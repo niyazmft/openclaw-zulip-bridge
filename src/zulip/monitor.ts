@@ -28,6 +28,7 @@ import {
   fetchZulipMe,
   fetchZulipStream,
   normalizeZulipBaseUrl,
+  registerZulipQueue,
   getZulipEventsWithRetry,
   deleteZulipQueue,
   sendZulipTyping,
@@ -758,9 +759,13 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
   const streams = account.streams ?? ["*"];
   const queueManager = new ZulipQueueManager({
     accountId: account.accountId,
-    client,
     runtime,
-    streams,
+    registerFn: async () => {
+      return await registerZulipQueue(client, {
+        eventTypes: ["message"],
+        streams,
+      });
+    },
   });
 
   let pollBackoffMs = 0;

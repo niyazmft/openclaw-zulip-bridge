@@ -1,35 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import { ZulipQueueManager } from "../src/zulip/queue-manager.js";
-import type { ZulipClient } from "../src/zulip/client.js";
+import { ZulipQueueManager } from "../src/zulip/queue-manager.ts";
 
 const mockRuntime = {
   log: () => {},
   error: () => {},
-  exit: (code: number) => { throw new Error(`exit ${code}`); },
+  exit: (code: number) => {
+    throw new Error(`exit ${code}`);
+  },
 } as any;
 
 test("ZulipQueueManager: registers a new queue", async () => {
   const accountId = "test-account-" + Date.now();
   let registerCalled = 0;
-  const mockClient = {
-    request: async (path: string) => {
-      if (path === "/register") {
-        registerCalled++;
-        return { result: "success", queue_id: "q1", last_event_id: 100 };
-      }
-      return { result: "success" };
-    }
-  } as unknown as ZulipClient;
 
   const manager = new ZulipQueueManager({
     accountId,
-    client: mockClient,
     runtime: mockRuntime,
-    streams: ["*"]
+    registerFn: async () => {
+      registerCalled++;
+      return { queueId: "q1", lastEventId: 100 };
+    },
   });
 
   const queue = await manager.ensureQueue();
@@ -49,21 +40,14 @@ test("ZulipQueueManager: registers a new queue", async () => {
 test("ZulipQueueManager: re-registers after expiry", async () => {
   const accountId = "test-account-expiry-" + Date.now();
   let registerCalled = 0;
-  const mockClient = {
-    request: async (path: string) => {
-      if (path === "/register") {
-        registerCalled++;
-        return { result: "success", queue_id: "q" + registerCalled, last_event_id: 100 };
-      }
-      return { result: "success" };
-    }
-  } as unknown as ZulipClient;
 
   const manager = new ZulipQueueManager({
     accountId,
-    client: mockClient,
     runtime: mockRuntime,
-    streams: ["*"]
+    registerFn: async () => {
+      registerCalled++;
+      return { queueId: "q" + registerCalled, lastEventId: 100 };
+    },
   });
 
   await manager.ensureQueue();
@@ -81,28 +65,21 @@ test("ZulipQueueManager: re-registers after expiry", async () => {
 test("ZulipQueueManager: single-flight locking", async () => {
   const accountId = "test-account-lock-" + Date.now();
   let registerCalled = 0;
-  const mockClient = {
-    request: async (path: string) => {
-      if (path === "/register") {
-        registerCalled++;
-        await new Promise(resolve => setTimeout(resolve, 50));
-        return { result: "success", queue_id: "q_lock", last_event_id: 100 };
-      }
-      return { result: "success" };
-    }
-  } as unknown as ZulipClient;
 
   const manager = new ZulipQueueManager({
     accountId,
-    client: mockClient,
     runtime: mockRuntime,
-    streams: ["*"]
+    registerFn: async () => {
+      registerCalled++;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return { queueId: "q_lock", lastEventId: 100 };
+    },
   });
 
   const [q1, q2, q3] = await Promise.all([
     manager.ensureQueue(),
     manager.ensureQueue(),
-    manager.ensureQueue()
+    manager.ensureQueue(),
   ]);
 
   assert.equal(q1.queueId, "q_lock");
@@ -117,21 +94,15 @@ test("ZulipQueueManager: single-flight locking", async () => {
 test("ZulipQueueManager: persistence across instances", async () => {
   const accountId = "test-account-pers-" + Date.now();
   let registerCalled = 0;
-  const mockClient = {
-    request: async (path: string) => {
-      if (path === "/register") {
-        registerCalled++;
-        return { result: "success", queue_id: "q_pers", last_event_id: 100 };
-      }
-      return { result: "success" };
-    }
-  } as unknown as ZulipClient;
+  const registerFn = async () => {
+    registerCalled++;
+    return { queueId: "q_pers", lastEventId: 100 };
+  };
 
   const manager1 = new ZulipQueueManager({
     accountId,
-    client: mockClient,
     runtime: mockRuntime,
-    streams: ["*"]
+    registerFn,
   });
 
   await manager1.ensureQueue();
@@ -139,9 +110,8 @@ test("ZulipQueueManager: persistence across instances", async () => {
 
   const manager2 = new ZulipQueueManager({
     accountId,
-    client: mockClient,
     runtime: mockRuntime,
-    streams: ["*"]
+    registerFn,
   });
 
   const q2 = await manager2.ensureQueue();
@@ -153,9 +123,8 @@ test("ZulipQueueManager: persistence across instances", async () => {
 
   const manager3 = new ZulipQueueManager({
     accountId,
-    client: mockClient,
     runtime: mockRuntime,
-    streams: ["*"]
+    registerFn,
   });
   const q3 = await manager3.ensureQueue();
   assert.equal(q3.lastEventId, 105);

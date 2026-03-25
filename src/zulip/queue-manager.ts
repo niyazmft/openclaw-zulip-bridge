@@ -1,5 +1,3 @@
-import type { ZulipClient } from "./client.js";
-import { registerZulipQueue } from "./client.js";
 import type { PluginRuntime } from "openclaw/plugin-sdk";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -11,26 +9,25 @@ export type QueueMetadata = {
   registeredAt: number;
 };
 
+export type QueueRegisterCallback = () => Promise<{ queueId: string; lastEventId: number }>;
+
 export type QueueManagerOpts = {
   accountId: string;
-  client: ZulipClient;
   runtime: PluginRuntime;
-  streams: string[];
+  registerFn: QueueRegisterCallback;
 };
 
 export class ZulipQueueManager {
   private accountId: string;
-  private client: ZulipClient;
   private runtime: PluginRuntime;
-  private streams: string[];
+  private registerFn: QueueRegisterCallback;
   private currentQueue: QueueMetadata | null = null;
   private registrationPromise: Promise<QueueMetadata> | null = null;
 
   constructor(opts: QueueManagerOpts) {
     this.accountId = opts.accountId;
-    this.client = opts.client;
     this.runtime = opts.runtime;
-    this.streams = opts.streams;
+    this.registerFn = opts.registerFn;
   }
 
   async ensureQueue(): Promise<QueueMetadata> {
@@ -76,11 +73,10 @@ export class ZulipQueueManager {
 
     while (attempt < maxAttempts) {
       try {
-        logger?.(`zulip queue manager [${this.accountId}]: registering new queue (attempt ${attempt + 1})...`);
-        const queue = await registerZulipQueue(this.client, {
-          eventTypes: ["message"],
-          streams: this.streams,
-        });
+        logger?.(
+          `zulip queue manager [${this.accountId}]: registering new queue (attempt ${attempt + 1})...`,
+        );
+        const queue = await this.registerFn();
         const metadata: QueueMetadata = {
           queueId: queue.queueId,
           lastEventId: queue.lastEventId,
