@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": false,
+    "noEmit": false,
+    "outDir": "dist",
+    "declaration": false,
+    "sourceMap": true
+  },
+  "include": [
+    "index.ts",
+    "src/**/*.ts",
+    "types/**/*.d.ts"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "@openclaw/zulip",
+  "version": "2026.2.4",
+  "description": "OpenClaw Zulip channel plugin",
+  "type": "module",
+  "dependencies": {
+    "zod": "^4.3.6",
+    "zulip-js": "^2.1.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channel": {
+      "id": "zulip",
+      "label": "Zulip",
+      "selectionLabel": "Zulip (plugin)",
+      "docsPath": "/channels/zulip",
+      "docsLabel": "zulip",
+      "blurb": "Zulip streams/topics with reaction-based reply indicators (plugin, installed separately).",
+      "order": 70
+    },
+    "install": {
+      "npmSpec": "@openclaw/zulip",
+      "localPath": "extensions/zulip",
+      "defaultChoice": "npm"
+    }
+  },
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --test --experimental-strip-types test/*.test.ts",
+    "check": "npm run typecheck && npm run test && npm run build"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.3.23 <2027"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "typescript": "^5.9.2"
+  }
+}
