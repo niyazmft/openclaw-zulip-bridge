@@ -28,7 +28,6 @@ import {
   fetchZulipMe,
   fetchZulipStream,
   normalizeZulipBaseUrl,
-  registerZulipQueue,
   getZulipEventsWithRetry,
   deleteZulipQueue,
   sendZulipTyping,
@@ -43,6 +42,7 @@ import {
   resolveThreadSessionKeys,
 } from "./monitor-helpers.js";
 import { sendMessageZulip } from "./send.js";
+import { ZulipQueueManager } from "./queue-manager.js";
 import { downloadZulipUpload, extractZulipUploadUrls, normalizeZulipEmojiName } from "./uploads.js";
 
 export type MonitorZulipOpts = {
@@ -754,17 +754,16 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     opts.statusSink?.({ lastInboundAt: Date.now() });
   };
 
-  // Register event queue
+  // Initialize queue manager
   const streams = account.streams ?? ["*"];
-  const queue = await registerZulipQueue(client, {
-    eventTypes: ["message"],
-    streams, // Pass ["*"] to trigger all_public_streams=true in registerZulipQueue
+  const queueManager = new ZulipQueueManager({
+    accountId: account.accountId,
+    client,
+    runtime,
+    streams,
   });
-  let queueId = queue.queueId;
-  let lastEventId = queue.lastEventId;
-  let pollBackoffMs = 0;
 
-  runtime.log?.(`zulip event queue registered: ${queueId}`);
+  let pollBackoffMs = 0;
 
   const resetPollBackoff = () => {
     pollBackoffMs = 0;
@@ -780,10 +779,19 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
   // Long-polling loop
   while (!opts.abortSignal?.aborted) {
+    let queue;
+    try {
+      queue = await queueManager.ensureQueue();
+    } catch (err) {
+      runtime.error?.(`zulip queue management failed: ${String(err)}`);
+      await delay(5000);
+      continue;
+    }
+
     try {
       const response = await getZulipEventsWithRetry(client, {
-        queueId,
-        lastEventId,
+        queueId: queue.queueId,
+        lastEventId: queue.lastEventId,
         timeoutMs: 90000,
         retryBaseDelayMs: 1000,
       });
@@ -793,14 +801,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         const isBadQueue =
           response.code === "BAD_EVENT_QUEUE_ID" || msg.toLowerCase().includes("bad event queue");
         if (isBadQueue) {
-          runtime.log?.("zulip: queue expired, re-registering...");
-          const newQueue = await registerZulipQueue(client, {
-            eventTypes: ["message"],
-            streams, // Pass ["*"] to trigger all_public_streams=true in registerZulipQueue
-          });
-          queueId = newQueue.queueId;
-          lastEventId = newQueue.lastEventId;
-          runtime.log?.(`zulip event queue re-registered: ${queueId}`);
+          await queueManager.markQueueExpired();
           resetPollBackoff();
           continue;
         }
@@ -827,7 +828,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         }
         const nextEventId = Number((event as { id?: unknown })?.id);
         if (!Number.isNaN(nextEventId) && nextEventId > 0) {
-          lastEventId = nextEventId;
+          await queueManager.updateLastEventId(nextEventId);
         }
       }
     } catch (err) {
@@ -836,14 +837,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       }
       const errStr = String(err);
       if (errStr.toLowerCase().includes("bad event queue")) {
-        runtime.log?.("zulip: bad event queue error thrown; re-registering...");
-        const newQueue = await registerZulipQueue(client, {
-          eventTypes: ["message"],
-          streams,
-        });
-        queueId = newQueue.queueId;
-        lastEventId = newQueue.lastEventId;
-        runtime.log?.(`zulip event queue re-registered: ${queueId}`);
+        await queueManager.markQueueExpired();
         resetPollBackoff();
         continue;
       }
@@ -867,6 +861,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
   }
 
   // Cleanup
-  await deleteZulipQueue(client, queueId);
+  if (queueManager) {
+    const queue = await queueManager.ensureQueue().catch(() => null);
+    if (queue) {
+      await deleteZulipQueue(client, queue.queueId);
+    }
+  }
   runtime.log?.("zulip monitor stopped");
 }

@@ -8,5 +8,5 @@ const monitorPath = path.resolve(process.cwd(), "src/zulip/monitor.ts");
 test("monitor regression: removed SDK cleanup helper is not referenced", async () => {
   const source = await fs.readFile(monitorPath, "utf8");
   assert.equal(source.includes("clearHistoryEntriesIfEnabled"), false);
-  assert.equal(source.includes("deleteZulipQueue(client, queueId)"), true);
+  assert.equal(source.includes("deleteZulipQueue(client, queue.queueId)"), true);
 });
