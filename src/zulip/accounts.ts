@@ -112,18 +112,37 @@ export function resolveZulipAccount(params: {
     baseConfig.site ??
     baseConfig.realm;
   const configUrlTrimmed = configUrl?.trim();
-  const apiKey = configApiKey || envApiKey;
-  const email = configEmail || envEmail;
-  const baseUrl = normalizeZulipBaseUrl(configUrlTrimmed || envUrl || envSite || envRealm);
-  const requireMention = resolveZulipRequireMention(merged);
 
-  const apiKeySource: ZulipTokenSource = configApiKey ? "config" : envApiKey ? "env" : "none";
-  const emailSource: ZulipEmailSource = configEmail ? "config" : envEmail ? "env" : "none";
-  const baseUrlSource: ZulipBaseUrlSource = configUrlTrimmed
-    ? "config"
-    : envUrl || envSite || envRealm
-      ? "env"
-      : "none";
+  let apiKey: string | undefined;
+  let email: string | undefined;
+  let baseUrl: string | undefined;
+  let apiKeySource: ZulipTokenSource = "none";
+  let emailSource: ZulipEmailSource = "none";
+  let baseUrlSource: ZulipBaseUrlSource = "none";
+
+  const envUrlAny = envUrl || envSite || envRealm;
+
+  if (allowEnv) {
+    // Default account: Env-first, then config.
+    apiKey = envApiKey || configApiKey;
+    email = envEmail || configEmail;
+    baseUrl = normalizeZulipBaseUrl(envUrlAny || configUrlTrimmed);
+
+    apiKeySource = envApiKey ? "env" : configApiKey ? "config" : "none";
+    emailSource = envEmail ? "env" : configEmail ? "config" : "none";
+    baseUrlSource = envUrlAny ? "env" : configUrlTrimmed ? "config" : "none";
+  } else {
+    // Non-default accounts: Config-only. No magic env discovery.
+    apiKey = configApiKey;
+    email = configEmail;
+    baseUrl = normalizeZulipBaseUrl(configUrlTrimmed);
+
+    apiKeySource = configApiKey ? "config" : "none";
+    emailSource = configEmail ? "config" : "none";
+    baseUrlSource = configUrlTrimmed ? "config" : "none";
+  }
+
+  const requireMention = resolveZulipRequireMention(merged);
 
   return {
     accountId,

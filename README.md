@@ -31,6 +31,17 @@ A GitHub Actions workflow is included at `.github/workflows/ci.yml` and runs `np
 - `docs/` — audit and fix notes
 - `test/fixtures/` — reserved for inbound regression fixtures
 
+## Configuration
+This bridge supports environment-based configuration for Zulip secrets. This is the recommended approach for staging and production environments to avoid plaintext credential storage in the repository or main configuration files.
+
+The following environment variables are supported for the **default account**:
+- `ZULIP_API_KEY`: Zulip API key for the bot.
+- `ZULIP_EMAIL`: Zulip bot email address.
+- `ZULIP_URL` (or `ZULIP_SITE`, `ZULIP_REALM`): Base URL for the Zulip server.
+
+Environment variables take precedence over configuration file fields for the default account. Non-default accounts must be configured via the configuration file.
+
+See [docs/config.md](docs/config.md) for more details.
+
 ## Notes
-- Secrets are still sourced by OpenClaw runtime config/env outside this repo.
 - This bootstrap is intended for staging validation before any production cutover.
