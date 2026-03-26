@@ -30,7 +30,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json",
-    "test": "node --test --experimental-strip-types test/*.test.ts",
+    "test": "node --test --experimental-strip-types --loader ./test-loader.js test/*.test.ts",
     "check": "npm run typecheck && npm run test && npm run build"
   },
   "peerDependencies": {
