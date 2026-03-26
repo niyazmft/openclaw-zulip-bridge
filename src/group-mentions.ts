@@ -6,8 +6,5 @@ export function resolveZulipGroupRequireMention(params: ChannelGroupContext): bo
     cfg: params.cfg,
     accountId: params.accountId,
   });
-  if (typeof account.requireMention === "boolean") {
-    return account.requireMention;
-  }
-  return true;
+  return account.requireMention;
 }
