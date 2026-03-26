@@ -164,3 +164,13 @@ export function resolveThreadSessionKeys(params: {
     : params.baseSessionKey;
   return { sessionKey, parentSessionKey: params.parentSessionKey };
 }
+
+/**
+ * Formats a log message with standardized, machine-parseable identifiers.
+ */
+export function formatZulipLog(message: string, fields: Record<string, any>): string {
+  const parts = Object.entries(fields)
+    .filter(([_, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => `${k}=${v}`);
+  return parts.length > 0 ? `${message} [${parts.join(" ")}]` : message;
+}

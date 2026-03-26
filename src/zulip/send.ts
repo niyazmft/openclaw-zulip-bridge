@@ -12,6 +12,7 @@ import {
   sendZulipStreamMessage,
   uploadZulipFile,
 } from "./client.js";
+import { formatZulipLog } from "./monitor-helpers.js";
 
 export type ZulipSendOpts = {
   apiKey?: string;
@@ -20,6 +21,8 @@ export type ZulipSendOpts = {
   accountId?: string;
   mediaUrl?: string;
   topic?: string;
+  sessionKey?: string;
+  kind?: "dm" | "channel";
 };
 
 export type ZulipSendResult = {
@@ -117,7 +120,6 @@ export async function sendMessageZulip(
   opts: ZulipSendOpts = {},
 ): Promise<ZulipSendResult> {
   const core = getCore();
-  const logger = core.logging.getChildLogger({ module: "zulip" });
   const cfg = core.config.loadConfig();
   const account = resolveZulipAccount({
     cfg,
@@ -139,6 +141,23 @@ export async function sendMessageZulip(
 
   const client = createZulipClient({ baseUrl, email, apiKey });
   const target = parseZulipTarget(to);
+
+  const kind = opts.kind || (target.kind === "user" ? "dm" : "channel");
+  const stream = target.kind === "stream" ? target.stream : undefined;
+  const topic = target.kind === "stream" ? target.topic || opts.topic : undefined;
+
+  core.log?.(
+    formatZulipLog("zulip outbound attempt", {
+      accountId: account.accountId,
+      target: to,
+      kind,
+      stream,
+      topic,
+      sessionKey: opts.sessionKey,
+      hasMedia: Boolean(opts.mediaUrl),
+    }),
+  );
+
   let message = text?.trim() ?? "";
   const rawMediaUrl = opts.mediaUrl?.trim();
   let mediaUrl = rawMediaUrl;
@@ -207,17 +226,26 @@ export async function sendMessageZulip(
     });
     messageId = response.id ? String(response.id) : "unknown";
   } else {
-    const topic = target.topic || opts.topic || DEFAULT_TOPIC;
-    if (!topic) {
-      logger.debug?.("zulip send: missing topic for stream message");
-    }
+    const resolvedTopic = target.topic || opts.topic || DEFAULT_TOPIC;
     const response = await sendZulipStreamMessage(client, {
       stream: target.stream,
-      topic: topic || DEFAULT_TOPIC,
+      topic: resolvedTopic,
       content: message,
     });
     messageId = response.id ? String(response.id) : "unknown";
   }
+
+  core.log?.(
+    formatZulipLog("zulip outbound success", {
+      accountId: account.accountId,
+      messageId,
+      target: to,
+      kind,
+      stream,
+      topic: target.kind === "stream" ? target.topic || opts.topic || DEFAULT_TOPIC : undefined,
+      sessionKey: opts.sessionKey,
+    }),
+  );
 
   core.channel.activity.record({
     channel: "zulip",

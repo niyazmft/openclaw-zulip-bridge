@@ -2,6 +2,7 @@ import type { PluginRuntime } from "openclaw/plugin-sdk";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { formatZulipLog } from "./monitor-helpers.js";
 
 export type QueueMetadata = {
   queueId: string;
@@ -49,21 +50,25 @@ export class ZulipQueueManager {
   }
 
   private async performRegistration(): Promise<QueueMetadata> {
-    const logger = this.runtime.log;
-    const errorLogger = this.runtime.error;
-
     // Try loading from persistence first
     try {
       const persisted = await this.loadMetadata();
       if (persisted) {
-        logger?.(
-          `zulip queue manager [${this.accountId}]: loaded persisted queue ${persisted.queueId} (last_event_id: ${persisted.lastEventId})`,
+        this.runtime.log?.(
+          formatZulipLog("zulip queue loaded", {
+            accountId: this.accountId,
+            queueId: persisted.queueId,
+            lastEventId: persisted.lastEventId,
+          }),
         );
         return persisted;
       }
     } catch (err) {
-      errorLogger?.(
-        `zulip queue manager [${this.accountId}]: failed to load persisted queue: ${String(err)}`,
+      this.runtime.error?.(
+        formatZulipLog("zulip queue load failed", {
+          accountId: this.accountId,
+          error: String(err),
+        }),
       );
     }
 
@@ -73,8 +78,11 @@ export class ZulipQueueManager {
 
     while (attempt < maxAttempts) {
       try {
-        logger?.(
-          `zulip queue manager [${this.accountId}]: registering new queue (attempt ${attempt + 1})...`,
+        this.runtime.log?.(
+          formatZulipLog("zulip queue registering", {
+            accountId: this.accountId,
+            attempt: attempt + 1,
+          }),
         );
         const queue = await this.registerFn();
         const metadata: QueueMetadata = {
@@ -83,18 +91,34 @@ export class ZulipQueueManager {
           registeredAt: Date.now(),
         };
         await this.saveMetadata(metadata);
-        logger?.(
-          `zulip queue manager [${this.accountId}]: registered new queue ${metadata.queueId} (last_event_id: ${metadata.lastEventId})`,
+        this.runtime.log?.(
+          formatZulipLog("zulip queue registered", {
+            accountId: this.accountId,
+            queueId: metadata.queueId,
+            lastEventId: metadata.lastEventId,
+          }),
         );
         return metadata;
       } catch (err) {
         attempt++;
         if (attempt >= maxAttempts) {
-          errorLogger?.(`zulip queue manager [${this.accountId}]: failed to register queue after ${maxAttempts} attempts: ${String(err)}`);
+          this.runtime.error?.(
+            formatZulipLog("zulip queue registration failed final", {
+              accountId: this.accountId,
+              attempts: maxAttempts,
+              error: String(err),
+            }),
+          );
           throw err;
         }
         const delayMs = baseDelayMs * Math.pow(2, attempt) + Math.random() * 1000;
-        logger?.(`zulip queue manager [${this.accountId}]: registration failed, retrying in ${Math.round(delayMs)}ms...`);
+        this.runtime.log?.(
+          formatZulipLog("zulip queue registration failed, retrying", {
+            accountId: this.accountId,
+            error: String(err),
+            delayMs: Math.round(delayMs),
+          }),
+        );
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
@@ -102,9 +126,13 @@ export class ZulipQueueManager {
   }
 
   async markQueueExpired(): Promise<void> {
-    const logger = this.runtime.log;
     if (this.currentQueue) {
-      logger?.(`zulip queue manager [${this.accountId}]: marking queue ${this.currentQueue.queueId} as expired`);
+      this.runtime.log?.(
+        formatZulipLog("zulip queue expired", {
+          accountId: this.accountId,
+          queueId: this.currentQueue.queueId,
+        }),
+      );
       this.currentQueue = null;
       const p = this.getPersistencePath();
       await fs.unlink(p).catch(() => {});
@@ -143,7 +171,12 @@ export class ZulipQueueManager {
       const p = this.getPersistencePath();
       await fs.writeFile(p, JSON.stringify(metadata), "utf8");
     } catch (err) {
-      this.runtime.error?.(`zulip queue manager [${this.accountId}]: failed to save metadata: ${String(err)}`);
+      this.runtime.error?.(
+        formatZulipLog("zulip queue metadata save failed", {
+          accountId: this.accountId,
+          error: String(err),
+        }),
+      );
     }
   }
 }
