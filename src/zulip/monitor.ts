@@ -40,6 +40,7 @@ import {
 import { formatInboundFromLabel, resolveThreadSessionKeys } from "./monitor-helpers.js";
 import { ZulipDedupeStore } from "./dedupe-store.js";
 import { sendMessageZulip } from "./send.js";
+import { decidePolicy } from "./policy.js";
 import { ZulipQueueManager } from "./queue-manager.js";
 import { downloadZulipUpload, extractZulipUploadUrls, normalizeZulipEmojiName } from "./uploads.js";
 
@@ -397,67 +398,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         ? dmPolicy === "open" || senderAllowedForCommands
         : commandGate.commandAuthorized;
 
-    if (kind === "dm") {
-      if (dmPolicy === "disabled") {
-        logVerboseMessage(`zulip: drop dm (dmPolicy=disabled sender=${senderId})`);
-        return;
-      }
-      if (dmPolicy !== "open" && !senderAllowedForCommands) {
-        if (dmPolicy === "pairing") {
-          const { code, created } = await core.channel.pairing.upsertPairingRequest({
-            channel: "zulip",
-            id: senderId,
-            meta: { name: senderName },
-          });
-          logVerboseMessage(`zulip: pairing request sender=${senderId} created=${created}`);
-          if (created) {
-            try {
-              await sendMessageZulip(
-                `user:${senderId}`,
-                core.channel.pairing.buildPairingReply({
-                  channel: "zulip",
-                  idLine: `Your Zulip email: ${senderId}`,
-                  code,
-                }),
-                { accountId: account.accountId },
-              );
-              opts.statusSink?.({ lastOutboundAt: Date.now() });
-            } catch (err) {
-              logVerboseMessage(`zulip: pairing reply failed for ${senderId}: ${String(err)}`);
-            }
-          }
-        } else {
-          logVerboseMessage(`zulip: drop dm sender=${senderId} (dmPolicy=${dmPolicy})`);
-        }
-        return;
-      }
-    } else {
-      if (groupPolicy === "disabled") {
-        logVerboseMessage("zulip: drop group message (groupPolicy=disabled)");
-        return;
-      }
-      if (groupPolicy === "allowlist") {
-        if (effectiveGroupAllowFrom.length === 0) {
-          logVerboseMessage("zulip: drop group message (no group allowlist)");
-          return;
-        }
-        if (!groupAllowedForCommands) {
-          logVerboseMessage(`zulip: drop group sender=${senderId} (not in groupAllowFrom)`);
-          return;
-        }
-      }
-    }
-
-    if (kind !== "dm" && commandGate.shouldBlock) {
-      logInboundDrop({
-        log: logVerboseMessage,
-        channel: "zulip",
-        reason: "control command (unauthorized)",
-        target: senderId,
-      });
-      return;
-    }
-
     const shouldRequireMention =
       kind !== "dm" &&
       core.channel.groups.resolveRequireMention({
@@ -467,20 +407,66 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         groupId: channelId,
         requireMentionOverride: account.config.requireMention,
       });
-    const shouldBypassMention =
-      isControlCommand && shouldRequireMention && !wasMentioned && commandAuthorized;
-    const effectiveWasMentioned = wasMentioned || shouldBypassMention || oncharTriggered;
     const canDetectMention = Boolean(botUsername) || mentionRegexes.length > 0;
+
+    const policyResult = decidePolicy({
+      kind,
+      senderId,
+      senderName,
+      dmPolicy,
+      groupPolicy,
+      senderAllowedForCommands,
+      groupAllowedForCommands,
+      effectiveGroupAllowFromLength: effectiveGroupAllowFrom.length,
+      shouldRequireMention,
+      wasMentioned,
+      isControlCommand,
+      commandAuthorized,
+      oncharTriggered,
+      canDetectMention,
+    });
+
+    if (policyResult.shouldDrop) {
+      if (policyResult.shouldPair) {
+        const { code, created } = await core.channel.pairing.upsertPairingRequest({
+          channel: "zulip",
+          id: senderId,
+          meta: { name: senderName },
+        });
+        logVerboseMessage(`zulip: pairing request sender=${senderId} created=${created}`);
+        if (created) {
+          try {
+            await sendMessageZulip(
+              `user:${senderId}`,
+              core.channel.pairing.buildPairingReply({
+                channel: "zulip",
+                idLine: `Your Zulip email: ${senderId}`,
+                code,
+              }),
+              { accountId: account.accountId },
+            );
+            opts.statusSink?.({ lastOutboundAt: Date.now() });
+          } catch (err) {
+            logVerboseMessage(`zulip: pairing reply failed for ${senderId}: ${String(err)}`);
+          }
+        }
+      } else {
+        logInboundDrop({
+          log: logVerboseMessage,
+          channel: "zulip",
+          reason: policyResult.reason ?? "policy drop",
+          target: senderId,
+        });
+      }
+      return;
+    }
 
     if (oncharEnabled && !oncharTriggered && !wasMentioned && !isControlCommand) {
       return;
     }
 
-    if (kind !== "dm" && shouldRequireMention && canDetectMention) {
-      if (!effectiveWasMentioned) {
-        return;
-      }
-    }
+    const effectiveWasMentioned =
+      wasMentioned || (isControlCommand && commandAuthorized) || oncharTriggered;
 
     const bodySource = oncharTriggered ? oncharResult.stripped : rawText;
     const bodyText = normalizeMention(bodySource, botUsername);

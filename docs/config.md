@@ -22,6 +22,35 @@ For the **default account**, environment variables **always take precedence** ov
 
 If you need to configure multiple Zulip accounts or other settings (like streams, DM policy, etc.), you can use the `channels.zulip` section in your OpenClaw configuration file.
 
+### Policy Configuration
+
+The bridge supports both Direct Message (DM) and Stream (Group) traffic. The behavior is controlled by several settings:
+
+#### Direct Message (DM) Policy (`dmPolicy`)
+| Policy | Behavior |
+| --- | --- |
+| `pairing` (default) | If the sender is not in `allowFrom`, a pairing code is sent. Once approved, the user is added to `allowFrom`. |
+| `allowlist` | Only users explicitly listed in `allowFrom` (or the persistent store) can trigger the agent. |
+| `open` | Anyone can send a DM to the bot. |
+| `disabled` | All DMs are ignored. |
+
+#### Stream/Group Policy (`groupPolicy`)
+| Policy | Behavior |
+| --- | --- |
+| `allowlist` (default) | Only messages from senders in `groupAllowFrom` (or `allowFrom` if `groupAllowFrom` is empty) are processed. |
+| `open` | Anyone in a monitored stream can trigger the agent, provided the mention/trigger requirements are met. |
+| `disabled` | All stream messages are ignored. |
+
+#### Mention & Trigger Settings
+- `requireMention` (boolean, default: `true`): If `true`, the bot must be @mentioned in streams to respond.
+- `chatmode`:
+  - `oncall` (default): Responds only when @mentioned. Sets `requireMention` to `true`.
+  - `onmessage`: Responds to every message in a stream. Sets `requireMention` to `false`.
+  - `onchar`: Responds only when a message starts with a trigger character (e.g., `>` or `!`). Sets `requireMention` to `true`, but the trigger character bypasses the @mention requirement.
+
+> **Note:** Control commands from authorized users always bypass the `requireMention` gate in streams.
+
+
 ### Default Account
 ```json
 {

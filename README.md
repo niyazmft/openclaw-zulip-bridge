@@ -41,7 +41,7 @@ The following environment variables are supported for the **default account**:
 
 Environment variables take precedence over configuration file fields for the default account. Non-default accounts must be configured via the configuration file.
 
-See [docs/config.md](docs/config.md) for more details.
+See [docs/config.md](docs/config.md) for more details on configuration and the supported **DM/Group policies**.
 
 ## Notes
 - This bootstrap is intended for staging validation before any production cutover.
