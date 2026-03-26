@@ -37,11 +37,8 @@ import {
   type ZulipMessage,
   type ZulipStream,
 } from "./client.js";
-import {
-  createDedupeCache,
-  formatInboundFromLabel,
-  resolveThreadSessionKeys,
-} from "./monitor-helpers.js";
+import { formatInboundFromLabel, resolveThreadSessionKeys } from "./monitor-helpers.js";
+import { ZulipDedupeStore } from "./dedupe-store.js";
 import { sendMessageZulip } from "./send.js";
 import { ZulipQueueManager } from "./queue-manager.js";
 import { downloadZulipUpload, extractZulipUploadUrls, normalizeZulipEmojiName } from "./uploads.js";
@@ -61,11 +58,6 @@ const RECENT_MESSAGE_TTL_MS = 5 * 60_000;
 const RECENT_MESSAGE_MAX = 2000;
 const DEFAULT_ONCHAR_PREFIXES = [">", "!"];
 const DEFAULT_TOPIC = "general";
-
-const recentInboundMessages = createDedupeCache({
-  ttlMs: RECENT_MESSAGE_TTL_MS,
-  maxSize: RECENT_MESSAGE_MAX,
-});
 
 function resolveRuntime(opts: MonitorZulipOpts): RuntimeEnv {
   return (
@@ -269,13 +261,21 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
   const reactionSuccess = normalizeZulipEmojiName(reactionConfig.onSuccess ?? "check_mark");
   const reactionError = normalizeZulipEmojiName(reactionConfig.onError ?? "warning");
 
+  const dedupeStore = new ZulipDedupeStore({
+    accountId: account.accountId,
+    runtime,
+    ttlMs: RECENT_MESSAGE_TTL_MS,
+    maxSize: RECENT_MESSAGE_MAX,
+  });
+  await dedupeStore.load();
+
   const handleMessage = async (message: ZulipMessage) => {
     const messageId = String(message.id ?? "");
     if (!messageId) {
       return;
     }
     const dedupeKey = `${account.accountId}:${messageId}`;
-    if (recentInboundMessages.check(dedupeKey)) {
+    if (await dedupeStore.check(dedupeKey)) {
       return;
     }
 
