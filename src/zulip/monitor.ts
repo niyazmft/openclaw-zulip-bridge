@@ -37,7 +37,11 @@ import {
   type ZulipMessage,
   type ZulipStream,
 } from "./client.js";
-import { formatInboundFromLabel, resolveThreadSessionKeys } from "./monitor-helpers.js";
+import {
+  formatInboundFromLabel,
+  resolveThreadSessionKeys,
+  formatZulipLog,
+} from "./monitor-helpers.js";
 import { ZulipDedupeStore } from "./dedupe-store.js";
 import { sendMessageZulip } from "./send.js";
 import { decidePolicy } from "./policy.js";
@@ -275,39 +279,54 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     if (!messageId) {
       return;
     }
-    const dedupeKey = `${account.accountId}:${messageId}`;
-    if (await dedupeStore.check(dedupeKey)) {
-      return;
-    }
 
     const senderId = message.sender_email || String(message.sender_id ?? "");
     if (!senderId) {
       return;
     }
+    // Safety check: ignore bot's own messages to prevent infinite loops.
     if (senderId === botEmail || String(message.sender_id) === botUserId) {
       return;
     }
 
-    const senderName = message.sender_full_name?.trim() || senderId;
     const isDM = message.type === "private";
     const kind = isDM ? "dm" : "channel";
-    const chatType = isDM ? "direct" : "channel";
-
-    let streamName = "";
     let streamId = "";
-    let topic = DEFAULT_TOPIC;
-    let channelId = "";
-
-    if (isDM) {
-      channelId = senderId;
-    } else {
+    let streamName = "";
+    let topic = isDM ? undefined : (message.subject?.trim() || DEFAULT_TOPIC);
+    if (!isDM) {
       streamId = String(message.stream_id ?? "");
-      channelId = streamId;
       if (typeof message.display_recipient === "string") {
         streamName = message.display_recipient;
       }
-      topic = message.subject?.trim() || DEFAULT_TOPIC;
     }
+
+    runtime.log?.(
+      formatZulipLog("zulip inbound arrival", {
+        accountId: account.accountId,
+        messageId,
+        senderId,
+        kind,
+        stream: streamName || streamId,
+        topic,
+      }),
+    );
+
+    const dedupeKey = `${account.accountId}:${messageId}`;
+    if (await dedupeStore.check(dedupeKey)) {
+      runtime.log?.(
+        formatZulipLog("zulip inbound dedupe hit", {
+          accountId: account.accountId,
+          messageId,
+        }),
+      );
+      return;
+    }
+
+    const senderName = message.sender_full_name?.trim() || senderId;
+    const chatType = isDM ? "direct" : "channel";
+
+    let channelId = isDM ? senderId : streamId;
 
     const rawText = stripHtmlToText(message.content ?? "");
     const oncharResult = stripOncharPrefix(rawText, oncharPrefixes);
@@ -433,7 +452,13 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           id: senderId,
           meta: { name: senderName },
         });
-        logVerboseMessage(`zulip: pairing request sender=${senderId} created=${created}`);
+        runtime.log?.(
+          formatZulipLog("zulip pairing request", {
+            accountId: account.accountId,
+            senderId,
+            created,
+          }),
+        );
         if (created) {
           try {
             await sendMessageZulip(
@@ -443,16 +468,34 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
                 idLine: `Your Zulip email: ${senderId}`,
                 code,
               }),
-              { accountId: account.accountId },
+              {
+                accountId: account.accountId,
+                sessionKey: `zulip:${account.accountId}:pairing`,
+                kind: "dm",
+              },
             );
             opts.statusSink?.({ lastOutboundAt: Date.now() });
           } catch (err) {
-            logVerboseMessage(`zulip: pairing reply failed for ${senderId}: ${String(err)}`);
+            runtime.error?.(
+              formatZulipLog("zulip pairing reply failed", {
+                accountId: account.accountId,
+                senderId,
+                error: String(err),
+              }),
+            );
           }
         }
       } else {
         logInboundDrop({
-          log: logVerboseMessage,
+          log: (msg: string) =>
+            runtime.log?.(
+              formatZulipLog(msg, {
+                accountId: account.accountId,
+                messageId,
+                senderId,
+                reason: policyResult.reason,
+              }),
+            ),
           channel: "zulip",
           reason: policyResult.reason ?? "policy drop",
           target: senderId,
@@ -582,8 +625,16 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     }
 
     const previewLine = bodyText.slice(0, 200).replace(/\n/g, "\\n");
-    logVerboseMessage(
-      `zulip inbound: from=${ctxPayload.From} len=${bodyText.length} preview="${previewLine}"`,
+    runtime.log?.(
+      formatZulipLog("zulip inbound dispatch", {
+        accountId: account.accountId,
+        messageId,
+        senderId,
+        from: ctxPayload.From,
+        sessionKey,
+        len: bodyText.length,
+        preview: previewLine,
+      }),
     );
 
     const addReactionSafe = async (emojiName: string) => {
@@ -718,7 +769,14 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       });
     } catch (err) {
       dispatchError = err;
-      runtime.error?.(`zulip reply failed: ${String(err)}`);
+      runtime.error?.(
+        formatZulipLog("zulip reply failed", {
+          accountId: account.accountId,
+          messageId,
+          senderId,
+          error: String(err),
+        }),
+      );
     } finally {
       markDispatchIdle();
     }
@@ -764,7 +822,13 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     try {
       await handleMessage(message);
     } catch (err) {
-      runtime.error?.(`zulip message handler failed: ${String(err)}`);
+      runtime.error?.(
+        formatZulipLog("zulip message handler failed", {
+          accountId: account.accountId,
+          messageId: message.id,
+          error: String(err),
+        }),
+      );
     }
   };
 
@@ -774,7 +838,12 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     try {
       queue = await queueManager.ensureQueue();
     } catch (err) {
-      runtime.error?.(`zulip queue management failed: ${String(err)}`);
+      runtime.error?.(
+        formatZulipLog("zulip queue management failed", {
+          accountId: account.accountId,
+          error: String(err),
+        }),
+      );
       await delay(5000);
       continue;
     }
@@ -801,6 +870,13 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
       const events = response.events ?? [];
       if (events.length > 0) {
+        runtime.log?.(
+          formatZulipLog("zulip events received", {
+            accountId: account.accountId,
+            queueId: queue.queueId,
+            count: events.length,
+          }),
+        );
         opts.statusSink?.({
           connected: true,
           lastConnectedAt: Date.now(),
@@ -834,7 +910,13 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       }
       const status = (err as { status?: number })?.status;
       const retryAfterMs = (err as { retryAfterMs?: number })?.retryAfterMs;
-      runtime.error?.(`zulip polling error: ${String(err)}`);
+      runtime.error?.(
+        formatZulipLog("zulip polling error", {
+          accountId: account.accountId,
+          error: String(err),
+          status,
+        }),
+      );
       opts.statusSink?.({
         connected: false,
         lastError: String(err),
