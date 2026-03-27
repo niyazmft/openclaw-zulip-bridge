@@ -22,6 +22,27 @@ For the **default account**, environment variables **always take precedence** ov
 
 If you need to configure multiple Zulip accounts or other settings (like streams, DM policy, etc.), you can use the `channels.zulip` section in your OpenClaw configuration file.
 
+### Account Settings
+
+The following settings are available for each Zulip account (and as top-level defaults for the `zulip` channel):
+
+| Setting | Type | Description |
+| --- | --- | --- |
+| `url` | string | Zulip base URL. |
+| `email` | string | Zulip bot email. |
+| `apiKey` | string | Zulip bot API key. |
+| `streams` | string[] | List of streams to monitor. Use `["*"]` for all (default). |
+| `chatmode` | enum | `oncall` (default), `onmessage`, or `onchar`. |
+| `oncharPrefixes`| string[] | Trigger characters for `onchar` mode (default: `[">", "!"]`). |
+| `requireMention`| boolean | Explicit override for @mention requirement in streams. |
+| `dmPolicy` | enum | `pairing` (default), `allowlist`, `open`, or `disabled`. |
+| `groupPolicy` | enum | `allowlist` (default), `open`, or `disabled`. |
+| `allowFrom` | string[] | Authorized user IDs/emails for DMs and general commands. |
+| `groupAllowFrom`| string[] | Authorized user IDs/emails for Stream messages (falls back to `allowFrom`). |
+| `mediaMaxMb` | number | Maximum size in MB for incoming media (default: 5). |
+| `reactions` | object | Configure reaction behavior (see below). |
+| `blockStreaming`| boolean | Enable/disable block-based streaming responses. |
+
 ### Policy Configuration
 
 The bridge supports both Direct Message (DM) and Stream (Group) traffic. The behavior is controlled by several settings:
@@ -50,8 +71,21 @@ The bridge supports both Direct Message (DM) and Stream (Group) traffic. The beh
 
 > **Note:** Control commands from authorized users always bypass the `requireMention` gate in streams.
 
+### Reaction Configuration
 
-### Default Account
+```json
+"reactions": {
+  "enabled": true,
+  "clearOnFinish": true,
+  "onStart": "eyes",
+  "onSuccess": "check_mark",
+  "onError": "warning"
+}
+```
+
+### Examples
+
+#### Simple Default Account
 ```json
 {
   "channels": {
@@ -64,7 +98,7 @@ The bridge supports both Direct Message (DM) and Stream (Group) traffic. The beh
 }
 ```
 
-### Multi-Account Setup
+#### Multi-Account Setup
 Non-default accounts must be defined in the `accounts` map and **require** credentials in the configuration file. To prevent accidental secret leakage and ensure predictable behavior, non-default accounts **do not support** environment-based resolution or fallbacks.
 
 ```json
