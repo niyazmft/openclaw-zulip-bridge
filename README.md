@@ -27,6 +27,8 @@ openclaw plugins install ./ --link
 openclaw plugins enable zulip
 ```
 
+> **Note on Linked Plugins**: The `--link` flag creates a symbolic link from the OpenClaw extensions directory (typically `~/.openclaw/extensions/zulip`) back to your local repository checkout. This means the local repo **is** the source of truth for the installed plugin; any local code changes are reflected immediately after an OpenClaw restart without re-installing.
+
 ### 2. Set Credentials
 Set the required environment variables for your Zulip bot. These take precedence over configuration file fields for the default account.
 
@@ -54,15 +56,20 @@ Add the Zulip channel to your `openclaw.config.json`. This minimal setup enables
 ### 4. Restart and Verify
 Restart OpenClaw to apply the changes.
 
-```bash
-# Command depends on your environment, e.g.:
-# openclaw start
-```
+| Environment | Restart Command |
+| --- | --- |
+| **Systemd** | `systemctl restart openclaw` |
+| **PM2** | `pm2 restart openclaw` |
+| **Manual/CLI** | `Ctrl+C` then restart (e.g., `openclaw start`) |
 
 **Verification Steps:**
-- **Check Logs**: Look for `[zulip] queue registered` or `[zulip] queue loaded` to confirm a successful connection.
-- **Test DM**: Send a Direct Message to the bot. If `dmPolicy` is `pairing`, it should respond with a pairing code.
+- **Check Logs**: Confirm success by looking for the initialization marker:
+  - `zulip queue registered [accountId=default queueId=... lastEventId=...]`
+  - (Or `zulip queue loaded [...]` if resuming from a previous session)
+- **Test DM**: Send a Direct Message to the bot. If `dmPolicy` is `pairing` (default), it should respond with a pairing code.
 - **Test Stream**: Mention the bot in the configured stream (e.g., `@bot-name hello`). The bot should receive the message and respond.
+
+Success is confirmed when the bot is both **registered** in logs and **responding** to messages.
 
 ## Configure Zulip in openclaw.json
 
@@ -113,10 +120,11 @@ For more advanced options like multi-account support, custom reactions, and stre
 
 ## Troubleshooting
 
-- **Queue Registration Fails**: Verify your `ZULIP_URL` is correct and reachable, and that `ZULIP_API_KEY` and `ZULIP_EMAIL` match exactly what is in your Zulip bot settings.
-- **Bot Not Responding in Streams**: Ensure the bot is a member of the stream and that the stream name is included in the `streams` array in your config.
-- **Plugin Not Recognized**: Run `openclaw plugins list` to verify `zulip` is installed and enabled. If not, re-run the `install` and `enable` commands from Step 1.
-- **Logs show `mention required`**: By default, the bot only responds to @mentions in streams. Ensure you are actually mentioning the bot or change `chatmode` to `onmessage`.
+- **Plugin Not Recognized**: Run `openclaw plugins list` to verify `zulip` is installed and enabled.
+  - Check the symlink: `ls -l ~/.openclaw/extensions/zulip` should point to your repo checkout.
+- **Queue Registration Fails**: Verify `ZULIP_URL` is reachable, and that `ZULIP_API_KEY` and `ZULIP_EMAIL` match exactly.
+- **Bot Not Responding in Streams**: Ensure the bot is a member of the stream and that the stream name is in the `streams` array.
+- **Logs show `mention required`**: By default, the bot only responds to @mentions in streams. Mention the bot or change `chatmode` to `onmessage`.
 
 ## Advanced Configuration
 
