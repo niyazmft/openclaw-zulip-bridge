@@ -16,7 +16,7 @@ This document provides a manual smoke testing checklist for the OpenClaw Zulip B
 ### 1. Installation, Configuration & Startup
 - [ ] Install the plugin from a local checkout:
   ```bash
-  openclaw plugins install /path/to/openclaw-zulip-bridge --link
+  openclaw plugins install "$HOME/.openclaw/workspace/specialists/tech/openclaw-zulip-bridge" --link
   openclaw plugins enable zulip
   ```
 - [ ] Configure the bridge in the staging OpenClaw environment using environment variables (`ZULIP_EMAIL`, `ZULIP_API_KEY`, `ZULIP_URL`).
