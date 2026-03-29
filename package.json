@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/zulip",
-  "version": "2026.2.4",
+  "version": "2026.3.29",
   "description": "OpenClaw Zulip channel plugin",
   "type": "module",
   "dependencies": {
