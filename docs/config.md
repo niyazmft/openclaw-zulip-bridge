@@ -91,7 +91,7 @@ The bridge supports both Direct Message (DM) and Stream (Group) traffic. The beh
   "channels": {
     "zulip": {
       "enabled": true,
-      "streams": ["bot-testing", "announcements"],
+      "streams": ["bot-testing"],
       "dmPolicy": "pairing"
     }
   }

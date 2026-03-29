@@ -13,60 +13,71 @@ The OpenClaw Zulip Bridge is a high-performance channel plugin for OpenClaw that
 - **Rich Feedback**: Optional reaction-based status indicators for request start, success, and errors.
 - **Standardized Observability**: Machine-parseable logs for easy monitoring and troubleshooting.
 
-## Getting Started
+## Quickstart: Enable Zulip on a New Device
 
-### Installation
+Follow these steps to get Zulip running on a fresh OpenClaw setup.
 
-This repository is designed for **sideloaded local installation** as an OpenClaw plugin. It is not currently distributed via the npm registry.
-
-To install the bridge, clone this repository and use the OpenClaw CLI to install it from your local path:
+### 1. Clone and Install
+Clone this repository to your device and install it as a linked plugin:
 
 ```bash
-# Replace with the actual path to your local checkout
-openclaw plugins install /path/to/openclaw-zulip-bridge --link
+git clone https://github.com/niyazmft/openclaw-zulip-bridge.git
+cd openclaw-zulip-bridge
+openclaw plugins install ./ --link
 openclaw plugins enable zulip
 ```
 
-Notes:
-- `--link` keeps the plugin connected to your working tree, which is useful for staging and sideload setups.
-- You can also install from a local path without `--link` if you want OpenClaw to copy the plugin into its managed extensions area.
-- This repo ships `openclaw.plugin.json`, so OpenClaw can discover it as a native local plugin.
-
-### Basic Configuration
-
-For the **default account**, you can quickly set up the bridge using environment variables:
+### 2. Set Credentials
+Set the required environment variables for your Zulip bot. These take precedence over configuration file fields for the default account.
 
 ```bash
-ZULIP_EMAIL="bot@your-zulip.com"
-ZULIP_API_KEY="your-api-key"
-ZULIP_URL="https://chat.your-zulip.com"
+export ZULIP_EMAIL="bot@example.com"
+export ZULIP_API_KEY="your-api-key"
+export ZULIP_URL="https://chat.example.com"
 ```
 
-Environment variables always take precedence over configuration file fields for the default account.
-
-### Configuration File (`openclaw.config.json`)
-
-Enable the bridge in your OpenClaw configuration:
+### 3. Configure OpenClaw
+Add the Zulip channel to your `openclaw.config.json`. This minimal setup enables the bridge and monitors a specific stream.
 
 ```json
 {
   "channels": {
     "zulip": {
       "enabled": true,
-      "streams": ["bot-testing", "announcements"],
+      "streams": ["bot-testing"],
       "dmPolicy": "pairing"
     }
   }
 }
 ```
 
-See [docs/config.md](docs/config.md) for a full reference of all available configuration options, including multi-account setups and policy details.
+### 4. Restart and Verify
+Restart OpenClaw to apply the changes.
 
-## Observability
+```bash
+# Command depends on your environment, e.g.:
+# openclaw start
+```
 
-The bridge uses standardized logging patterns to simplify troubleshooting. You can monitor the health of the connection by watching for `zulip queue` and `zulip inbound arrival` events.
+**Verification Steps:**
+- **Check Logs**: Look for `[zulip] queue registered` or `[zulip] queue loaded` to confirm a successful connection.
+- **Test DM**: Send a Direct Message to the bot. If `dmPolicy` is `pairing`, it should respond with a pairing code.
+- **Test Stream**: Mention the bot in the configured stream (e.g., `@bot-name hello`). The bot should receive the message and respond.
 
-Detailed observability documentation is available in [docs/observability.md](docs/observability.md).
+## Troubleshooting
+
+- **Queue Registration Fails**: Verify your `ZULIP_URL` is correct and reachable, and that `ZULIP_API_KEY` and `ZULIP_EMAIL` match exactly what is in your Zulip bot settings.
+- **Bot Not Responding in Streams**: Ensure the bot is a member of the stream and that the stream name is included in the `streams` array in your config.
+- **Plugin Not Recognized**: Run `openclaw plugins list` to verify `zulip` is installed and enabled. If not, re-run the `install` and `enable` commands from Step 1.
+- **Logs show `mention required`**: By default, the bot only responds to @mentions in streams. Ensure you are actually mentioning the bot or change `chatmode` to `onmessage`.
+
+## Advanced Configuration
+
+The bridge supports complex setups, including multiple accounts and custom traffic policies.
+
+- **Multiple Accounts**: See [docs/config.md](docs/config.md) for how to define additional accounts.
+- **Traffic Policies**: Detailed info on `dmPolicy` and `groupPolicy` is available in [docs/config.md](docs/config.md).
+- **Observability**: For machine-parseable log schemas and monitoring tips, see [docs/observability.md](docs/observability.md).
 
 ## Development
 
