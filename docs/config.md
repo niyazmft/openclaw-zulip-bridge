@@ -29,6 +29,8 @@ The following settings are available for each Zulip account (and as top-level de
 | Setting | Type | Description |
 | --- | --- | --- |
 | `url` | string | Zulip base URL. |
+| `site` | string | Alias for `url`. |
+| `realm` | string | Alias for `url`. |
 | `email` | string | Zulip bot email. |
 | `apiKey` | string | Zulip bot API key. |
 | `streams` | string[] | List of streams to monitor. Use `["*"]` for all (default). |
@@ -36,9 +38,9 @@ The following settings are available for each Zulip account (and as top-level de
 | `oncharPrefixes`| string[] | Trigger characters for `onchar` mode (default: `[">", "!"]`). |
 | `requireMention`| boolean | Explicit override for @mention requirement in streams. |
 | `dmPolicy` | enum | `pairing` (default), `allowlist`, `open`, or `disabled`. |
-| `groupPolicy` | enum | `allowlist` (default), `open`, or `disabled`. |
 | `allowFrom` | string[] | Authorized user IDs/emails for DMs and general commands. |
 | `groupAllowFrom`| string[] | Authorized user IDs/emails for Stream messages (falls back to `allowFrom`). |
+| `groupPolicy` | enum | `allowlist` (default), `open`, or `disabled`. |
 | `mediaMaxMb` | number | Maximum size in MB for incoming media (default: 5). |
 | `reactions` | object | Configure reaction behavior (see below). |
 | `blockStreaming`| boolean | Enable/disable block-based streaming responses. |
@@ -93,6 +95,24 @@ The bridge supports both Direct Message (DM) and Stream (Group) traffic. The beh
       "enabled": true,
       "streams": ["bot-testing"],
       "dmPolicy": "pairing"
+    }
+  }
+}
+```
+
+#### Allowlist-based DM Setup
+In this setup, only explicitly authorized users can interact with the bot in DMs. Other users will be ignored (not even prompted for pairing).
+
+```json
+{
+  "channels": {
+    "zulip": {
+      "enabled": true,
+      "site": "https://chat.example.com",
+      "email": "bot@example.com",
+      "apiKey": "your-api-key",
+      "dmPolicy": "allowlist",
+      "allowFrom": ["authorized-user@example.com", "admin@example.com"]
     }
   }
 }
