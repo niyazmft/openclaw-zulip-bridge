@@ -122,7 +122,7 @@ For more advanced options like multi-account support, custom reactions, and stre
 
 - **Plugin Not Recognized**: Run `openclaw plugins list` to verify `zulip` is installed and enabled.
   - Check the symlink: `ls -l ~/.openclaw/extensions/zulip` should point to your repo checkout.
-- **Queue Registration Fails**: Verify `ZULIP_URL` is reachable, and `ZULIP_API_KEY` matches exactly.
+- **Queue Registration Fails**: Verify `ZULIP_URL` is reachable, and that `ZULIP_API_KEY` and `ZULIP_EMAIL` match exactly.
 - **Bot Not Responding in Streams**: Ensure the bot is a member of the stream and that the stream name is in the `streams` array.
 - **Logs show `mention required`**: By default, the bot only responds to @mentions in streams. Mention the bot or change `chatmode` to `onmessage`.
 
