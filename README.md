@@ -71,6 +71,14 @@ Restart OpenClaw to apply the changes.
 
 Success is confirmed when the bot is both **registered** in logs and **responding** to messages.
 
+### Parity & Verification
+
+To verify that the bridge is running the latest repository version (and not a legacy installation), check for these markers:
+
+1.  **Log Markers**: Look for the log entry `zulip queue registered [accountId=... queueId=... lastEventId=...]`. Legacy versions likely lacked this structured log.
+2.  **PII Masking**: Send a message to the bot and observe the logs. The latest version implements `maskPII` for security, so logs should show masked values like `senderId: user:********` instead of full email addresses or numeric IDs.
+3.  **Durable State**: Check for persistent JSON files in your temporary directory (`os.tmpdir()`) with the pattern `openclaw-zulip-*.json`. These files store queue metadata and deduplication state, which was not present in legacy versions.
+
 ## Configure Zulip in openclaw.json
 
 While environment variables are great for secrets in the default account, you can also configure Zulip directly in your `openclaw.json` (or `openclaw.config.json`). This is required for multi-account setups or when using advanced policies.
