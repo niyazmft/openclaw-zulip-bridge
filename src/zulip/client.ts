@@ -101,13 +101,17 @@ function delay(ms: number): Promise<void> {
 export async function readZulipError(res: Response): Promise<string> {
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
-    const data = (await res.json()) as ZulipApiResponse | undefined;
-    if (data?.msg) {
-      return data.msg;
+    try {
+      const data = (await res.json()) as ZulipApiResponse | undefined;
+      if (data?.msg) {
+        return data.msg;
+      }
+    } catch {
+      // ignore parse errors
     }
-    return JSON.stringify(data);
+    return "Zulip API error";
   }
-  return await res.text();
+  return "Zulip API error";
 }
 
 export function createZulipClient(params: {

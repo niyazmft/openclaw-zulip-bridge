@@ -41,6 +41,7 @@ import {
   formatInboundFromLabel,
   resolveThreadSessionKeys,
   formatZulipLog,
+  maskPII,
 } from "./monitor-helpers.js";
 import { ZulipDedupeStore } from "./dedupe-store.js";
 import { sendMessageZulip } from "./send.js";
@@ -305,7 +306,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       formatZulipLog("zulip inbound arrival", {
         accountId: account.accountId,
         messageId,
-        senderId,
+        senderId: maskPII(senderId),
         kind,
         stream: streamName || streamId,
         topic,
@@ -455,7 +456,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         runtime.log?.(
           formatZulipLog("zulip pairing request", {
             accountId: account.accountId,
-            senderId,
+            senderId: maskPII(senderId),
             created,
           }),
         );
@@ -479,7 +480,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             runtime.error?.(
               formatZulipLog("zulip pairing reply failed", {
                 accountId: account.accountId,
-                senderId,
+                senderId: maskPII(senderId),
                 error: String(err),
               }),
             );
@@ -492,7 +493,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
               formatZulipLog(msg, {
                 accountId: account.accountId,
                 messageId,
-                senderId,
+                senderId: maskPII(senderId),
                 reason: policyResult.reason,
               }),
             ),
@@ -629,7 +630,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       formatZulipLog("zulip inbound dispatch", {
         accountId: account.accountId,
         messageId,
-        senderId,
+        senderId: maskPII(senderId),
         from: ctxPayload.From,
         sessionKey,
         len: bodyText.length,
@@ -773,7 +774,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         formatZulipLog("zulip reply failed", {
           accountId: account.accountId,
           messageId,
-          senderId,
+          senderId: maskPII(senderId),
           error: String(err),
         }),
       );

@@ -12,7 +12,7 @@ import {
   sendZulipStreamMessage,
   uploadZulipFile,
 } from "./client.js";
-import { formatZulipLog } from "./monitor-helpers.js";
+import { formatZulipLog, maskPII } from "./monitor-helpers.js";
 
 export type ZulipSendOpts = {
   apiKey?: string;
@@ -149,9 +149,9 @@ export async function sendMessageZulip(
   core.log?.(
     formatZulipLog("zulip outbound attempt", {
       accountId: account.accountId,
-      target: to,
+      target: maskPII(to),
       kind,
-      stream,
+      stream: stream ? maskPII(stream) : undefined,
       topic,
       sessionKey: opts.sessionKey,
       hasMedia: Boolean(opts.mediaUrl),
@@ -239,9 +239,9 @@ export async function sendMessageZulip(
     formatZulipLog("zulip outbound success", {
       accountId: account.accountId,
       messageId,
-      target: to,
+      target: maskPII(to),
       kind,
-      stream,
+      stream: stream ? maskPII(stream) : undefined,
       topic: target.kind === "stream" ? target.topic || opts.topic || DEFAULT_TOPIC : undefined,
       sessionKey: opts.sessionKey,
     }),

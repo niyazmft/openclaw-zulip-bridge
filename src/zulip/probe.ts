@@ -52,7 +52,7 @@ export async function probeZulip(
       },
     };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, error: "Zulip probe failed" };
   } finally {
     if (timeout) {
       clearTimeout(timeout);
