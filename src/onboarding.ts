@@ -7,19 +7,22 @@ import {
   resolveDefaultZulipAccountId,
   resolveZulipAccount,
 } from "./zulip/accounts.js";
+import { createZulipClient, fetchZulipSubscriptions } from "./zulip/client.js";
+import { probeZulip } from "./zulip/probe.js";
 
 const channel = "zulip" as const;
 
 async function noteZulipSetup(prompter: WizardPrompter): Promise<void> {
   await prompter.note(
     [
-      "1) Zulip settings -> Bots -> Create a bot",
-      "2) Copy the bot email + API key",
-      "3) Use your server base URL (e.g., https://chat.example.com)",
+      "1) In Zulip: Settings -> Bots -> Add a new bot",
+      "2) Bot type: 'Generic bot' is recommended",
+      "3) Copy the bot's Email and API Key from 'Active bots'",
+      "4) Server URL: the base URL (e.g., https://chat.example.com)",
       "Tip: the bot must be a member of any stream you want it to monitor.",
       "Docs: https://docs.openclaw.ai/channels/zulip",
     ].join("\n"),
-    "Zulip credentials",
+    "Zulip Setup",
   );
 }
 
@@ -75,95 +78,222 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
     let apiKey: string | null = null;
     let email: string | null = null;
     let baseUrl: string | null = null;
+    let useEnv = false;
 
     if (!accountConfigured) {
       await noteZulipSetup(prompter);
     }
 
-    if (canUseEnv && !hasConfigValues) {
-      const keepEnv = await prompter.confirm({
-        message: "ZULIP_API_KEY + ZULIP_EMAIL + ZULIP_URL detected. Use env vars?",
-        initialValue: true,
-      });
-      if (keepEnv) {
-        const zulipSection = (next.channels?.zulip ?? {}) as ZulipConfig;
-        next = {
-          ...next,
-          channels: {
-            ...next.channels,
-            zulip: {
-              ...zulipSection,
-              enabled: true,
-            },
-          },
-        };
-      } else {
-        apiKey = String(
-          await prompter.text({
+    let verified = false;
+    let skipVerification = false;
+
+    while (!verified && !skipVerification) {
+      if (canUseEnv && !hasConfigValues && !apiKey && !useEnv) {
+        const keepEnv = await prompter.confirm({
+          message: "ZULIP_API_KEY + ZULIP_EMAIL + ZULIP_URL detected. Use env vars?",
+          initialValue: true,
+        });
+        if (typeof keepEnv === "symbol") {
+          return { cfg, accountId };
+        }
+        if (keepEnv) {
+          apiKey = process.env.ZULIP_API_KEY?.trim() ?? null;
+          email = process.env.ZULIP_EMAIL?.trim() ?? null;
+          baseUrl = process.env.ZULIP_URL?.trim() ?? null;
+          useEnv = true;
+        } else {
+          const resApiKey = await prompter.text({
             message: "Enter Zulip API key",
             validate: (value) => (value?.trim() ? undefined : "Required"),
-          }),
-        ).trim();
-        email = String(
-          await prompter.text({
+          });
+          if (typeof resApiKey === "symbol") {
+            return { cfg, accountId };
+          }
+          apiKey = String(resApiKey).trim();
+
+          const resEmail = await prompter.text({
             message: "Enter Zulip bot email",
             validate: (value) => (value?.trim() ? undefined : "Required"),
-          }),
-        ).trim();
-        baseUrl = String(
-          await prompter.text({
+          });
+          if (typeof resEmail === "symbol") {
+            return { cfg, accountId };
+          }
+          email = String(resEmail).trim();
+
+          const resBaseUrl = await prompter.text({
             message: "Enter Zulip base URL",
             validate: (value) => (value?.trim() ? undefined : "Required"),
-          }),
-        ).trim();
-      }
-    } else if (accountConfigured) {
-      const keep = await prompter.confirm({
-        message: "Zulip credentials already configured. Keep them?",
-        initialValue: true,
-      });
-      if (!keep) {
-        apiKey = String(
-          await prompter.text({
+          });
+          if (typeof resBaseUrl === "symbol") {
+            return { cfg, accountId };
+          }
+          baseUrl = String(resBaseUrl).trim();
+        }
+      } else if (accountConfigured && !apiKey) {
+        const keep = await prompter.confirm({
+          message: "Zulip credentials already configured. Keep them?",
+          initialValue: true,
+        });
+        if (typeof keep === "symbol") {
+          return { cfg, accountId };
+        }
+        if (keep) {
+          apiKey = resolvedAccount.apiKey ?? null;
+          email = resolvedAccount.email ?? null;
+          baseUrl = resolvedAccount.baseUrl ?? null;
+          verified = true;
+          break;
+        } else {
+          const resApiKey = await prompter.text({
             message: "Enter Zulip API key",
             validate: (value) => (value?.trim() ? undefined : "Required"),
-          }),
-        ).trim();
-        email = String(
-          await prompter.text({
+          });
+          if (typeof resApiKey === "symbol") {
+            return { cfg, accountId };
+          }
+          apiKey = String(resApiKey).trim();
+
+          const resEmail = await prompter.text({
             message: "Enter Zulip bot email",
             validate: (value) => (value?.trim() ? undefined : "Required"),
-          }),
-        ).trim();
-        baseUrl = String(
-          await prompter.text({
+          });
+          if (typeof resEmail === "symbol") {
+            return { cfg, accountId };
+          }
+          email = String(resEmail).trim();
+
+          const resBaseUrl = await prompter.text({
             message: "Enter Zulip base URL",
             validate: (value) => (value?.trim() ? undefined : "Required"),
-          }),
-        ).trim();
-      }
-    } else {
-      apiKey = String(
-        await prompter.text({
+          });
+          if (typeof resBaseUrl === "symbol") {
+            return { cfg, accountId };
+          }
+          baseUrl = String(resBaseUrl).trim();
+        }
+      } else if (!apiKey) {
+        const resApiKey = await prompter.text({
           message: "Enter Zulip API key",
+          initialValue: apiKey ?? undefined,
           validate: (value) => (value?.trim() ? undefined : "Required"),
-        }),
-      ).trim();
-      email = String(
-        await prompter.text({
+        });
+        if (typeof resApiKey === "symbol") {
+          return { cfg, accountId };
+        }
+        apiKey = String(resApiKey).trim();
+
+        const resEmail = await prompter.text({
           message: "Enter Zulip bot email",
+          initialValue: email ?? undefined,
           validate: (value) => (value?.trim() ? undefined : "Required"),
-        }),
-      ).trim();
-      baseUrl = String(
-        await prompter.text({
+        });
+        if (typeof resEmail === "symbol") {
+          return { cfg, accountId };
+        }
+        email = String(resEmail).trim();
+
+        const resBaseUrl = await prompter.text({
           message: "Enter Zulip base URL",
+          initialValue: baseUrl ?? undefined,
           validate: (value) => (value?.trim() ? undefined : "Required"),
-        }),
-      ).trim();
+        });
+        if (typeof resBaseUrl === "symbol") {
+          return { cfg, accountId };
+        }
+        baseUrl = String(resBaseUrl).trim();
+      }
+
+      if (apiKey && email && baseUrl) {
+        const probe = await probeZulip(baseUrl, email, apiKey);
+        if (probe.ok) {
+          verified = true;
+          await prompter.note(`Successfully verified Zulip credentials for ${probe.bot?.email}.`);
+        } else {
+          await prompter.note(`Verification failed: ${probe.error}`, "Zulip Verification");
+          const retry = await prompter.confirm({
+            message: "Re-enter credentials?",
+            initialValue: true,
+          });
+          if (typeof retry === "symbol") {
+            return { cfg, accountId };
+          }
+          if (!retry) {
+            skipVerification = true;
+          } else {
+            // Re-prompt specifically for strings. Env vars are skipped if useEnv is reset.
+            useEnv = false;
+            apiKey = useEnv ? null : apiKey;
+            email = useEnv ? null : email;
+            baseUrl = useEnv ? null : baseUrl;
+
+            const editApiKey = await prompter.text({
+              message: "Edit Zulip API key",
+              initialValue: apiKey ?? undefined,
+              validate: (value) => (value?.trim() ? undefined : "Required"),
+            });
+            if (typeof editApiKey === "symbol") return { cfg, accountId };
+            apiKey = String(editApiKey).trim();
+
+            const editEmail = await prompter.text({
+              message: "Edit Zulip bot email",
+              initialValue: email ?? undefined,
+              validate: (value) => (value?.trim() ? undefined : "Required"),
+            });
+            if (typeof editEmail === "symbol") return { cfg, accountId };
+            email = String(editEmail).trim();
+
+            const editBaseUrl = await prompter.text({
+              message: "Edit Zulip base URL",
+              initialValue: baseUrl ?? undefined,
+              validate: (value) => (value?.trim() ? undefined : "Required"),
+            });
+            if (typeof editBaseUrl === "symbol") return { cfg, accountId };
+            baseUrl = String(editBaseUrl).trim();
+          }
+        }
+      } else {
+        verified = true;
+      }
     }
 
-    if (apiKey || email || baseUrl) {
+    let streams: string[] | undefined;
+    if (verified && apiKey && email && baseUrl) {
+      try {
+        const client = createZulipClient({ baseUrl, email, apiKey });
+        const subscriptions = await fetchZulipSubscriptions(client);
+        const streamNames = subscriptions
+          .map((s) => s.name)
+          .filter((name): name is string => Boolean(name));
+
+        if (streamNames.length > 0) {
+          const streamInput = await prompter.text({
+            message: "Which streams should the bot monitor? (comma-separated)",
+            placeholder: "e.g. bot-testing, announcements",
+            hint: `Subscribed streams: ${streamNames.join(", ")}`,
+            initialValue: streamNames.join(", "),
+          });
+          if (typeof streamInput === "symbol") {
+            return { cfg, accountId };
+          }
+          if (streamInput?.trim()) {
+            streams = streamInput
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+          }
+        } else {
+          await prompter.note(
+            "The bot is not yet subscribed to any streams. You can add them later in the config.",
+            "Zulip Streams",
+          );
+        }
+      } catch (err) {
+        // Log error but don't fail onboarding
+        console.error("Failed to fetch Zulip subscriptions during onboarding:", err);
+      }
+    }
+
+    if (apiKey || email || baseUrl || streams) {
       const zulipSection = (next.channels?.zulip ?? {}) as ZulipConfig;
       const zulipAccounts = (zulipSection.accounts ?? {}) as Record<string, ZulipAccountConfig>;
       if (accountId === DEFAULT_ACCOUNT_ID) {
@@ -174,9 +304,10 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
             zulip: {
               ...zulipSection,
               enabled: true,
-              ...(apiKey ? { apiKey } : {}),
-              ...(email ? { email } : {}),
-              ...(baseUrl ? { url: baseUrl } : {}),
+              ...(useEnv ? {} : { ...(apiKey ? { apiKey } : {}) }),
+              ...(useEnv ? {} : { ...(email ? { email } : {}) }),
+              ...(useEnv ? {} : { ...(baseUrl ? { url: baseUrl } : {}) }),
+              ...(streams ? { streams } : {}),
             },
           },
         };
@@ -196,6 +327,7 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
                   ...(apiKey ? { apiKey } : {}),
                   ...(email ? { email } : {}),
                   ...(baseUrl ? { url: baseUrl } : {}),
+                  ...(streams ? { streams } : {}),
                 },
               },
             },
