@@ -21,9 +21,8 @@
       "order": 70
     },
     "install": {
-      "npmSpec": "@openclaw/zulip",
-      "localPath": "extensions/zulip",
-      "defaultChoice": "npm"
+      "localPath": ".",
+      "defaultChoice": "local"
     }
   },
   "private": true,
