@@ -1,6 +1,6 @@
 ---
 name: zulip-bridge
-description: 🦞 High-performance Zulip bridge skill. Enables messaging, stream monitoring, and administrative actions on Zulip servers.
+description: 💬 High-performance Zulip bridge skill. Enables messaging, stream monitoring, and administrative actions on Zulip servers.
 user-invocable: true
 metadata: {
   "openclaw": {
