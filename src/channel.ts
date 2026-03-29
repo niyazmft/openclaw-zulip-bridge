@@ -275,12 +275,31 @@ export const zulipPlugin: ChannelPlugin<ResolvedZulipAccount> = {
       const apiKey = (inputAny.apiKey as string | undefined) ?? input.botToken ?? input.token;
       const email = inputAny.email as string | undefined;
       const baseUrl = input.httpUrl;
-      if (!input.useEnv && (!apiKey || !email || !baseUrl)) {
-        return "Zulip requires --api-key, --email, and --http-url (or --use-env).";
+
+      if (input.useEnv) {
+        return null;
       }
-      if (baseUrl && !normalizeZulipBaseUrl(baseUrl)) {
+
+      if (!apiKey || !apiKey.trim()) {
+        return "Zulip requires --api-key (or --token/--bot-token).";
+      }
+      if (!email || !email.trim()) {
+        return "Zulip requires --email.";
+      }
+      if (!baseUrl || !baseUrl.trim()) {
+        return "Zulip requires --http-url.";
+      }
+
+      const normalized = normalizeZulipBaseUrl(baseUrl);
+      if (!normalized) {
         return "Zulip --http-url must include a valid base URL.";
       }
+      try {
+        new URL(normalized);
+      } catch {
+        return `Zulip --http-url "${baseUrl}" is not a valid URL (e.g. https://chat.zulip.org).`;
+      }
+
       return null;
     },
     applyAccountConfig: ({ cfg, accountId, input }) => {
