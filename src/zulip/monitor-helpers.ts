@@ -174,3 +174,51 @@ export function formatZulipLog(message: string, fields: Record<string, any>): st
     .map(([k, v]) => `${k}=${v}`);
   return parts.length > 0 ? `${message} [${parts.join(" ")}]` : message;
 }
+
+/**
+ * Masks sensitive information (PII) like emails and numeric IDs for safe logging.
+ */
+export function maskPII(value: string | number | undefined | null): string {
+  const str = String(value ?? "").trim();
+  if (!str) {
+    return "";
+  }
+
+  // Handle email
+  if (str.includes("@")) {
+    const [user, domain] = str.split("@");
+    if (user && domain) {
+      const maskedUser = user.length > 1 ? `${user[0]}***` : "***";
+      return `${maskedUser}@${domain}`;
+    }
+  }
+
+  // Handle numeric ID
+  if (/^\d+$/.test(str)) {
+    if (str.length <= 2) {
+      return "**";
+    }
+    if (str.length <= 5) {
+      return `${str[0]}***${str[str.length - 1]}`;
+    }
+    return `${str.slice(0, 2)}***${str.slice(-2)}`;
+  }
+
+  // Handle prefixed targets like user:email or stream:name
+  if (str.startsWith("user:")) {
+    return `user:${maskPII(str.slice(5))}`;
+  }
+  if (str.startsWith("stream:")) {
+    const rest = str.slice(7);
+    const parts = rest.split(/[:#/]/);
+    const streamName = parts[0];
+    const maskedStream = streamName.length > 2 ? `${streamName.slice(0, 2)}***` : "***";
+    return `stream:${maskedStream}${parts.length > 1 ? ":" + parts.slice(1).join(":") : ""}`;
+  }
+
+  // Fallback for other strings that might be sensitive
+  if (str.length <= 2) {
+    return "**";
+  }
+  return `${str.slice(0, 2)}***${str.slice(-2)}`;
+}

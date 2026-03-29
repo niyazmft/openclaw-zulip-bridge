@@ -26,6 +26,7 @@ import {
   type ResolvedZulipAccount,
 } from "./zulip/accounts.js";
 import { normalizeZulipBaseUrl } from "./zulip/client.js";
+import { maskPII } from "./zulip/monitor-helpers.js";
 import { monitorZulipProvider } from "./zulip/monitor.js";
 import { probeZulip } from "./zulip/probe.js";
 import { sendMessageZulip } from "./zulip/send.js";
@@ -73,7 +74,7 @@ export const zulipPlugin: ChannelPlugin<ResolvedZulipAccount> = {
     idLabel: "zulipUserId",
     normalizeAllowEntry: (entry) => normalizeAllowEntry(entry),
     notifyApproval: async ({ id }) => {
-      console.log(`[zulip] User ${id} approved for pairing`);
+      console.log(`[zulip] User ${maskPII(id)} approved for pairing`);
     },
   },
   capabilities: {
