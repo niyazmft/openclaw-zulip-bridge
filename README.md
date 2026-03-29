@@ -30,7 +30,7 @@ That package is not currently published to the npm registry, and this repo is ma
 Instead, install the plugin from a local checkout/path:
 
 ```bash
-openclaw plugins install /path/to/openclaw-zulip-bridge --link
+openclaw plugins install "$HOME/.openclaw/workspace/specialists/tech/openclaw-zulip-bridge" --link
 openclaw plugins enable zulip
 ```
 
