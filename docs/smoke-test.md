@@ -62,4 +62,4 @@ This document provides a manual smoke testing checklist for the OpenClaw Zulip B
 
 - **Queue churn:** If logs show constant re-registration, check network connectivity between the runtime and the Zulip server.
 - **Missing messages:** Check the `ZULIP_EMAIL` configuration to ensure the bot is not filtering out its own messages. Verify DM/Group policy settings in the OpenClaw configuration.
-- **Install confusion:** If someone tries `npm install @openclaw/zulip`, redirect them to the local sideload flow above; this repository is currently intended for sideload installation rather than npm registry distribution.
+- **Install confusion:** If the plugin is not recognized by OpenClaw, verify that the local path provided to `openclaw plugins install` is correct and that the plugin was successfully enabled with `openclaw plugins enable zulip`.
