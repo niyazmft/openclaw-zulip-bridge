@@ -17,11 +17,27 @@ The OpenClaw Zulip Bridge is a high-performance channel plugin for OpenClaw that
 
 ### Installation
 
-The Zulip bridge is typically installed as part of the OpenClaw plugin suite or via NPM:
+This repository is currently distributed as a **sideloaded local OpenClaw plugin**, not as a published npm package.
+
+Do **not** run:
 
 ```bash
 npm install @openclaw/zulip
 ```
+
+That package is not currently published to the npm registry, and this repo is marked `private`, which matches the current sideload-only distribution model.
+
+Instead, install the plugin from a local checkout/path:
+
+```bash
+openclaw plugins install /path/to/openclaw-zulip-bridge --link
+openclaw plugins enable zulip
+```
+
+Notes:
+- `--link` keeps the plugin connected to your working tree, which is useful for staging and sideload setups.
+- You can also install from a local path without `--link` if you want OpenClaw to copy the plugin into its managed extensions area.
+- This repo ships `openclaw.plugin.json`, so OpenClaw can discover it as a native local plugin.
 
 ### Basic Configuration
 
@@ -68,7 +84,7 @@ Detailed observability documentation is available in [docs/observability.md](doc
 
 ### Local Setup
 
-1. Install dependencies:
+1. Install dependencies for plugin development:
    ```bash
    npm install
    ```
@@ -77,6 +93,8 @@ Detailed observability documentation is available in [docs/observability.md](doc
    ```bash
    npm run check
    ```
+
+This `npm install` step is for **working on the plugin itself**, not for installing the plugin into OpenClaw from npm.
 
 ### Project Structure
 
