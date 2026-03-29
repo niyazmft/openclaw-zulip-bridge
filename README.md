@@ -64,6 +64,40 @@ Restart OpenClaw to apply the changes.
 - **Test DM**: Send a Direct Message to the bot. If `dmPolicy` is `pairing`, it should respond with a pairing code.
 - **Test Stream**: Mention the bot in the configured stream (e.g., `@bot-name hello`). The bot should receive the message and respond.
 
+## Configure Zulip in openclaw.json
+
+While environment variables are great for secrets in the default account, you can also configure Zulip directly in your `openclaw.json` (or `openclaw.config.json`). This is required for multi-account setups or when using advanced policies.
+
+### Reference Configuration
+
+```json
+{
+  "channels": {
+    "zulip": {
+      "enabled": true,
+      "site": "https://<your-realm>.zulipchat.com/",
+      "email": "<bot-email>",
+      "apiKey": "<bot-api-key>",
+      "dmPolicy": "allowlist",
+      "allowFrom": ["<authorized-user@example.com>"],
+      "blockStreaming": true
+    }
+  }
+}
+```
+
+### Configuration Fields
+
+- **`enabled`**: (boolean) Set to `true` to enable the Zulip channel.
+- **`site` / `url` / `realm`**: (string) The base URL of your Zulip server. These are interchangeable aliases.
+- **`email`**: (string) The email address of your Zulip bot.
+- **`apiKey`**: (string) The API key for your Zulip bot.
+- **`dmPolicy`**: (string) Controls who can DM the bot. Options: `pairing`, `allowlist`, `open`, `disabled`.
+- **`allowFrom`**: (string[]) A list of authorized Zulip emails or user IDs allowed to interact with the bot (used by `allowlist` and `pairing` policies).
+- **`blockStreaming`**: (boolean) Enable or disable block-based streaming for responses.
+
+For more advanced options like multi-account support, custom reactions, and stream-specific policies, see [docs/config.md](docs/config.md).
+
 ## Troubleshooting
 
 - **Queue Registration Fails**: Verify your `ZULIP_URL` is correct and reachable, and that `ZULIP_API_KEY` and `ZULIP_EMAIL` match exactly what is in your Zulip bot settings.
