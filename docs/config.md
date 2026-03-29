@@ -112,7 +112,7 @@ In this setup, only explicitly authorized users can interact with the bot in DMs
       "email": "bot@example.com",
       "apiKey": "your-api-key",
       "dmPolicy": "allowlist",
-      "allowFrom": ["authorized-user@example.com", "admin@example.com"]
+      "allowFrom": ["authorized-user@example.com", "admin@example.com", 12345]
     }
   }
 }
