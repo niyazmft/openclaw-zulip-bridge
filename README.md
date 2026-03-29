@@ -93,7 +93,7 @@ While environment variables are great for secrets in the default account, you ca
 - **`email`**: (string) The email address of your Zulip bot.
 - **`apiKey`**: (string) The API key for your Zulip bot.
 - **`dmPolicy`**: (string) Controls who can DM the bot. Options: `pairing`, `allowlist`, `open`, `disabled`.
-- **`allowFrom`**: (string[]) A list of authorized Zulip emails or user IDs allowed to interact with the bot (used by `allowlist` and `pairing` policies).
+**`allowFrom`**: (Array<string | number>) A list of authorized Zulip emails or user IDs allowed to interact with the bot (used by `allowlist` and `pairing` policies).
 - **`blockStreaming`**: (boolean) Enable or disable block-based streaming for responses.
 
 For more advanced options like multi-account support, custom reactions, and stream-specific policies, see [docs/config.md](docs/config.md).
