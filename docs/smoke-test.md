@@ -8,7 +8,7 @@ This document provides a manual smoke testing checklist for the OpenClaw Zulip B
 2. A test Zulip organization (realm) where you have administrative access or can create bots.
 3. A dedicated Zulip bot account for staging (`ZULIP_EMAIL`, `ZULIP_API_KEY`, `ZULIP_URL`).
 4. At least two test user accounts in the Zulip organization.
-5. A dedicated test stream (e.g., `#staging-test`).
+5. A dedicated test stream (e.g., `bot-testing`).
 6. A local checkout of this repository for sideload installation.
 
 ## Checklist
@@ -16,10 +16,28 @@ This document provides a manual smoke testing checklist for the OpenClaw Zulip B
 ### 1. Installation, Configuration & Startup
 - [ ] Install the plugin from a local checkout:
   ```bash
-  openclaw plugins install "$HOME/.openclaw/workspace/specialists/tech/openclaw-zulip-bridge" --link
+  # From the root of the openclaw-zulip-bridge repo
+  openclaw plugins install ./ --link
   openclaw plugins enable zulip
   ```
-- [ ] Configure the bridge in the staging OpenClaw environment using environment variables (`ZULIP_EMAIL`, `ZULIP_API_KEY`, `ZULIP_URL`).
+- [ ] Configure the bridge in the staging OpenClaw environment using environment variables:
+  ```bash
+  export ZULIP_EMAIL="bot@example.com"
+  export ZULIP_API_KEY="your-api-key"
+  export ZULIP_URL="https://chat.example.com"
+  ```
+- [ ] Ensure `openclaw.config.json` has the zulip channel enabled:
+  ```json
+  {
+    "channels": {
+      "zulip": {
+        "enabled": true,
+        "streams": ["bot-testing"],
+        "dmPolicy": "pairing"
+      }
+    }
+  }
+  ```
 - [ ] Start the OpenClaw runtime.
 - [ ] Verify the bridge initializes without errors in the logs.
 - [ ] Check logs for `zulip queue registered` indicating a successful connection to the Zulip events API.
