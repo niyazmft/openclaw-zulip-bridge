@@ -107,7 +107,7 @@ export const zulipSetupWizard: ChannelSetupWizard = {
   ],
   textInputs: [
     {
-      inputKey: "tokenFile",
+      inputKey: "email",
       message: "Enter Zulip bot email",
       confirmCurrentValue: false,
       currentValue: ({ cfg, accountId }) =>
