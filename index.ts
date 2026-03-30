@@ -3,6 +3,9 @@ import { emptyPluginConfigSchema } from "openclaw/plugin-sdk/core";
 import { zulipPlugin } from "./src/channel.js";
 import { setZulipRuntime } from "./src/runtime.js";
 
+export { zulipPlugin } from "./src/channel.js";
+export { setZulipRuntime } from "./src/runtime.js";
+
 const plugin = {
   id: "zulip",
   name: "Zulip",

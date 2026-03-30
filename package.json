@@ -23,7 +23,11 @@
     },
     "install": {
       "localPath": ".",
-      "defaultChoice": "local"
+      "defaultChoice": "local",
+      "minHostVersion": ">=2026.3.28"
+    },
+    "bundle": {
+      "stageRuntimeDependencies": true
     }
   },
   "private": true,
