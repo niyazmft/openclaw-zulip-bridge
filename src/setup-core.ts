@@ -36,7 +36,7 @@ export const zulipSetupAdapter: ChannelSetupAdapter = createPatchedAccountSetupA
     ],
     validate: ({ input }) => {
       const apiKey = input.token ?? input.botToken;
-      const email = input.email;
+      const email = input.tokenFile;
       const baseUrl = normalizeZulipBaseUrl(input.httpUrl);
       if (!input.useEnv && (!apiKey || !email || !baseUrl)) {
         return "Zulip requires --token (or --bot-token), --token-file for email, and --http-url (or --use-env).";
