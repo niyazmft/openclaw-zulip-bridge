@@ -13,7 +13,7 @@ import { zulipChannelConfigUiHints } from "./config-ui-hints.js";
 const ZulipAccountSchema = z.object({
   name: z.string().optional(),
   capabilities: z.array(z.string()).optional(),
-  markdown: MarkdownConfigSchema,
+  markdown: MarkdownConfigSchema.optional(),
   enabled: z.boolean().optional(),
   configWrites: z.boolean().optional(),
   url: z.string().optional(),
@@ -26,8 +26,8 @@ const ZulipAccountSchema = z.object({
   oncharPrefixes: z.array(z.string()).optional(),
   requireMention: z.boolean().optional(),
   dmPolicy: DmPolicySchema.optional(),
-  allowFrom: z.array(z.string()).optional(),
-  groupAllowFrom: z.array(z.string()).optional(),
+  allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
+  groupAllowFrom: z.array(z.union([z.string(), z.number()])).optional(),
   groupPolicy: GroupPolicySchema.optional(),
   mediaMaxMb: z.number().int().positive().optional(),
   reactions: z

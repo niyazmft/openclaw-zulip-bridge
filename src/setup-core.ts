@@ -51,12 +51,15 @@ export const zulipSetupAdapter: ChannelSetupAdapter = createPatchedAccountSetupA
     const apiKey = input.token ?? input.botToken;
     const email = input.tokenFile?.trim();
     const baseUrl = normalizeZulipBaseUrl(input.httpUrl);
-    return input.useEnv
-      ? {}
-      : {
-          ...(apiKey ? { apiKey } : {}),
-          ...(email ? { email } : {}),
-          ...(baseUrl ? { url: baseUrl } : {}),
-        };
+    return {
+      enabled: true,
+      ...(input.useEnv
+        ? {}
+        : {
+            ...(apiKey ? { apiKey } : {}),
+            ...(email ? { email } : {}),
+            ...(baseUrl ? { url: baseUrl } : {}),
+          }),
+    };
   },
 });
