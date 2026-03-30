@@ -10,7 +10,7 @@ metadata: {
   }
 }
 ---
-# 🦞 Zulip Bridge Skill
+# 💬 Zulip Bridge Skill
 
 This skill provides the intelligence and instructions for interacting with the Zulip communication platform through the OpenClaw Zulip Bridge plugin.
 
