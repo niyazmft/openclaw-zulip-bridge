@@ -1,9 +1,54 @@
 {
   "id": "zulip",
+  "kind": "channel",
   "channels": ["zulip"],
+  "name": "Zulip",
+  "description": "OpenClaw Zulip channel plugin",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "zulip": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "site": { "type": "string" },
+          "url": { "type": "string" },
+          "realm": { "type": "string" },
+          "email": { "type": "string" },
+          "apiKey": { "type": "string" },
+          "streams": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "chatmode": {
+            "type": "string",
+            "enum": ["oncall", "onmessage", "onchar"]
+          },
+          "oncharPrefixes": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "requireMention": { "type": "boolean" },
+          "dmPolicy": {
+            "type": "string",
+            "enum": ["pairing", "allowlist", "open", "disabled"]
+          },
+          "allowFrom": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "groupAllowFrom": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "groupPolicy": {
+            "type": "string",
+            "enum": ["allowlist", "open", "disabled"]
+          }
+        }
+      }
+    }
   }
 }
