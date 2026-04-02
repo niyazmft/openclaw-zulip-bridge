@@ -148,7 +148,7 @@ Non-default accounts must be defined in the `accounts` map and **require** crede
 ```
 
 ## Security Best Practices
+- **Prioritize environment variables** for credentials (`ZULIP_API_KEY`, `ZULIP_EMAIL`, `ZULIP_URL`). This prevents sensitive data from being stored in plaintext on disk.
 - **Do not commit secrets** to your repository. Use `.env.example` as a template for your local or server environment.
-- **Prefer environment variables** for the default account's `apiKey`.
-- If using multi-account config, ensure your configuration file is properly protected and not part of the source control.
+- If you must store credentials in `openclaw.json` (e.g., for multi-account setups), ensure the file is properly protected (e.g., `chmod 600`) and is not tracked by source control.
 - Use the least-privileged bot type in Zulip where possible.

@@ -45,21 +45,24 @@ openclaw plugins enable zulip
 > **Note on Linked Plugins**: The `--link` flag creates a symbolic link from the OpenClaw extensions directory (typically `~/.openclaw/extensions/zulip`) back to your local repository checkout. This means the local repo **is** the source of truth for the installed plugin; any local code changes are reflected immediately after an OpenClaw restart without re-installing.
 
 ### 2. Configure OpenClaw
-Add the Zulip channel configuration to your `~/.openclaw/openclaw.json`. You will need to provide your bot's email, API key, and the server URL.
+It is highly recommended to use **environment variables** for your Zulip credentials to avoid storing secrets in plaintext in your configuration file.
 
+#### Recommended: Using Environment Variables
+Set the following variables in your shell or `.env` file:
+- `ZULIP_API_KEY`: Your bot's API key.
+- `ZULIP_EMAIL`: Your bot's email address.
+- `ZULIP_URL`: The base URL of your Zulip server.
+
+Then, your `~/.openclaw/openclaw.json` can remain simple:
 ```json
 {
   "channels": {
     "zulip": {
       "enabled": true,
       "dmPolicy": "allowlist",
-      "site": "https://chat.example.com",
-      "email": "bot@example.com",
-      "apiKey": "bot-api-key",
       "allowFrom": [
         "user@example.com"
-      ],
-      "streaming": true
+      ]
     }
   },
   "plugins": {
