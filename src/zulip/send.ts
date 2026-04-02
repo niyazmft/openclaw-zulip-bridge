@@ -105,6 +105,13 @@ function parseZulipTarget(raw: string): ZulipTarget {
   return { kind: "stream", stream: trimmed };
 }
 
+/**
+ * Sends a message to a Zulip stream or user.
+ * Security: This function implements "read-and-send" hardening by:
+ * 1. Rejecting non-HTTP protocols for `mediaUrl` to prevent local file exfiltration.
+ * 2. Downloading remote media to a controlled temporary file before uploading to Zulip.
+ * 3. Only calling `uploadZulipFile` with paths to these verified temporary files.
+ */
 export async function sendMessageZulip(
   to: string,
   text: string,

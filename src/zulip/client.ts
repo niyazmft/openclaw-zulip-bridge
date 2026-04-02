@@ -61,9 +61,17 @@ export type ZulipMessage = {
   recipient_id?: string | null;
 };
 
+/**
+ * Normalizes a Zulip base URL by trimming whitespace and removing trailing slashes.
+ * Security: Only http:// and https:// protocols are allowed to prevent SSRF and protocol smuggling.
+ */
 export function normalizeZulipBaseUrl(raw?: string | null): string | undefined {
   const trimmed = raw?.trim();
   if (!trimmed) {
+    return undefined;
+  }
+  // Security check: only allow http or https protocols.
+  if (!/^https?:\/\//i.test(trimmed)) {
     return undefined;
   }
   return trimmed.replace(/\/+$/, "");
@@ -429,6 +437,13 @@ export async function sendZulipPrivateMessage(
   return { id: payload.id };
 }
 
+/**
+ * Uploads a local file to the Zulip server.
+ * Security: This function relies on the caller (e.g., sendMessageZulip) to ensure that the
+ * `filePath` refers to a safe, temporary, or verified local file and not an arbitrary
+ * system path controlled by an untrusted source. The destination is always the validated
+ * `client.baseUrl` associated with the provided client.
+ */
 export async function uploadZulipFile(
   client: ZulipClient,
   filePath: string,
