@@ -185,7 +185,7 @@ export function maskPII(value: string | number | undefined | null): string {
   }
 
   // Handle email
-  if (str.includes("@")) {
+  if (str.includes("@") && !str.includes(":")) {
     const [user, domain] = str.split("@");
     if (user && domain) {
       const maskedUser = user.length > 1 ? `${user[0]}***` : "***";
@@ -205,8 +205,9 @@ export function maskPII(value: string | number | undefined | null): string {
   }
 
   // Handle prefixed targets like user:email or stream:name
-  if (str.startsWith("user:")) {
-    return `user:${maskPII(str.slice(5))}`;
+  if (str.startsWith("user:") || str.startsWith("dm:")) {
+    const prefix = str.startsWith("user:") ? "user:" : "dm:";
+    return `${prefix}${maskPII(str.slice(prefix.length))}`;
   }
   if (str.startsWith("stream:")) {
     const rest = str.slice(7);

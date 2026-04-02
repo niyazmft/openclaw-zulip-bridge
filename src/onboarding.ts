@@ -8,6 +8,7 @@ import {
   resolveZulipAccount,
 } from "./zulip/accounts.js";
 import { createZulipClient, fetchZulipSubscriptions } from "./zulip/client.js";
+import { maskPII } from "./zulip/monitor-helpers.js";
 import { probeZulip } from "./zulip/probe.js";
 
 const channel = "zulip" as const;
@@ -207,7 +208,8 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
         const probe = await probeZulip(baseUrl, email, apiKey);
         if (probe.ok) {
           verified = true;
-          await prompter.note(`Successfully verified Zulip credentials for ${probe.bot?.email}.`);
+          const masked = maskPII(probe.bot?.email);
+          await prompter.note(`Successfully verified Zulip credentials${masked ? " for " + masked : ""}.`);
         } else {
           await prompter.note(`Verification failed: ${probe.error}`, "Zulip Verification");
           const retry = await prompter.confirm({

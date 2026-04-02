@@ -186,7 +186,17 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         lastStartAt: runtime?.lastStartAt ?? null,
         lastStopAt: runtime?.lastStopAt ?? null,
         lastError: runtime?.lastError ?? null,
-        probe,
+        probe: probe
+          ? {
+              ...probe,
+              bot: probe.bot
+                ? {
+                    ...probe.bot,
+                    email: maskPII(probe.bot.email) || null,
+                  }
+                : undefined,
+            }
+          : undefined,
         lastInboundAt: runtime?.lastInboundAt ?? null,
         lastOutboundAt: runtime?.lastOutboundAt ?? null,
       }) as ChannelAccountSnapshot,
