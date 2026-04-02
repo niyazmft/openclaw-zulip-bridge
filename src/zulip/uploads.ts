@@ -18,7 +18,9 @@ export function extractZulipUploadUrls(html: string, baseUrl: string): string[] 
   } catch {
     baseOrigin = "";
   }
-  const matches = html.matchAll(/(?:https?:\/\/[^\s"'<>)]+)?\/user_uploads\/[^\s"'<>)]+/g);
+  const matches = html.matchAll(
+    /(?:https?:\/\/[^\s"'<>)]+)?\/user_uploads\/\d+\/[a-zA-Z0-9_-]+\/[^\s"'<>)]+/g,
+  );
   const urls = new Set<string>();
   for (const match of matches) {
     const raw = match[0];

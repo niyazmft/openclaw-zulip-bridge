@@ -24,6 +24,7 @@ export class ZulipQueueManager {
   private registerFn: QueueRegisterCallback;
   private currentQueue: QueueMetadata | null = null;
   private registrationPromise: Promise<QueueMetadata> | null = null;
+  private persistenceDirChecked = false;
 
   constructor(opts: QueueManagerOpts) {
     this.accountId = opts.accountId;
@@ -148,7 +149,11 @@ export class ZulipQueueManager {
 
   private getPersistencePath(): string {
     const safeAccountId = this.accountId.replace(/[^a-z0-9]/gi, "_");
-    return path.join(os.tmpdir(), `zulip_queue_${safeAccountId}.json`);
+    const dataDir = this.runtime.paths?.dataDir;
+    if (dataDir) {
+      return path.join(dataDir, `zulip_queue_${safeAccountId}.json`);
+    }
+    return path.join(os.tmpdir(), "openclaw-zulip", `zulip_queue_${safeAccountId}.json`);
   }
 
   private async loadMetadata(): Promise<QueueMetadata | null> {
@@ -169,6 +174,10 @@ export class ZulipQueueManager {
   private async saveMetadata(metadata: QueueMetadata): Promise<void> {
     try {
       const p = this.getPersistencePath();
+      if (!this.persistenceDirChecked) {
+        await fs.mkdir(path.dirname(p), { recursive: true }).catch(() => {});
+        this.persistenceDirChecked = true;
+      }
       await fs.writeFile(p, JSON.stringify(metadata), "utf8");
     } catch (err) {
       this.runtime.error?.(
