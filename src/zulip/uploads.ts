@@ -37,26 +37,36 @@ export function extractZulipUploadUrls(html: string, baseUrl: string): string[] 
 }
 
 function resolveFilename(url: string, contentDisposition?: string | null): string {
+  let filename = "";
   if (contentDisposition) {
     const encodedMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
     if (encodedMatch?.[1]) {
-      return decodeURIComponent(encodedMatch[1]);
-    }
-    const match = contentDisposition.match(/filename="?([^";]+)"?/i);
-    if (match?.[1]) {
-      return match[1];
+      filename = decodeURIComponent(encodedMatch[1]);
+    } else {
+      const match = contentDisposition.match(/filename="?([^";]+)"?/i);
+      if (match?.[1]) {
+        filename = match[1];
+      }
     }
   }
-  try {
-    const parsed = new URL(url);
-    const base = path.basename(parsed.pathname);
-    if (base) {
-      return base;
+
+  if (!filename) {
+    try {
+      const parsed = new URL(url);
+      const base = path.basename(parsed.pathname);
+      if (base) {
+        filename = base;
+      }
+    } catch {
+      // ignore
     }
-  } catch {
-    // ignore
   }
-  return "upload.bin";
+
+  if (!filename) {
+    filename = "upload.bin";
+  }
+
+  return path.basename(filename);
 }
 
 export async function downloadZulipUpload(
