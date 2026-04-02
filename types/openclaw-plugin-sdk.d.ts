@@ -29,6 +29,9 @@ declare module "openclaw/plugin-sdk/core" {
   export const migrateBaseNameToDefaultAccount: any;
   export const setAccountEnabledInConfigSection: any;
   export const emptyPluginConfigSchema: any;
+  export const createChatChannelPlugin: <T = any>(params: any) => any;
+  export const defineChannelPluginEntry: any;
+  export const definePluginEntry: any;
 }
 
 declare module "openclaw/plugin-sdk/irc" {
