@@ -196,7 +196,7 @@ async function saveZulipMediaBuffer(params: {
       contentType: saved.contentType ?? contentType,
     };
   }
-  const baseDir = core.paths?.dataDir ?? path.join(os.tmpdir(), "openclaw-zulip");
+  const baseDir = path.join(os.tmpdir(), "openclaw-zulip");
   await fs.mkdir(baseDir, { recursive: true }).catch(() => {});
   const dir = await fs.mkdtemp(path.join(baseDir, "zulip-upload-"));
   const filePath = path.join(dir, filename);
