@@ -148,7 +148,11 @@ export class ZulipQueueManager {
 
   private getPersistencePath(): string {
     const safeAccountId = this.accountId.replace(/[^a-z0-9]/gi, "_");
-    return path.join(os.tmpdir(), `zulip_queue_${safeAccountId}.json`);
+    const dataDir = this.runtime.paths?.dataDir;
+    if (dataDir) {
+      return path.join(dataDir, `zulip_queue_${safeAccountId}.json`);
+    }
+    return path.join(os.tmpdir(), "openclaw-zulip", `zulip_queue_${safeAccountId}.json`);
   }
 
   private async loadMetadata(): Promise<QueueMetadata | null> {
@@ -169,6 +173,7 @@ export class ZulipQueueManager {
   private async saveMetadata(metadata: QueueMetadata): Promise<void> {
     try {
       const p = this.getPersistencePath();
+      await fs.mkdir(path.dirname(p), { recursive: true }).catch(() => {});
       await fs.writeFile(p, JSON.stringify(metadata), "utf8");
     } catch (err) {
       this.runtime.error?.(

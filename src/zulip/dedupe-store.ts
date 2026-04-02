@@ -26,7 +26,11 @@ export class ZulipDedupeStore {
 
   private getPersistencePath(): string {
     const safeAccountId = this.accountId.replace(/[^a-z0-9]/gi, "_");
-    return path.join(os.tmpdir(), `zulip_dedupe_${safeAccountId}.json`);
+    const dataDir = this.runtime.paths?.dataDir;
+    if (dataDir) {
+      return path.join(dataDir, `zulip_dedupe_${safeAccountId}.json`);
+    }
+    return path.join(os.tmpdir(), "openclaw-zulip", `zulip_dedupe_${safeAccountId}.json`);
   }
 
   /**
@@ -50,6 +54,7 @@ export class ZulipDedupeStore {
   async save(): Promise<void> {
     try {
       const p = this.getPersistencePath();
+      await fs.mkdir(path.dirname(p), { recursive: true }).catch(() => {});
       const entries = Array.from(this.cache.entries());
       await fs.writeFile(p, JSON.stringify(entries), "utf8");
     } catch (err) {

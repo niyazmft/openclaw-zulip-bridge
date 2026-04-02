@@ -196,7 +196,9 @@ async function saveZulipMediaBuffer(params: {
       contentType: saved.contentType ?? contentType,
     };
   }
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "zulip-upload-"));
+  const baseDir = core.paths?.dataDir ?? path.join(os.tmpdir(), "openclaw-zulip");
+  await fs.mkdir(baseDir, { recursive: true }).catch(() => {});
+  const dir = await fs.mkdtemp(path.join(baseDir, "zulip-upload-"));
   const filePath = path.join(dir, filename);
   await fs.writeFile(filePath, buffer);
   return { path: filePath, contentType };
@@ -269,7 +271,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
   const dedupeStore = new ZulipDedupeStore({
     accountId: account.accountId,
-    runtime,
+    runtime: core,
     ttlMs: RECENT_MESSAGE_TTL_MS,
     maxSize: RECENT_MESSAGE_MAX,
   });
@@ -357,7 +359,16 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             mediaTypes.push(saved.contentType);
             mediaUrls.push(uploadUrl);
           }
-        } catch (err) {}
+        } catch (err) {
+          runtime.error?.(
+            formatZulipLog("zulip attachment download failed", {
+              accountId: account.accountId,
+              messageId,
+              url: uploadUrl,
+              error: String(err),
+            }),
+          );
+        }
       }
     }
     const oncharTriggered = oncharEnabled && oncharResult.triggered;
@@ -804,7 +815,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
   const streams = account.streams ?? ["*"];
   const queueManager = new ZulipQueueManager({
     accountId: account.accountId,
-    runtime,
+    runtime: core,
     registerFn: async () => {
       return await registerZulipQueue(client, {
         eventTypes: ["message"],

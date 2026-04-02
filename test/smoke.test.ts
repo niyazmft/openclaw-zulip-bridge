@@ -2,6 +2,27 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { formatZulipLog } from "../src/zulip/monitor-helpers.js";
 import { decidePolicy } from "../src/zulip/policy.js";
+import { extractZulipUploadUrls } from "../src/zulip/uploads.js";
+
+test("smoke test extractZulipUploadUrls with tightened regex", () => {
+  const baseUrl = "https://zulip.example.com";
+  const html = `
+    Check this out: <a href="/user_uploads/1/abc-123/file.png">link</a>
+    And this: /user_uploads/2/xyz_456/another.jpg
+    But not this: /user_uploads/malformed/url
+    And definitely not this: /user_uploads/1/too-short
+    Full URL: https://zulip.example.com/user_uploads/3/hash789/full.pdf
+  `;
+
+  const urls = extractZulipUploadUrls(html, baseUrl);
+
+  assert.equal(urls.length, 3, "Should extract exactly 3 valid upload URLs");
+  assert.ok(urls.includes("https://zulip.example.com/user_uploads/1/abc-123/file.png"));
+  assert.ok(urls.includes("https://zulip.example.com/user_uploads/2/xyz_456/another.jpg"));
+  assert.ok(urls.includes("https://zulip.example.com/user_uploads/3/hash789/full.pdf"));
+  assert.ok(!urls.includes("https://zulip.example.com/user_uploads/malformed/url"));
+  assert.ok(!urls.includes("https://zulip.example.com/user_uploads/1/too-short"));
+});
 
 test("smoke test formatZulipLog outputs expected string format", () => {
   const result = formatZulipLog("test event", { accountId: "default", messageId: 123, stream: "general" });
