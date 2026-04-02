@@ -242,7 +242,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
   const botEmail = botUser.email ?? "";
   const botUsername = botUser.full_name ?? "";
 
-  core.log?.(`zulip connected as ${botUsername ? botUsername : botUserId} (${botEmail})`);
+  core.log?.(`zulip connected as ${botUsername ? botUsername : botUserId} (${maskPII(botEmail)})`);
 
   const logger = core.logging.getChildLogger({ module: "zulip" });
   const logVerboseMessage = core.logging.shouldLogVerbose()
