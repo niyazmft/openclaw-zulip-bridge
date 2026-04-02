@@ -237,7 +237,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
   const botEmail = botUser.email ?? "";
   const botUsername = botUser.full_name ?? "";
 
-  runtime.log?.(`zulip connected as ${botUsername ? botUsername : botUserId} (${botEmail})`);
+  core.log?.(`zulip connected as ${botUsername ? botUsername : botUserId} (${botEmail})`);
 
   const logger = core.logging.getChildLogger({ module: "zulip" });
   const logVerboseMessage = core.logging.shouldLogVerbose()
@@ -304,7 +304,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       }
     }
 
-    runtime.log?.(
+    core.log?.(
       formatZulipLog("zulip inbound arrival", {
         accountId: account.accountId,
         messageId,
@@ -317,7 +317,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
     const dedupeKey = `${account.accountId}:${messageId}`;
     if (await dedupeStore.check(dedupeKey)) {
-      runtime.log?.(
+      core.log?.(
         formatZulipLog("zulip inbound dedupe hit", {
           accountId: account.accountId,
           messageId,
@@ -360,7 +360,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             mediaUrls.push(uploadUrl);
           }
         } catch (err) {
-          runtime.error?.(
+          core.error?.(
             formatZulipLog("zulip attachment download failed", {
               accountId: account.accountId,
               messageId,
@@ -464,7 +464,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           id: senderId,
           meta: { name: senderName },
         });
-        runtime.log?.(
+        core.log?.(
           formatZulipLog("zulip pairing request", {
             accountId: account.accountId,
             senderId: maskPII(senderId),
@@ -488,7 +488,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             );
             opts.statusSink?.({ lastOutboundAt: Date.now() });
           } catch (err) {
-            runtime.error?.(
+            core.error?.(
               formatZulipLog("zulip pairing reply failed", {
                 accountId: account.accountId,
                 senderId: maskPII(senderId),
@@ -500,7 +500,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       } else {
         logInboundDrop({
           log: (msg: string) =>
-            runtime.log?.(
+            core.log?.(
               formatZulipLog(msg, {
                 accountId: account.accountId,
                 messageId,
@@ -637,7 +637,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     }
 
     const previewLine = bodyText.slice(0, 200).replace(/\n/g, "\\n");
-    runtime.log?.(
+    core.log?.(
       formatZulipLog("zulip inbound dispatch", {
         accountId: account.accountId,
         messageId,
@@ -762,7 +762,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           opts.statusSink?.({ lastOutboundAt: Date.now() });
         },
         onError: (err: unknown) => {
-          runtime.error?.(`zulip reply failed: ${String(err)}`);
+          core.error?.(`zulip reply failed: ${String(err)}`);
         },
       });
 
@@ -781,7 +781,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       });
     } catch (err) {
       dispatchError = err;
-      runtime.error?.(
+      core.error?.(
         formatZulipLog("zulip reply failed", {
           accountId: account.accountId,
           messageId,
@@ -834,7 +834,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     try {
       await handleMessage(message);
     } catch (err) {
-      runtime.error?.(
+      core.error?.(
         formatZulipLog("zulip message handler failed", {
           accountId: account.accountId,
           messageId: message.id,
@@ -850,7 +850,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     try {
       queue = await queueManager.ensureQueue();
     } catch (err) {
-      runtime.error?.(
+      core.error?.(
         formatZulipLog("zulip queue management failed", {
           accountId: account.accountId,
           error: String(err),
@@ -882,7 +882,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
       const events = response.events ?? [];
       if (events.length > 0) {
-        runtime.log?.(
+        core.log?.(
           formatZulipLog("zulip events received", {
             accountId: account.accountId,
             queueId: queue.queueId,
@@ -922,7 +922,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       }
       const status = (err as { status?: number })?.status;
       const retryAfterMs = (err as { retryAfterMs?: number })?.retryAfterMs;
-      runtime.error?.(
+      core.error?.(
         formatZulipLog("zulip polling error", {
           accountId: account.accountId,
           error: String(err),
@@ -952,5 +952,5 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       await deleteZulipQueue(client, queue.queueId);
     }
   }
-  runtime.log?.("zulip monitor stopped");
+  core.log?.("zulip monitor stopped");
 }
