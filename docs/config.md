@@ -44,6 +44,7 @@ The following settings are available for each Zulip account (and as top-level de
 | `mediaMaxMb` | number | Maximum size in MB for incoming media (default: 5). |
 | `reactions` | object | Configure reaction behavior (see below). |
 | `blockStreaming`| boolean | Enable/disable block-based streaming responses. |
+| `enableAdminActions`| boolean | Require explicit opt-in for high-privilege actions (e.g., user deactivation, channel management). Default: `false`. |
 
 ### Policy Configuration
 

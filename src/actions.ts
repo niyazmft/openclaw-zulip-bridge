@@ -499,6 +499,7 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
     }
 
     if (action === "channel-create") {
+      requireAdminActionsEnabled(account);
       const raw =
         readStringParam(params, "stream") ??
         readStringParam(params, "name") ??
@@ -545,6 +546,7 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
     }
 
     if (action === "channel-edit") {
+      requireAdminActionsEnabled(account);
       const streamIdOrName = readStreamId(params);
       const description = readStringParam(params, "description", { allowEmpty: true });
       const newName = readStringParam(params, "newName") ?? readStringParam(params, "name");
@@ -596,6 +598,7 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
     }
 
     if (action === "channel-delete") {
+      requireAdminActionsEnabled(account);
       const streamIdOrName = readStreamId(params);
       // Resolve stream name to ID if necessary
       const streamId = await resolveZulipStreamId(client, streamIdOrName);

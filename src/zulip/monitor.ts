@@ -244,6 +244,12 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
   core.log?.(`zulip connected as ${botUsername ? botUsername : botUserId} (${maskPII(botEmail)})`);
 
+  if (account.enableAdminActions) {
+    core.log?.(
+      `[${account.accountId}] WARNING: enableAdminActions is true. High-privilege administrative actions are enabled.`,
+    );
+  }
+
   const logger = core.logging.getChildLogger({ module: "zulip" });
   const logVerboseMessage = core.logging.shouldLogVerbose()
     ? (message: string) => logger.debug?.(message)
