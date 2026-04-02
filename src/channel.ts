@@ -107,8 +107,6 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         name: account.name,
         enabled: account.enabled,
         configured: Boolean(account.apiKey && account.email && account.baseUrl),
-        // tokenSource for OpenClaw status display (maps apiKey → token)
-        tokenSource: account.apiKeySource,
         apiKeySource: account.apiKeySource,
         emailSource: account.emailSource,
         baseUrl: account.baseUrl,
@@ -178,9 +176,6 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         name: account.name,
         enabled: account.enabled,
         configured: Boolean(account.apiKey && account.email && account.baseUrl),
-        // Expose token/tokenSource for status display (maps to apiKey)
-        token: account.apiKey,
-        tokenSource: account.apiKeySource,
         apiKeySource: account.apiKeySource,
         emailSource: account.emailSource,
         baseUrl: account.baseUrl,

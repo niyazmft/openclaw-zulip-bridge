@@ -17,9 +17,6 @@ export type ResolvedZulipAccount = {
   apiKeySource: ZulipTokenSource;
   emailSource: ZulipEmailSource;
   baseUrlSource: ZulipBaseUrlSource;
-  // Aliases for OpenClaw status display (maps apiKey → token)
-  token?: string;
-  tokenSource: ZulipTokenSource;
   config: ZulipAccountConfig;
   enableAdminActions?: boolean;
   chatmode?: ZulipChatMode;
@@ -154,9 +151,6 @@ export function resolveZulipAccount(params: {
     apiKeySource,
     emailSource,
     baseUrlSource,
-    // Expose token/tokenSource aliases for OpenClaw status display
-    token: apiKey,
-    tokenSource: apiKeySource,
     config: merged,
     enableAdminActions: merged.enableAdminActions,
     chatmode: merged.chatmode,
