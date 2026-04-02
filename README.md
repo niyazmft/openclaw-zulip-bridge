@@ -40,7 +40,6 @@ openclaw plugins install ./ --link
 openclaw plugins enable zulip
 ```
 
-> **Note on Dependencies**: The `npm install` step is required to install the `zulip-js` and `zod` libraries used by the bridge.
 
 
 > **Note on Linked Plugins**: The `--link` flag creates a symbolic link from the OpenClaw extensions directory (typically `~/.openclaw/extensions/zulip`) back to your local repository checkout. This means the local repo **is** the source of truth for the installed plugin; any local code changes are reflected immediately after an OpenClaw restart without re-installing.
