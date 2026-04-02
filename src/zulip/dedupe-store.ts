@@ -16,6 +16,7 @@ export class ZulipDedupeStore {
   private ttlMs: number;
   private maxSize: number;
   private cache = new Map<string, number>();
+  private persistenceDirChecked = false;
 
   constructor(opts: DedupeStoreOpts) {
     this.accountId = opts.accountId;
@@ -54,7 +55,10 @@ export class ZulipDedupeStore {
   async save(): Promise<void> {
     try {
       const p = this.getPersistencePath();
-      await fs.mkdir(path.dirname(p), { recursive: true }).catch(() => {});
+      if (!this.persistenceDirChecked) {
+        await fs.mkdir(path.dirname(p), { recursive: true }).catch(() => {});
+        this.persistenceDirChecked = true;
+      }
       const entries = Array.from(this.cache.entries());
       await fs.writeFile(p, JSON.stringify(entries), "utf8");
     } catch (err) {

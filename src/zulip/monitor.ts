@@ -49,6 +49,8 @@ import { decidePolicy } from "./policy.js";
 import { ZulipQueueManager } from "./queue-manager.js";
 import { downloadZulipUpload, extractZulipUploadUrls, normalizeZulipEmojiName } from "./uploads.js";
 
+const checkedMediaDirs = new Set<string>();
+
 export type MonitorZulipOpts = {
   apiKey?: string;
   email?: string;
@@ -196,8 +198,11 @@ async function saveZulipMediaBuffer(params: {
       contentType: saved.contentType ?? contentType,
     };
   }
-  const baseDir = path.join(os.tmpdir(), "openclaw-zulip");
-  await fs.mkdir(baseDir, { recursive: true }).catch(() => {});
+  const baseDir = core.paths?.dataDir ?? path.join(os.tmpdir(), "openclaw-zulip");
+  if (!checkedMediaDirs.has(baseDir)) {
+    await fs.mkdir(baseDir, { recursive: true }).catch(() => {});
+    checkedMediaDirs.add(baseDir);
+  }
   const dir = await fs.mkdtemp(path.join(baseDir, "zulip-upload-"));
   const filePath = path.join(dir, filename);
   await fs.writeFile(filePath, buffer);

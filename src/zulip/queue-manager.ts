@@ -24,6 +24,7 @@ export class ZulipQueueManager {
   private registerFn: QueueRegisterCallback;
   private currentQueue: QueueMetadata | null = null;
   private registrationPromise: Promise<QueueMetadata> | null = null;
+  private persistenceDirChecked = false;
 
   constructor(opts: QueueManagerOpts) {
     this.accountId = opts.accountId;
@@ -173,7 +174,10 @@ export class ZulipQueueManager {
   private async saveMetadata(metadata: QueueMetadata): Promise<void> {
     try {
       const p = this.getPersistencePath();
-      await fs.mkdir(path.dirname(p), { recursive: true }).catch(() => {});
+      if (!this.persistenceDirChecked) {
+        await fs.mkdir(path.dirname(p), { recursive: true }).catch(() => {});
+        this.persistenceDirChecked = true;
+      }
       await fs.writeFile(p, JSON.stringify(metadata), "utf8");
     } catch (err) {
       this.runtime.error?.(
