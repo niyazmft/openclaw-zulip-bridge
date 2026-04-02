@@ -44,7 +44,7 @@ const ZulipAccountSchema = z.object({
   blockStreaming: z.boolean().optional(),
   blockStreamingCoalesce: BlockStreamingCoalesceSchema.optional(),
   responsePrefix: z.string().optional(),
-  enableAdminActions: z.boolean().optional(),
+  enableAdminActions: z.boolean().default(false),
 });
 
 export const ZulipConfigSchema = buildCatchallMultiAccountChannelSchema(
