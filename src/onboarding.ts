@@ -16,15 +16,29 @@ const channel = "zulip" as const;
 async function noteZulipSetup(prompter: WizardPrompter): Promise<void> {
   await prompter.note(
     [
-      "1) In Zulip: Settings -> Bots -> Add a new bot",
-      "2) Bot type: 'Generic bot' is recommended",
-      "3) Copy the bot's Email and API Key from 'Active bots'",
-      "4) Server URL: the base URL (e.g., https://chat.example.com)",
+      "1) In Zulip: Settings -> Bots -> Add a new bot (Generic bot recommended).",
+      "2) Copy the bot's Email, API Key, and Server URL.",
+      "",
+      "Security Recommendation:",
+      "Use environment variables to avoid storing secrets in plaintext on disk.",
+      "Required variables: ZULIP_API_KEY, ZULIP_EMAIL, ZULIP_URL",
+      "",
       "Tip: the bot must be a member of any stream you want it to monitor.",
       "Docs: https://docs.openclaw.ai/channels/zulip",
     ].join("\n"),
     "Zulip Setup",
   );
+}
+
+async function warnPlaintextSecrets(prompter: WizardPrompter): Promise<boolean | symbol> {
+  await prompter.note(
+    "WARNING: Entering credentials here will store them in plaintext in your configuration file. This is suboptimal for security.",
+    "Security Warning",
+  );
+  return await prompter.confirm({
+    message: "Are you sure you want to proceed with config-file storage?",
+    initialValue: false,
+  });
 }
 
 export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
@@ -87,50 +101,61 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
 
     let verified = false;
     let skipVerification = false;
+    let declinedEnv = false;
 
     while (!verified && !skipVerification) {
-      if (canUseEnv && !hasConfigValues && !apiKey && !useEnv) {
-        const keepEnv = await prompter.confirm({
-          message: "ZULIP_API_KEY + ZULIP_EMAIL + ZULIP_URL detected. Use env vars?",
-          initialValue: true,
-        });
-        if (typeof keepEnv === "symbol") {
+      if (allowEnv && !apiKey && !useEnv && !declinedEnv) {
+        if (canUseEnv && !hasConfigValues) {
+          const keepEnv = await prompter.confirm({
+            message: "ZULIP_API_KEY + ZULIP_EMAIL + ZULIP_URL detected. Use env vars?",
+            initialValue: true,
+          });
+          if (typeof keepEnv === "symbol") {
+            return { cfg, accountId };
+          }
+          if (keepEnv) {
+            apiKey = process.env.ZULIP_API_KEY?.trim() ?? null;
+            email = process.env.ZULIP_EMAIL?.trim() ?? null;
+            baseUrl = process.env.ZULIP_URL?.trim() ?? null;
+            useEnv = true;
+          } else {
+            declinedEnv = true;
+          }
+        }
+
+        if (!useEnv && !declinedEnv) {
+          const chooseEnv = await prompter.confirm({
+            message: "Would you like to use environment variables for credentials (recommended)?",
+            initialValue: true,
+          });
+          if (typeof chooseEnv === "symbol") {
+            return { cfg, accountId };
+          }
+          if (chooseEnv) {
+            await prompter.note(
+              "Please set ZULIP_API_KEY, ZULIP_EMAIL, and ZULIP_URL in your environment and restart OpenClaw.",
+              "Environment Variables",
+            );
+            return { cfg, accountId };
+          } else {
+            declinedEnv = true;
+          }
+        }
+
+        if (declinedEnv) {
+          const confirmed = await warnPlaintextSecrets(prompter);
+          if (typeof confirmed === "symbol" || !confirmed) {
+            return { cfg, accountId };
+          }
+        }
+      } else if (!allowEnv && !apiKey) {
+        const confirmed = await warnPlaintextSecrets(prompter);
+        if (typeof confirmed === "symbol" || !confirmed) {
           return { cfg, accountId };
         }
-        if (keepEnv) {
-          apiKey = process.env.ZULIP_API_KEY?.trim() ?? null;
-          email = process.env.ZULIP_EMAIL?.trim() ?? null;
-          baseUrl = process.env.ZULIP_URL?.trim() ?? null;
-          useEnv = true;
-        } else {
-          const resApiKey = await prompter.text({
-            message: "Enter Zulip API key",
-            validate: (value) => (value?.trim() ? undefined : "Required"),
-          });
-          if (typeof resApiKey === "symbol") {
-            return { cfg, accountId };
-          }
-          apiKey = String(resApiKey).trim();
+      }
 
-          const resEmail = await prompter.text({
-            message: "Enter Zulip bot email",
-            validate: (value) => (value?.trim() ? undefined : "Required"),
-          });
-          if (typeof resEmail === "symbol") {
-            return { cfg, accountId };
-          }
-          email = String(resEmail).trim();
-
-          const resBaseUrl = await prompter.text({
-            message: "Enter Zulip base URL",
-            validate: (value) => (value?.trim() ? undefined : "Required"),
-          });
-          if (typeof resBaseUrl === "symbol") {
-            return { cfg, accountId };
-          }
-          baseUrl = String(resBaseUrl).trim();
-        }
-      } else if (accountConfigured && !apiKey) {
+      if (accountConfigured && !apiKey) {
         const keep = await prompter.confirm({
           message: "Zulip credentials already configured. Keep them?",
           initialValue: true,
