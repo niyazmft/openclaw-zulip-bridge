@@ -7,6 +7,11 @@ export type ZulipProbe = {
   error?: string;
 };
 
+/**
+ * Probes a Zulip server to verify credentials and connectivity.
+ * Security: Uses `normalizeZulipBaseUrl` to ensure the target URL uses a safe protocol (http/https).
+ * This prevents SSRF via unexpected protocols like file:// or gopher://.
+ */
 export async function probeZulip(
   baseUrl: string,
   email: string,
