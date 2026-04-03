@@ -16,6 +16,15 @@
       "./index.ts"
     ],
     "setupEntry": "./setup-entry.ts",
+    "providerAuthEnvVars": {
+      "zulip": [
+        "ZULIP_API_KEY",
+        "ZULIP_EMAIL",
+        "ZULIP_URL",
+        "ZULIP_SITE",
+        "ZULIP_REALM"
+      ]
+    },
     "channel": {
       "id": "zulip",
       "label": "Zulip",
@@ -33,6 +42,10 @@
     "build": {
       "openclawVersion": "2026.3.28",
       "stageRuntimeDependencies": true
+    },
+    "securityExemptions": {
+      "envAccess": ["ZULIP_API_KEY", "ZULIP_EMAIL", "ZULIP_URL", "ZULIP_SITE", "ZULIP_REALM"],
+      "reason": "Zulip credentials from environment variables (documented pattern)"
     }
   },
   "private": true,
