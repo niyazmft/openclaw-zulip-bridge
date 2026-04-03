@@ -110,9 +110,9 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
             return { cfg, accountId };
           }
           if (keepEnv) {
-            apiKey = getEnvSecret("ZULIP_API_KEY") ?? null;
-            email = getEnvSecret("ZULIP_EMAIL") ?? null;
-            baseUrl = getEnvSecret("ZULIP_URL") ?? null;
+            apiKey = getZulipEnvSecret("ZULIP_API_KEY") ?? null;
+            email = getZulipEnvSecret("ZULIP_EMAIL") ?? null;
+            baseUrl = getZulipEnvSecret("ZULIP_URL") ?? null;
             useEnv = true;
           } else {
             declinedEnv = true;
