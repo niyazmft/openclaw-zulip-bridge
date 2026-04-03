@@ -3,6 +3,8 @@ import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk";
 import type { ZulipAccountConfig, ZulipConfig } from "./types.js";
 import { promptAccountId } from "./onboarding-helpers.js";
 import {
+  getZulipEnvSecret,
+  hasZulipEnvSecrets,
   listZulipAccountIds,
   resolveDefaultZulipAccountId,
   resolveZulipAccount,
@@ -39,16 +41,6 @@ async function warnPlaintextSecrets(prompter: WizardPrompter): Promise<boolean |
     message: "Are you sure you want to proceed with config-file storage?",
     initialValue: false,
   });
-}
-
-function getEnvSecret(name: string): string | undefined {
-  return process.env[name]?.trim();
-}
-
-function hasZulipEnvSecrets(): boolean {
-  return Boolean(getEnvSecret("ZULIP_API_KEY")) && 
-         Boolean(getEnvSecret("ZULIP_EMAIL")) && 
-         Boolean(getEnvSecret("ZULIP_URL"));
 }
 
 export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
@@ -120,9 +112,9 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
             return { cfg, accountId };
           }
           if (keepEnv) {
-            apiKey = getEnvSecret("ZULIP_API_KEY") ?? null;
-            email = getEnvSecret("ZULIP_EMAIL") ?? null;
-            baseUrl = getEnvSecret("ZULIP_URL") ?? null;
+            apiKey = getZulipEnvSecret("ZULIP_API_KEY") ?? null;
+            email = getZulipEnvSecret("ZULIP_EMAIL") ?? null;
+            baseUrl = getZulipEnvSecret("ZULIP_URL") ?? null;
             useEnv = true;
           } else {
             declinedEnv = true;
