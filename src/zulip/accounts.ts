@@ -80,6 +80,10 @@ function resolveZulipRequireMention(config: ZulipAccountConfig): boolean | undef
   return config.requireMention;
 }
 
+function getEnv(name: string): string | undefined {
+  return process.env[name]?.trim();
+}
+
 export function resolveZulipAccount(params: {
   cfg: OpenClawConfig;
   accountId?: string | null;
@@ -94,11 +98,11 @@ export function resolveZulipAccount(params: {
   const enabled = baseEnabled && accountEnabled;
 
   const allowEnv = accountId === DEFAULT_ACCOUNT_ID;
-  const envApiKey = allowEnv ? process.env.ZULIP_API_KEY?.trim() : undefined;
-  const envEmail = allowEnv ? process.env.ZULIP_EMAIL?.trim() : undefined;
-  const envUrl = allowEnv ? process.env.ZULIP_URL?.trim() : undefined;
-  const envSite = allowEnv ? process.env.ZULIP_SITE?.trim() : undefined;
-  const envRealm = allowEnv ? process.env.ZULIP_REALM?.trim() : undefined;
+  const envApiKey = allowEnv ? getEnv("ZULIP_API_KEY") : undefined;
+  const envEmail = allowEnv ? getEnv("ZULIP_EMAIL") : undefined;
+  const envUrl = allowEnv ? getEnv("ZULIP_URL") : undefined;
+  const envSite = allowEnv ? getEnv("ZULIP_SITE") : undefined;
+  const envRealm = allowEnv ? getEnv("ZULIP_REALM") : undefined;
   const configApiKey = merged.apiKey?.trim();
   const configEmail = merged.email?.trim();
   const configUrl =

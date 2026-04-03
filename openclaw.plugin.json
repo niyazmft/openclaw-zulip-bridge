@@ -2,7 +2,7 @@
   "id": "zulip",
   "name": "Zulip",
   "description": "OpenClaw Zulip channel plugin",
-  "version": "2026.4.2",
+  "version": "2026.4.3",
   "kind": "channel",
   "channels": ["zulip"],
   "providerAuthEnvVars": {

@@ -41,6 +41,16 @@ async function warnPlaintextSecrets(prompter: WizardPrompter): Promise<boolean |
   });
 }
 
+function getEnvSecret(name: string): string | undefined {
+  return process.env[name]?.trim();
+}
+
+function hasZulipEnvSecrets(): boolean {
+  return Boolean(getEnvSecret("ZULIP_API_KEY")) && 
+         Boolean(getEnvSecret("ZULIP_EMAIL")) && 
+         Boolean(getEnvSecret("ZULIP_URL"));
+}
+
 export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
   channel,
   getStatus: async ({ cfg }) => {
@@ -80,11 +90,7 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
       resolvedAccount.apiKey && resolvedAccount.email && resolvedAccount.baseUrl,
     );
     const allowEnv = accountId === DEFAULT_ACCOUNT_ID;
-    const canUseEnv =
-      allowEnv &&
-      Boolean(process.env.ZULIP_API_KEY?.trim()) &&
-      Boolean(process.env.ZULIP_EMAIL?.trim()) &&
-      Boolean(process.env.ZULIP_URL?.trim());
+    const canUseEnv = allowEnv && hasZulipEnvSecrets();
     const hasConfigValues =
       Boolean(resolvedAccount.config.apiKey) ||
       Boolean(resolvedAccount.config.email) ||
@@ -114,9 +120,9 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
             return { cfg, accountId };
           }
           if (keepEnv) {
-            apiKey = process.env.ZULIP_API_KEY?.trim() ?? null;
-            email = process.env.ZULIP_EMAIL?.trim() ?? null;
-            baseUrl = process.env.ZULIP_URL?.trim() ?? null;
+            apiKey = getEnvSecret("ZULIP_API_KEY") ?? null;
+            email = getEnvSecret("ZULIP_EMAIL") ?? null;
+            baseUrl = getEnvSecret("ZULIP_URL") ?? null;
             useEnv = true;
           } else {
             declinedEnv = true;
