@@ -41,16 +41,6 @@ async function warnPlaintextSecrets(prompter: WizardPrompter): Promise<boolean |
   });
 }
 
-function getEnvSecret(name: string): string | undefined {
-  return process.env[name]?.trim();
-}
-
-function hasZulipEnvSecrets(): boolean {
-  return Boolean(getEnvSecret("ZULIP_API_KEY")) && 
-         Boolean(getEnvSecret("ZULIP_EMAIL")) && 
-         Boolean(getEnvSecret("ZULIP_URL"));
-}
-
 export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
   channel,
   getStatus: async ({ cfg }) => {
