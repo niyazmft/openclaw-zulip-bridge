@@ -10,9 +10,18 @@
   },
   "openclaw": {
     "extensions": [
-      "./index.ts"
+      "./dist/index.js"
     ],
-    "setupEntry": "./setup-entry.ts",
+    "setupEntry": "./dist/setup-entry.js",
+    "providerAuthEnvVars": {
+      "zulip": [
+        "ZULIP_API_KEY",
+        "ZULIP_EMAIL",
+        "ZULIP_URL",
+        "ZULIP_SITE",
+        "ZULIP_REALM"
+      ]
+    },
     "channel": {
       "id": "zulip",
       "label": "Zulip",
@@ -29,6 +38,10 @@
     },
     "bundle": {
       "stageRuntimeDependencies": true
+    },
+    "securityExemptions": {
+      "envAccess": ["ZULIP_API_KEY", "ZULIP_EMAIL", "ZULIP_URL", "ZULIP_SITE", "ZULIP_REALM"],
+      "reason": "Zulip credentials from environment variables (documented pattern)"
     }
   },
   "private": true,
