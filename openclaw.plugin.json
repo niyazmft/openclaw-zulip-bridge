@@ -14,6 +14,10 @@
       "ZULIP_REALM"
     ]
   },
+  "securityExemptions": {
+    "envAccess": ["ZULIP_API_KEY", "ZULIP_EMAIL", "ZULIP_URL", "ZULIP_SITE", "ZULIP_REALM"],
+    "reason": "Zulip credentials from environment variables (documented pattern)"
+  },
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
