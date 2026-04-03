@@ -80,8 +80,16 @@ function resolveZulipRequireMention(config: ZulipAccountConfig): boolean | undef
   return config.requireMention;
 }
 
-function getEnv(name: string): string | undefined {
+export function getZulipEnvSecret(name: string): string | undefined {
   return process.env[name]?.trim();
+}
+
+export function hasZulipEnvSecrets(): boolean {
+  return (
+    Boolean(getZulipEnvSecret("ZULIP_API_KEY")) &&
+    Boolean(getZulipEnvSecret("ZULIP_EMAIL")) &&
+    Boolean(getZulipEnvSecret("ZULIP_URL"))
+  );
 }
 
 export function resolveZulipAccount(params: {
@@ -98,11 +106,11 @@ export function resolveZulipAccount(params: {
   const enabled = baseEnabled && accountEnabled;
 
   const allowEnv = accountId === DEFAULT_ACCOUNT_ID;
-  const envApiKey = allowEnv ? getEnv("ZULIP_API_KEY") : undefined;
-  const envEmail = allowEnv ? getEnv("ZULIP_EMAIL") : undefined;
-  const envUrl = allowEnv ? getEnv("ZULIP_URL") : undefined;
-  const envSite = allowEnv ? getEnv("ZULIP_SITE") : undefined;
-  const envRealm = allowEnv ? getEnv("ZULIP_REALM") : undefined;
+  const envApiKey = allowEnv ? getZulipEnvSecret("ZULIP_API_KEY") : undefined;
+  const envEmail = allowEnv ? getZulipEnvSecret("ZULIP_EMAIL") : undefined;
+  const envUrl = allowEnv ? getZulipEnvSecret("ZULIP_URL") : undefined;
+  const envSite = allowEnv ? getZulipEnvSecret("ZULIP_SITE") : undefined;
+  const envRealm = allowEnv ? getZulipEnvSecret("ZULIP_REALM") : undefined;
   const configApiKey = merged.apiKey?.trim();
   const configEmail = merged.email?.trim();
   const configUrl =

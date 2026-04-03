@@ -3,6 +3,8 @@ import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk";
 import type { ZulipAccountConfig, ZulipConfig } from "./types.js";
 import { promptAccountId } from "./onboarding-helpers.js";
 import {
+  getZulipEnvSecret,
+  hasZulipEnvSecrets,
   listZulipAccountIds,
   resolveDefaultZulipAccountId,
   resolveZulipAccount,
