@@ -12,6 +12,7 @@ import {
   resolveZulipAccount,
   resolveDefaultZulipAccountId,
 } from "./zulip/accounts.js";
+import { normalizeZulipBaseUrl } from "./zulip/client.js";
 import { isZulipConfigured, zulipSetupAdapter } from "./setup-core.js";
 
 const channel = "zulip" as const;
@@ -21,7 +22,7 @@ export const ZULIP_SETUP_HELP_LINES = [
   "1) In Zulip: Settings -> Bots -> Add a new bot",
   "2) Bot type: 'Generic bot' is recommended",
   "3) Copy the bot's Email and API Key from 'Active bots'",
-  "4) Server URL: the base URL (e.g., https://chat.example.com)",
+  "4) Site URL: the base URL (e.g., https://chat.example.com)",
   "Tip: the bot must be a member of any stream you want it to monitor.",
   `Docs: ${formatDocsLink("/channels/zulip", "channels/zulip")}`,
 ];
@@ -125,7 +126,7 @@ export const zulipSetupWizard: ChannelSetupWizard = {
     },
     {
       inputKey: "httpUrl",
-      message: "Enter Zulip base URL",
+      message: "Enter Zulip site URL",
       confirmCurrentValue: false,
       currentValue: ({ cfg, accountId }) =>
         resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).baseUrl ??
@@ -137,9 +138,16 @@ export const zulipSetupWizard: ChannelSetupWizard = {
         (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
           ? process.env.ZULIP_URL?.trim()
           : undefined),
-      validate: ({ value }) =>
-        value?.trim() ? undefined : "Zulip base URL is required.",
-      normalizeValue: ({ value }) => value.trim(),
+      validate: ({ value }) => {
+        const trimmed = value?.trim();
+        if (!trimmed) {
+          return "Zulip site URL is required.";
+        }
+        return normalizeZulipBaseUrl(trimmed)
+          ? undefined
+          : "Enter a valid URL including protocol, for example: https://chat.example.com";
+      },
+      normalizeValue: ({ value }) => normalizeZulipBaseUrl(value) ?? value.trim(),
     },
   ],
   disable: (cfg: OpenClawConfig) => ({
