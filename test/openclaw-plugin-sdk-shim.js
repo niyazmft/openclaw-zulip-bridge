@@ -64,4 +64,9 @@ export const createSetupInputPresenceValidator = () => () => true;
 export const createStandardChannelSetupStatus = () => ({ ok: true });
 export const formatDocsLink = (label, url) => `${label}: ${url}`;
 
-export const z = {};
+export const z = new Proxy(
+  {},
+  {
+    get: () => () => z,
+  },
+);

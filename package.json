@@ -56,8 +56,7 @@
     "src/",
     "openclaw.plugin.json",
     "SKILL.md",
-    "README.md",
-    "test-loader.js"
+    "README.md"
   ],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
