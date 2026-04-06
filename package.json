@@ -1,13 +1,8 @@
 {
   "name": "@openclaw/zulip",
-  "version": "2026.4.5",
+  "version": "2026.4.6",
   "description": "OpenClaw Zulip channel plugin",
   "type": "module",
-  "dependencies": {},
-  "overrides": {
-    "@aws-sdk/client-bedrock": "zod",
-    "@anthropic-ai/vertex-sdk": "zod"
-  },
   "openclaw": {
     "compat": {
       "pluginApi": ">=1.0.0"
@@ -44,11 +39,25 @@
       "stageRuntimeDependencies": true
     },
     "securityExemptions": {
-      "envAccess": ["ZULIP_API_KEY", "ZULIP_EMAIL", "ZULIP_URL", "ZULIP_SITE", "ZULIP_REALM"],
+      "envAccess": [
+        "ZULIP_API_KEY",
+        "ZULIP_EMAIL",
+        "ZULIP_URL",
+        "ZULIP_SITE",
+        "ZULIP_REALM"
+      ],
       "reason": "Zulip credentials from environment variables (documented pattern)"
     }
   },
   "private": true,
+  "files": [
+    "index.ts",
+    "setup-entry.ts",
+    "src/",
+    "openclaw.plugin.json",
+    "SKILL.md",
+    "README.md"
+  ],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json",

@@ -78,3 +78,47 @@ declare module "openclaw/plugin-sdk/reply-payload" {
 declare module "openclaw/plugin-sdk/runtime-env" {
   export type RuntimeEnv = any;
 }
+
+declare module "openclaw/plugin-sdk/channel-config-schema" {
+  export const BlockStreamingCoalesceSchema: any;
+  export const DmPolicySchema: any;
+  export const GroupPolicySchema: any;
+  export const MarkdownConfigSchema: any;
+  export const requireOpenAllowFrom: any;
+  export const buildChannelConfigSchema: any;
+  export const buildCatchallMultiAccountChannelSchema: any;
+  export const buildDefaultChannelConfigSchemaOptions: any;
+  export const createChannelConfigSectionSchema: any;
+  export const markLegacyAlias: any;
+}
+
+declare module "openclaw/plugin-sdk/zod" {
+  export const z: any;
+}
+
+declare module "openclaw/plugin-sdk/setup" {
+  export type ChannelSetupAdapter = any;
+  export type ChannelSetupField = any;
+  export type ChannelSetupFieldResolver = any;
+  export type ChannelSetupFlowDefinition = any;
+  export type ChannelSetupWizard = any;
+  export const createPatchedAccountSetupAdapter: any;
+  export const createStandardChannelSetupStatus: any;
+  export const defineChannelSetupFlow: any;
+  export const formatDocsLink: any;
+  export const resolveSetupFieldValue: any;
+}
+
+declare module "openclaw/plugin-sdk/setup-runtime" {
+  export const createSetupInputPresenceValidator: any;
+}
+
+declare module "ws" {
+  class WebSocket {}
+
+  namespace WebSocket {
+    type RawData = any;
+  }
+
+  export default WebSocket;
+}

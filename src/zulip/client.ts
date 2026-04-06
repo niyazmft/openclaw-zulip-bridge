@@ -1,3 +1,5 @@
+import { readSafeLocalFile } from "./fs-utils.js";
+
 export type ZulipClient = {
   baseUrl: string;
   authHeader: string;
@@ -449,7 +451,7 @@ export async function uploadZulipFile(
   filePath: string,
 ): Promise<{ url: string }> {
   const filename = filePath.split("/").pop() || "upload.bin";
-  const buffer = await (await import("node:fs/promises")).readFile(filePath);
+  const buffer = await readSafeLocalFile(filePath);
   const form = new FormData();
   form.append("file", new Blob([buffer]), filename);
   const payload = await zulipRequestWithRetry<ZulipApiResponse & { uri?: string }>(
