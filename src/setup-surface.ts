@@ -150,6 +150,26 @@ export const zulipSetupWizard: ChannelSetupWizard = {
       normalizeValue: ({ value }) => normalizeZulipBaseUrl(value) ?? value.trim(),
     },
   ],
+  selects: [
+    {
+      inputKey: "dmPolicy",
+      message: "Who can DM the bot?",
+      options: [
+        { value: "pairing", label: "Pairing (users must be approved via command)" },
+        { value: "open", label: "Open (anyone can DM)" },
+        { value: "allowlist", label: "Allowlist (only specific users)" },
+        { value: "disabled", label: "Disabled (no DMs)" },
+      ],
+      initialValue: ({ cfg, accountId }) => {
+        const resolved = resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) });
+        return resolved.config.dmPolicy ?? "pairing";
+      },
+      currentValue: ({ cfg, accountId }) => {
+        const resolved = resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) });
+        return resolved.config.dmPolicy ?? "pairing";
+      },
+    },
+  ],
   disable: (cfg: OpenClawConfig) => ({
     ...cfg,
     channels: {
