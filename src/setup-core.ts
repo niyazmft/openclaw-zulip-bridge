@@ -32,8 +32,10 @@ export const zulipSetupAdapter: ChannelSetupAdapter = createPatchedAccountSetupA
     const apiKey = input.token ?? input.botToken;
     const email = input.tokenFile?.trim();
     const baseUrl = normalizeZulipBaseUrl(input.httpUrl);
+    const dmPolicy = input.dmPolicy ?? "pairing";
     return {
       enabled: true,
+      dmPolicy,
       ...(input.useEnv
         ? {}
         : {
