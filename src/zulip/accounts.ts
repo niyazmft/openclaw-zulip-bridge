@@ -25,6 +25,7 @@ export type ResolvedZulipAccount = {
   textChunkLimit?: number;
   blockStreaming?: boolean;
   blockStreamingCoalesce?: ZulipAccountConfig["blockStreamingCoalesce"];
+  streaming?: boolean;
   streams?: string[];
 };
 
