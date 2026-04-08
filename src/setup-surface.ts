@@ -23,6 +23,8 @@ export const ZULIP_SETUP_HELP_LINES = [
   "2) Bot type: 'Generic bot' is recommended",
   "3) Copy the bot's Email and API Key from 'Active bots'",
   "4) Site URL: the base URL (e.g., https://chat.example.com)",
+  "",
+  "Important: Enable streaming mode so the bot can receive messages.",
   "Tip: the bot must be a member of any stream you want it to monitor.",
   `Docs: ${formatDocsLink("/channels/zulip", "channels/zulip")}`,
 ];
@@ -168,6 +170,23 @@ export const zulipSetupWizard: ChannelSetupWizard = {
         const resolved = resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) });
         return resolved.config.dmPolicy ?? "pairing";
       },
+    },
+    {
+      inputKey: "streaming",
+      message: "Enable message receiving?",
+      options: [
+        { value: "true", label: "Yes (recommended - bot receives DMs and stream mentions)" },
+        { value: "false", label: "No (bot can only send, not receive)" },
+      ],
+      initialValue: ({ cfg, accountId }) => {
+        const resolved = resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) });
+        return String(resolved.config.streaming ?? true);
+      },
+      currentValue: ({ cfg, accountId }) => {
+        const resolved = resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) });
+        return String(resolved.config.streaming ?? true);
+      },
+      hint: "Requires streaming mode for the bot to receive messages. Disable only if troubleshoot issues.",
     },
   ],
   disable: (cfg: OpenClawConfig) => ({
