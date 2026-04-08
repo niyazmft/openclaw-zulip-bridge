@@ -186,7 +186,7 @@ export const zulipSetupWizard: ChannelSetupWizard = {
         const resolved = resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) });
         return String(resolved.config.streaming ?? true);
       },
-      hint: "Requires streaming mode for the bot to receive messages. Disable only if troubleshoot issues.",
+      hint: "Requires streaming mode for the bot to receive messages. Disable only to troubleshoot issues.",
     },
   ],
   disable: (cfg: OpenClawConfig) => ({
