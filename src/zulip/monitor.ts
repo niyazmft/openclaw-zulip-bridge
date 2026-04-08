@@ -855,6 +855,15 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     }
   };
 
+  if (account.streaming === false) {
+    core.log?.(
+      formatZulipLog("zulip monitoring disabled by configuration", {
+        accountId: account.accountId,
+      }),
+    );
+    return;
+  }
+
   // Long-polling loop
   while (!opts.abortSignal?.aborted) {
     let queue;

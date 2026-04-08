@@ -171,6 +171,7 @@ export function resolveZulipAccount(params: {
     textChunkLimit: merged.textChunkLimit,
     blockStreaming: merged.blockStreaming,
     blockStreamingCoalesce: merged.blockStreamingCoalesce,
+    streaming: merged.streaming,
     streams: merged.streams,
   };
 }
