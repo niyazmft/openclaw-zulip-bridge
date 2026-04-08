@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/zulip",
-  "version": "2026.4.7",
+  "version": "2026.4.8",
   "description": "OpenClaw Zulip channel plugin",
   "type": "module",
   "openclaw": {
@@ -65,7 +65,7 @@
     "check": "npm run typecheck && npm run test && npm run build"
   },
   "peerDependencies": {
-    "openclaw": ">=2026.3.23 <2027"
+    "openclaw": "^2026.4.8"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
