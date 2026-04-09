@@ -1,12 +1,12 @@
-import type { ChannelMessageActionAdapter } from "openclaw/plugin-sdk/channel-contract";
+import type {
+  ChannelMessageActionAdapter,
+  ChannelMessageActionName,
+} from "openclaw/plugin-sdk/irc";
 import {
   getChatChannelMeta,
   type OpenClawConfig,
-  type ChannelMessageActionName,
-  jsonResult,
-  readNumberParam,
-  readStringParam,
 } from "openclaw/plugin-sdk/core";
+import { jsonResult, readNumberParam, readStringParam } from "openclaw/plugin-sdk/irc";
 import { resolveZulipAccount } from "./zulip/accounts.js";
 import {
   addZulipReaction,
