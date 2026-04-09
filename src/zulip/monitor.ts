@@ -963,7 +963,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
   // Cleanup
   if (queueManager) {
-    const queue = await queueManager.ensureQueue().catch(() => null);
+    const queue = queueManager.getQueue();
     if (queue) {
       await deleteZulipQueue(client, queue.queueId);
     }
