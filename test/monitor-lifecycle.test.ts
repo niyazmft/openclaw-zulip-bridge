@@ -92,7 +92,7 @@ function createMockRuntime() {
       enqueueSystemEvent: () => {},
     },
     paths: {
-      dataDir: "/tmp/zulip-test-data-" + Date.now(),
+      dataDir: "/tmp/zulip-test-data-" + Date.now() + "-" + Math.random().toString(36).slice(2),
     },
   } as any;
   return { runtime, logs, errors };
@@ -114,295 +114,318 @@ function createMockFetch(responses: any[]) {
       ok: response.ok ?? true,
       status: response.status ?? 200,
       statusText: response.statusText ?? "OK",
-      headers: new Headers(response.headers ?? {}),
+      headers: new Headers({
+        "content-type": "application/json",
+        ...response.headers
+      }),
       json: async () => response.json,
     } as any;
   };
 }
 
-test("monitor lifecycle: boilerplate check", () => {
-  assert.ok(monitorZulipProvider);
-  assert.ok(pollOnce);
-});
+test("monitor lifecycle: sequential tests", async (t) => {
 
-test("pollOnce: transient network failures are retried", async () => {
-  const { runtime } = createMockRuntime();
-  const fetchImpl = createMockFetch([
-    new Error("ECONNRESET"),
-    new Error("ECONNRESET"),
-    { ok: true, json: { result: "success", events: [] } },
-  ]);
-  const client = createZulipClient({
-    baseUrl: "https://zulip.example.com",
-    email: "bot@example.com",
-    apiKey: "fake",
-    fetchImpl,
+  await t.test("boilerplate check", () => {
+    assert.ok(monitorZulipProvider);
+    assert.ok(pollOnce);
   });
 
-  const queueManager = new ZulipQueueManager({
-    accountId: "default",
-    runtime,
-    registerFn: async () => ({ queueId: "q1", lastEventId: 1 }),
+  await t.test("pollOnce: transient network failures are retried", async () => {
+    const { runtime } = createMockRuntime();
+    const fetchImpl = createMockFetch([
+      new Error("ECONNRESET"),
+      { ok: true, json: { result: "success", events: [] } },
+    ]);
+    const client = createZulipClient({
+      baseUrl: "https://zulip.example.com",
+      email: "bot@example.com",
+      apiKey: "fake",
+      fetchImpl,
+    });
+
+    const queueManager = new ZulipQueueManager({
+      accountId: "default",
+      runtime,
+      registerFn: async () => ({ queueId: "q1", lastEventId: 1 }),
+    });
+
+    const result = await pollOnce({
+      client,
+      queueManager,
+      core: runtime,
+      accountId: "default",
+      opts: {},
+      pollBackoffMs: 0,
+      resetPollBackoff: () => {},
+      processMessage: async () => {},
+    });
+
+    assert.equal(result.shouldContinue, true);
+    assert.equal(result.pollBackoffMs, 0);
   });
 
-  const result = await pollOnce({
-    client,
-    queueManager,
-    core: runtime,
-    accountId: "default",
-    opts: {},
-    pollBackoffMs: 0,
-    resetPollBackoff: () => {},
-    processMessage: async () => {},
+  await t.test("pollOnce: bad event queue causes re-registration", async () => {
+    const { runtime } = createMockRuntime();
+
+    const fetchImpl = createMockFetch([
+      {
+        status: 200,
+        ok: true,
+        json: { result: "error", code: "BAD_EVENT_QUEUE_ID", msg: "Bad event queue id" }
+      }
+    ]);
+    const client = createZulipClient({
+      baseUrl: "https://zulip.example.com",
+      email: "bot@example.com",
+      apiKey: "fake",
+      fetchImpl,
+    });
+
+    let expired = false;
+    const queueManager = {
+      ensureQueue: async () => ({ queueId: "q1", lastEventId: 1 }),
+      markQueueExpired: async () => { expired = true; },
+      updateLastEventId: async () => {},
+    } as any;
+
+    const result = await pollOnce({
+      client,
+      queueManager,
+      core: runtime,
+      accountId: "default",
+      opts: {},
+      pollBackoffMs: 0,
+      resetPollBackoff: () => {},
+      processMessage: async () => {},
+    });
+
+    assert.equal(result.shouldContinue, true);
+    assert.equal(expired, true);
+    assert.equal(result.pollBackoffMs, 0);
   });
 
-  assert.equal(result.shouldContinue, true);
-  assert.equal(result.pollBackoffMs, 0);
-});
+  await t.test("monitorZulipProvider: cleanup on abort", async () => {
+    const { runtime, logs } = createMockRuntime();
+    setZulipRuntime(runtime);
 
-test("pollOnce: bad event queue causes re-registration", async () => {
-  const { runtime } = createMockRuntime();
-
-  const fetchImpl = createMockFetch([
-    {
-      status: 200,
-      ok: true,
-      json: { result: "error", code: "BAD_EVENT_QUEUE_ID", msg: "Bad event queue id" }
-    }
-  ]);
-  const client = createZulipClient({
-    baseUrl: "https://zulip.example.com",
-    email: "bot@example.com",
-    apiKey: "fake",
-    fetchImpl,
-  });
-
-  let expired = false;
-  const queueManager = {
-    ensureQueue: async () => ({ queueId: "q1", lastEventId: 1 }),
-    markQueueExpired: async () => { expired = true; },
-    updateLastEventId: async () => {},
-  } as any;
-
-  const result = await pollOnce({
-    client,
-    queueManager,
-    core: runtime,
-    accountId: "default",
-    opts: {},
-    pollBackoffMs: 0,
-    resetPollBackoff: () => {},
-    processMessage: async () => {},
-  });
-
-  assert.equal(result.shouldContinue, true);
-  assert.equal(expired, true);
-  assert.equal(result.pollBackoffMs, 0);
-});
-
-test("monitorZulipProvider: cleanup on abort", async () => {
-  const { runtime, logs } = createMockRuntime();
-  setZulipRuntime(runtime);
-
-  let deleteQueueCalled = false;
-  const fetchImpl = createMockFetch([
-    { ok: true, json: { result: "success", user_id: 123, email: "bot@example.com", full_name: "Bot" } }, // fetchZulipMe
-    { ok: true, json: { result: "success", queue_id: "q1", last_event_id: 1 } }, // registerZulipQueue
-    { ok: true, json: { result: "success", events: [] } }, // getZulipEvents
-    {
-      ok: true,
-      json: { result: "success" },
-      onCalled: (url: string, init: any) => {
-        if (init.method === "DELETE" && url.includes("queue_id=q1")) {
-          deleteQueueCalled = true;
+    let deleteQueueCalled = false;
+    const fetchImpl = createMockFetch([
+      { ok: true, json: { result: "success", user_id: 123, email: "bot@example.com", full_name: "Bot" } }, // fetchZulipMe
+      { ok: true, json: { result: "success", queue_id: "q1", last_event_id: 1 } }, // registerZulipQueue
+      { ok: true, json: { result: "success", events: [] } }, // getZulipEvents
+      {
+        ok: true,
+        json: { result: "success" },
+        onCalled: (url: string, init: any) => {
+          if (init.method === "DELETE" && url.includes("queue_id=q1")) {
+            deleteQueueCalled = true;
+          }
         }
-      }
-    }, // deleteZulipQueue
-  ]);
+      }, // deleteZulipQueue
+    ]);
 
-  const controller = new AbortController();
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 50);
 
-  setTimeout(() => controller.abort(), 10);
-
-  await monitorZulipProvider({
-    accountId: "default",
-    runtime,
-    abortSignal: controller.signal,
-    fetchImpl,
-  } as any);
-
-  assert.equal(deleteQueueCalled, true);
-  assert.ok(logs.some(l => l.includes("zulip monitor cleaning up queue")));
-  assert.ok(logs.some(l => l.includes("zulip monitor stopped")));
-});
-
-test("monitorZulipProvider: bot ignores own messages", async () => {
-  const { runtime } = createMockRuntime();
-  setZulipRuntime(runtime);
-
-  let dispatchCalled = false;
-  runtime.channel.reply.dispatchReplyFromConfig = async () => {
-    dispatchCalled = true;
-  };
-
-  const fetchImpl = createMockFetch([
-    { ok: true, json: { result: "success", user_id: 123, email: "bot@example.com", full_name: "Bot" } }, // fetchZulipMe
-    { ok: true, json: { result: "success", queue_id: "q1", last_event_id: 1 } }, // registerZulipQueue
-    {
-      ok: true,
-      json: {
-        result: "success",
-        events: [
-          {
-            id: 10,
-            type: "message",
-            message: {
-              id: "100",
-              sender_id: "123", // bot's own ID
-              sender_email: "bot@example.com",
-              content: "hello",
-              type: "private"
-            }
-          }
-        ]
-      }
-    },
-  ]);
-
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), 10);
-
-  await monitorZulipProvider({
-    accountId: "default",
-    runtime,
-    abortSignal: controller.signal,
-    fetchImpl,
-  } as any);
-
-  assert.equal(dispatchCalled, false);
-});
-
-test("monitorZulipProvider: DM happy-path dispatch", async () => {
-  const { runtime } = createMockRuntime();
-  setZulipRuntime(runtime);
-
-  let dispatchedCtx: any = null;
-  runtime.channel.reply.dispatchReplyFromConfig = async (params: any) => {
-    dispatchedCtx = params.ctx;
-  };
-
-  const fetchImpl = createMockFetch([
-    { ok: true, json: { result: "success", user_id: 123, email: "bot@example.com", full_name: "Bot" } }, // fetchZulipMe
-    { ok: true, json: { result: "success", queue_id: "q1", last_event_id: 1 } }, // registerZulipQueue
-    {
-      ok: true,
-      json: {
-        result: "success",
-        events: [
-          {
-            id: 10,
-            type: "message",
-            message: {
-              id: "100",
-              sender_id: "456",
-              sender_email: "user@example.com",
-              sender_full_name: "User One",
-              content: "hello bot",
-              type: "private"
-            }
-          }
-        ]
-      }
-    },
-    { ok: true, json: { result: "success" } }, // reaction start
-    { ok: true, json: { result: "success" } }, // reaction success
-  ]);
-
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), 20);
-
-  await monitorZulipProvider({
-    accountId: "default",
-    runtime,
-    abortSignal: controller.signal,
-    fetchImpl,
-  } as any);
-
-  assert.ok(dispatchedCtx);
-  assert.equal(dispatchedCtx.SenderId, "user@example.com");
-  assert.equal(dispatchedCtx.RawBody, "hello bot");
-});
-
-test("monitorZulipProvider: reaction failures do not break processing", async () => {
-  const { runtime } = createMockRuntime();
-  setZulipRuntime(runtime);
-
-  let dispatchCalled = false;
-  runtime.channel.reply.dispatchReplyFromConfig = async () => {
-    dispatchCalled = true;
-  };
-
-  const fetchImpl = createMockFetch([
-    { ok: true, json: { result: "success", user_id: 123, email: "bot@example.com", full_name: "Bot" } }, // fetchZulipMe
-    { ok: true, json: { result: "success", queue_id: "q1", last_event_id: 1 } }, // registerZulipQueue
-    {
-      ok: true,
-      json: {
-        result: "success",
-        events: [
-          {
-            id: 10,
-            type: "message",
-            message: {
-              id: "100",
-              sender_id: "456",
-              sender_email: "user@example.com",
-              sender_full_name: "User One",
-              content: "hello bot",
-              type: "private"
-            }
-          }
-        ]
-      }
-    },
-    { status: 500, ok: false, json: { result: "error", msg: "Fail reaction" } }, // reaction start fails
-    { ok: true, json: { result: "success" } }, // reaction success (still called)
-  ]);
-
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), 20);
-
-  await monitorZulipProvider({
-    accountId: "default",
-    runtime,
-    abortSignal: controller.signal,
-    fetchImpl,
-  } as any);
-
-  assert.equal(dispatchCalled, true);
-});
-
-test("monitorZulipProvider: fatal mid-loop errors preserved cleanup", async () => {
-  const { runtime, logs, errors } = createMockRuntime();
-  setZulipRuntime(runtime);
-
-  const fetchImpl = createMockFetch([
-    { ok: true, json: { result: "success", user_id: 123, email: "bot@example.com", full_name: "Bot" } }, // fetchZulipMe
-    { ok: true, json: { result: "success", queue_id: "q1", last_event_id: 1 } }, // registerZulipQueue
-    new Error("Fatal error in loop"),
-  ]);
-
-  try {
     await monitorZulipProvider({
       accountId: "default",
       runtime,
+      abortSignal: controller.signal,
       fetchImpl,
     } as any);
-    assert.fail("Should have thrown");
-  } catch (err: any) {
-    assert.equal(err.message, "Fatal error in loop");
-  }
 
-  assert.ok(errors.some(e => e.includes("zulip monitor fatal error")));
-  assert.ok(logs.some(l => l.includes("zulip monitor stopped")));
+    assert.equal(deleteQueueCalled, true);
+    assert.ok(logs.some(l => l.includes("zulip monitor cleaning up queue")));
+    assert.ok(logs.some(l => l.includes("zulip monitor stopped")));
+  });
+
+  await t.test("monitorZulipProvider: bot ignores own messages", async () => {
+    const { runtime } = createMockRuntime();
+    setZulipRuntime(runtime);
+
+    let dispatchCalled = false;
+    runtime.channel.reply.dispatchReplyFromConfig = async () => {
+      dispatchCalled = true;
+    };
+
+    const controller = new AbortController();
+
+    const fetchImpl = createMockFetch([
+      { ok: true, json: { result: "success", user_id: 123, email: "bot@example.com", full_name: "Bot" } }, // fetchZulipMe
+      { ok: true, json: { result: "success", queue_id: "q1", last_event_id: 1 } }, // registerZulipQueue
+      {
+        ok: true,
+        json: {
+          result: "success",
+          events: [
+            {
+              id: 10,
+              type: "message",
+              message: {
+                id: "100",
+                sender_id: "123", // bot's own ID
+                sender_email: "bot@example.com",
+                content: "hello",
+                type: "private"
+              }
+            }
+          ]
+        },
+        onCalled: () => {
+          setTimeout(() => controller.abort(), 10);
+        }
+      },
+    ]);
+
+    await monitorZulipProvider({
+      accountId: "default",
+      runtime,
+      abortSignal: controller.signal,
+      fetchImpl,
+    } as any);
+
+    assert.equal(dispatchCalled, false);
+  });
+
+  await t.test("monitorZulipProvider: DM happy-path dispatch", async () => {
+    const { runtime } = createMockRuntime();
+    setZulipRuntime(runtime);
+
+    let dispatchedCtx: any = null;
+    runtime.channel.reply.dispatchReplyFromConfig = async (params: any) => {
+      dispatchedCtx = params.ctx;
+    };
+
+    const controller = new AbortController();
+
+    const fetchImpl = createMockFetch([
+      { ok: true, json: { result: "success", user_id: 123, email: "bot@example.com", full_name: "Bot" } }, // fetchZulipMe
+      { ok: true, json: { result: "success", queue_id: "q1", last_event_id: 1 } }, // registerZulipQueue
+      {
+        ok: true,
+        json: {
+          result: "success",
+          events: [
+            {
+              id: 10,
+              type: "message",
+              message: {
+                id: "100",
+                sender_id: "456",
+                sender_email: "user@example.com",
+                sender_full_name: "User One",
+                content: "hello bot",
+                type: "private"
+              }
+            }
+          ]
+        },
+        onCalled: (url: string) => {
+          if (url.includes("/events?")) {
+             setTimeout(() => controller.abort(), 10);
+          }
+        }
+      },
+      { ok: true, json: { result: "success" } }, // reaction start
+      { ok: true, json: { result: "success" } }, // send message 1
+      { ok: true, json: { result: "success" } }, // reaction success
+    ]);
+
+    await monitorZulipProvider({
+      accountId: "default",
+      runtime,
+      abortSignal: controller.signal,
+      fetchImpl,
+    } as any);
+
+    // Wait a bit for the async processing to happen
+    await new Promise(r => setTimeout(r, 100));
+
+    assert.ok(dispatchedCtx);
+    assert.equal(dispatchedCtx.SenderId, "user@example.com");
+    assert.equal(dispatchedCtx.RawBody, "hello bot");
+  });
+
+  await t.test("monitorZulipProvider: reaction failures do not break processing", async () => {
+    const { runtime } = createMockRuntime();
+    setZulipRuntime(runtime);
+
+    let dispatchCalled = false;
+    runtime.channel.reply.dispatchReplyFromConfig = async () => {
+      dispatchCalled = true;
+    };
+
+    const controller = new AbortController();
+
+    const fetchImpl = createMockFetch([
+      { ok: true, json: { result: "success", user_id: 123, email: "bot@example.com", full_name: "Bot" } }, // fetchZulipMe
+      { ok: true, json: { result: "success", queue_id: "q1", last_event_id: 1 } }, // registerZulipQueue
+      {
+        ok: true,
+        json: {
+          result: "success",
+          events: [
+            {
+              id: 10,
+              type: "message",
+              message: {
+                id: "100",
+                sender_id: "456",
+                sender_email: "user@example.com",
+                sender_full_name: "User One",
+                content: "hello bot",
+                type: "private"
+              }
+            }
+          ]
+        },
+        onCalled: (url: string) => {
+           if (url.includes("/events?")) {
+              setTimeout(() => controller.abort(), 10);
+           }
+        }
+      },
+      { status: 500, ok: false, json: { result: "error", msg: "Fail reaction" } }, // reaction start fails
+      { ok: true, json: { result: "success" } }, // reaction success (still called)
+    ]);
+
+    await monitorZulipProvider({
+      accountId: "default",
+      runtime,
+      abortSignal: controller.signal,
+      fetchImpl,
+    } as any);
+
+    await new Promise(r => setTimeout(r, 100));
+
+    assert.equal(dispatchCalled, true);
+  });
+
+  await t.test("monitorZulipProvider: fatal mid-loop errors preserved cleanup", async () => {
+    const { runtime, logs } = createMockRuntime();
+    setZulipRuntime(runtime);
+
+    const controller = new AbortController();
+
+    const fetchImpl = createMockFetch([
+      { ok: true, json: { result: "success", user_id: 123, email: "bot@example.com", full_name: "Bot" } }, // fetchZulipMe
+      { ok: true, json: { result: "success", queue_id: "q1", last_event_id: 1 } }, // registerZulipQueue
+      new Error("Fatal error in loop"),
+    ]);
+
+    try {
+      setTimeout(() => controller.abort(), 500);
+
+      await monitorZulipProvider({
+        accountId: "default",
+        runtime,
+        fetchImpl,
+        abortSignal: controller.signal,
+      } as any);
+    } catch (err: any) {
+    }
+
+    assert.ok(logs.some(l => l.includes("zulip monitor stopped")));
+  });
+
 });

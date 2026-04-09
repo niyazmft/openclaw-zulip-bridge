@@ -59,7 +59,7 @@ export async function initializeZulipMonitor(params: {
     baseUrl,
     email,
     apiKey,
-    fetchImpl: (opts as any).fetchImpl,
+    fetchImpl: opts.fetchImpl,
   });
   const botUser = await fetchZulipMe(client);
   const botUserId = botUser.id;
