@@ -33,6 +33,12 @@ try {
 if (errors.length > 0) {
   console.error('\nBootstrap validation failed:');
   errors.forEach(err => console.error(`- ${err}`));
+
+  if (process.env.NODE_ENV === 'production') {
+    console.error('\nHINT: NODE_ENV is set to "production", which may cause npm to skip installing devDependencies.');
+    console.error('Try running: NODE_ENV=development npm install');
+  }
+
   console.error('\nTry running "npm install" or "npm ci" again.');
   process.exit(1);
 }
