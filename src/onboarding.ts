@@ -12,7 +12,6 @@ import {
 import { createZulipClient, fetchZulipSubscriptions } from "./zulip/client.js";
 import { maskPII } from "./zulip/monitor-helpers.js";
 import { probeZulip } from "./zulip/probe.js";
-import { getZulipRuntime } from "./runtime.js";
 
 const channel = "zulip" as const;
 
@@ -59,7 +58,7 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
       quickstartScore: configured ? 2 : 1,
     };
   },
-  configure: async ({ cfg, prompter, accountOverrides, shouldPromptAccountIds }) => {
+  configure: async ({ cfg, prompter, accountOverrides, shouldPromptAccountIds, env }) => {
     const override = accountOverrides.zulip?.trim();
     const defaultAccountId = resolveDefaultZulipAccountId(cfg);
     let accountId = override ? normalizeAccountId(override) : defaultAccountId;
@@ -314,7 +313,7 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
         }
       } catch (err) {
         // Log error but don't fail onboarding
-        getZulipRuntime().error?.("Failed to fetch Zulip subscriptions during onboarding:", err);
+        env.logger.error("Failed to fetch Zulip subscriptions during onboarding:", err);
       }
     }
 
