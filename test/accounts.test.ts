@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { test, describe, beforeEach, afterEach } from "node:test";
-import { resolveZulipAccount } from "../src/zulip/accounts.ts";
+import { resolveZulipAccount, listZulipAccountIds } from "../src/zulip/accounts.ts";
 import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/core";
 
 describe("resolveZulipAccount Precedence", () => {
@@ -84,5 +84,43 @@ describe("resolveZulipAccount Precedence", () => {
 
     assert.strictEqual(resolved.apiKey, "other-config-api-key");
     assert.strictEqual(resolved.apiKeySource, "config");
+  });
+});
+
+describe("listZulipAccountIds", () => {
+  test("returns [DEFAULT_ACCOUNT_ID] when no zulip configuration is present", () => {
+    const ids = listZulipAccountIds({} as any);
+    assert.deepStrictEqual(ids, [DEFAULT_ACCOUNT_ID]);
+  });
+
+  test("returns [DEFAULT_ACCOUNT_ID] when accounts object is empty", () => {
+    const ids = listZulipAccountIds({
+      channels: { zulip: { accounts: {} } }
+    } as any);
+    assert.deepStrictEqual(ids, [DEFAULT_ACCOUNT_ID]);
+  });
+
+  test("returns [DEFAULT_ACCOUNT_ID] when accounts property is invalid", () => {
+    const ids = listZulipAccountIds({
+      channels: { zulip: { accounts: null } }
+    } as any);
+    assert.deepStrictEqual(ids, [DEFAULT_ACCOUNT_ID]);
+  });
+
+  test("returns sorted account IDs when accounts are configured", () => {
+    const ids = listZulipAccountIds({
+      channels: {
+        zulip: {
+          accounts: {
+            "z-account": {},
+            "a-account": {},
+            "m-account": {},
+            "": {} // Should be filtered out by filter(Boolean)
+          }
+        }
+      }
+    } as any);
+
+    assert.deepStrictEqual(ids, ["a-account", "m-account", "z-account"]);
   });
 });

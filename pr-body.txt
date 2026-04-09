@@ -1,0 +1,12 @@
+🎯 **What:** Adds unit tests for the `extractShortModelName` helper function in `src/zulip/monitor-helpers.ts` which was previously untested.
+
+📊 **Coverage:** The new tests cover:
+- Extracting the model name from strings without a provider.
+- Extracting the model name from strings with a provider.
+- Extracting the model name from strings with multiple slashes.
+- Removing the `-latest` suffix.
+- Removing the `-\d{8}` date suffix.
+- Handling empty strings properly.
+- Checking that generic non-date suffixes aren't incorrectly modified.
+
+✨ **Result:** Test coverage for `src/zulip/monitor-helpers.ts` is improved, increasing codebase reliability and adding a safety net for any future refactoring.
