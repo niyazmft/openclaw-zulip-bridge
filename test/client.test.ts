@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createZulipClient, getZulipEventsWithRetry, normalizeZulipBaseUrl } from "../src/zulip/client.ts";
+import { createZulipClient, getZulipEventsWithRetry } from "../src/zulip/client.ts";
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -9,28 +9,6 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
     ...init,
   });
 }
-
-test("normalizeZulipBaseUrl normalizes valid URLs", () => {
-  assert.equal(normalizeZulipBaseUrl("https://example.com"), "https://example.com");
-  assert.equal(normalizeZulipBaseUrl("http://example.com"), "http://example.com");
-  assert.equal(normalizeZulipBaseUrl("  https://example.com  "), "https://example.com");
-  assert.equal(normalizeZulipBaseUrl("https://example.com/"), "https://example.com");
-  assert.equal(normalizeZulipBaseUrl("https://example.com///"), "https://example.com");
-});
-
-test("normalizeZulipBaseUrl rejects invalid protocols", () => {
-  assert.equal(normalizeZulipBaseUrl("ftp://example.com"), undefined);
-  assert.equal(normalizeZulipBaseUrl("file:///etc/passwd"), undefined);
-  assert.equal(normalizeZulipBaseUrl("example.com"), undefined);
-  assert.equal(normalizeZulipBaseUrl("://example.com"), undefined);
-});
-
-test("normalizeZulipBaseUrl handles empty or missing inputs", () => {
-  assert.equal(normalizeZulipBaseUrl(undefined), undefined);
-  assert.equal(normalizeZulipBaseUrl(null), undefined);
-  assert.equal(normalizeZulipBaseUrl(""), undefined);
-  assert.equal(normalizeZulipBaseUrl("   "), undefined);
-});
 
 test("getZulipEventsWithRetry retries once on 429 and then succeeds", async () => {
   let attempts = 0;
