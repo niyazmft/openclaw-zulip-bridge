@@ -1,7 +1,5 @@
-import os from "node:os";
-import path from "node:path";
-import { getZulipRuntime } from "../runtime.js";
 import { readSafeLocalFile } from "./fs-utils.js";
+import { formatZulipLog } from "./monitor-helpers.js";
 
 export type ZulipClient = {
   baseUrl: string;
@@ -199,7 +197,20 @@ export async function zulipRequestWithRetry<T>(
     if (init?.body && !headers.has("Content-Type") && typeof init.body === "string") {
       headers.set("Content-Type", "application/x-www-form-urlencoded");
     }
-    const res = await client.fetchImpl(url, { ...init, headers });
+    let res: Response;
+    try {
+      res = await client.fetchImpl(url, { ...init, headers });
+    } catch (err) {
+      if (attempt >= maxRetries) {
+        throw err;
+      }
+      const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt);
+      // We don't always have easy access to a logger here without passing it through,
+      // but we can at least ensure the error is retryable.
+      await delay(backoff);
+      continue;
+    }
+
     if (res.ok) {
       return (await res.json()) as T;
     }
@@ -453,29 +464,7 @@ export async function uploadZulipFile(
   client: ZulipClient,
   filePath: string,
 ): Promise<{ url: string }> {
-  const absolutePath = path.resolve(filePath);
-  const tmpDir = path.resolve(os.tmpdir());
-  let dataDir: string | undefined;
-  try {
-    dataDir = getZulipRuntime().paths?.dataDir;
-    if (dataDir) {
-      dataDir = path.resolve(dataDir);
-    }
-  } catch {
-    // runtime may not be initialized in all test contexts
-  }
-
-  const isUnderTmp = absolutePath.startsWith(tmpDir + path.sep) || absolutePath === tmpDir;
-  const isUnderData =
-    dataDir && (absolutePath.startsWith(dataDir + path.sep) || absolutePath === dataDir);
-
-  if (!isUnderTmp && !isUnderData) {
-    throw new Error(
-      `Security violation: upload path "${filePath}" is outside of allowed directories.`,
-    );
-  }
-
-  const filename = path.basename(filePath) || "upload.bin";
+  const filename = filePath.split("/").pop() || "upload.bin";
   const buffer = await readSafeLocalFile(filePath);
   const form = new FormData();
   form.append("file", new Blob([buffer]), filename);

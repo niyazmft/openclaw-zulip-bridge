@@ -58,7 +58,7 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
       quickstartScore: configured ? 2 : 1,
     };
   },
-  configure: async ({ cfg, prompter, accountOverrides, shouldPromptAccountIds, env }) => {
+  configure: async ({ cfg, prompter, accountOverrides, shouldPromptAccountIds }) => {
     const override = accountOverrides.zulip?.trim();
     const defaultAccountId = resolveDefaultZulipAccountId(cfg);
     let accountId = override ? normalizeAccountId(override) : defaultAccountId;
@@ -313,7 +313,7 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
         }
       } catch (err) {
         // Log error but don't fail onboarding
-        env.logger.error("Failed to fetch Zulip subscriptions during onboarding:", err);
+        console.error("Failed to fetch Zulip subscriptions during onboarding:", err);
       }
     }
 
