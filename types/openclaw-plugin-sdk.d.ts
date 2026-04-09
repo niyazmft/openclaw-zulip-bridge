@@ -34,6 +34,7 @@ declare module "openclaw/plugin-sdk/core" {
   export const createChatChannelPlugin: <T = any>(params: any) => any;
   export const defineChannelPluginEntry: any;
   export const definePluginEntry: any;
+  export const defineSetupPluginEntry: any;
   export const formatPairingApproveHint: any;
   export const jsonResult: any;
   export const readNumberParam: any;
