@@ -1,37 +1,12 @@
 import type { OpenClawConfig, ChannelAccountSnapshot } from "openclaw/plugin-sdk/core";
-import type { ReplyPayload } from "openclaw/plugin-sdk/reply-payload";
-import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import { logInboundDrop, resolveControlCommandGate } from "openclaw/plugin-sdk/irc";
-import { logTypingFailure } from "openclaw/plugin-sdk/channel-feedback";
-import {
-  buildPendingHistoryContextFromMap,
-  DEFAULT_GROUP_HISTORY_LIMIT,
-  recordPendingHistoryEntryIfEnabled,
-  type HistoryEntry,
-} from "openclaw/plugin-sdk/reply-history";
-import {
-  createReplyPrefixOptions,
-  createTypingCallbacks,
-} from "openclaw/plugin-sdk/channel-runtime";
+import { createReplyPrefixOptions } from "openclaw/plugin-sdk/channel-runtime";
 import { resolveChannelMediaMaxBytes } from "openclaw/plugin-sdk/media-runtime";
 import { getZulipRuntime } from "../runtime.js";
-import { resolveZulipAccount } from "./accounts.js";
 import {
-  createZulipClient,
-  fetchZulipMe,
-  fetchZulipStream,
-  normalizeZulipBaseUrl,
-  registerZulipQueue,
-  getZulipEventsWithRetry,
   deleteZulipQueue,
-  sendZulipTyping,
-  addZulipReaction,
-  removeZulipReaction,
+  registerZulipQueue,
   type ZulipMessage,
-  type ZulipStream,
 } from "./client.js";
 import {
   formatInboundFromLabel,
@@ -43,9 +18,22 @@ import { ZulipDedupeStore } from "./dedupe-store.js";
 import { sendMessageZulip } from "./send.js";
 import { decidePolicy } from "./policy.js";
 import { ZulipQueueManager } from "./queue-manager.js";
-import { downloadZulipUpload, extractZulipUploadUrls, normalizeZulipEmojiName } from "./uploads.js";
-
-const checkedMediaDirs = new Set<string>();
+import { extractZulipUploadUrls, normalizeZulipEmojiName } from "./uploads.js";
+import {
+  stripHtmlToText,
+  normalizeMention,
+  resolveOncharPrefixes,
+  stripOncharPrefix,
+} from "./text-utils.js";
+import {
+  isSenderAllowed,
+  normalizeAllowList,
+} from "./auth.js";
+import { downloadAttachments } from "./media-utils.js";
+import { addReactionSafe, removeReactionSafe } from "./reactions.js";
+import { initializeZulipMonitor } from "./bootstrap.js";
+import { pollOnce, delay } from "./polling.js";
+import { dispatchZulipReply } from "./reply-handler.js";
 
 export type MonitorZulipOpts = {
   apiKey?: string;
@@ -53,210 +41,29 @@ export type MonitorZulipOpts = {
   baseUrl?: string;
   accountId?: string;
   config?: OpenClawConfig;
-  runtime?: RuntimeEnv;
+  runtime?: any;
   abortSignal?: AbortSignal;
   statusSink?: (patch: Partial<ChannelAccountSnapshot>) => void;
 };
 
 const RECENT_MESSAGE_TTL_MS = 5 * 60_000;
 const RECENT_MESSAGE_MAX = 2000;
-const DEFAULT_ONCHAR_PREFIXES = [">", "!"];
 const DEFAULT_TOPIC = "general";
-
-function resolveRuntime(opts: MonitorZulipOpts): RuntimeEnv {
-  return (
-    opts.runtime ?? {
-      log: console.log,
-      error: console.error,
-      exit: (code: number): never => {
-        throw new Error(`exit ${code}`);
-      },
-    }
-  );
-}
-
-function stripHtmlToText(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/@\*\*([^*]+)\*\*/g, "@$1")
-    .trim();
-}
-
-function normalizeMention(text: string, mention: string | undefined): string {
-  if (!mention) {
-    return text.trim();
-  }
-  const escaped = mention.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`@${escaped}\\b`, "gi");
-  return text.replace(re, " ").replace(/\s+/g, " ").trim();
-}
-
-function resolveOncharPrefixes(prefixes: string[] | undefined): string[] {
-  const cleaned = prefixes?.map((entry) => entry.trim()).filter(Boolean) ?? DEFAULT_ONCHAR_PREFIXES;
-  return cleaned.length > 0 ? cleaned : DEFAULT_ONCHAR_PREFIXES;
-}
-
-function stripOncharPrefix(
-  text: string,
-  prefixes: string[],
-): { triggered: boolean; stripped: string } {
-  const trimmed = text.trimStart();
-  for (const prefix of prefixes) {
-    if (!prefix) {
-      continue;
-    }
-    if (trimmed.startsWith(prefix)) {
-      return {
-        triggered: true,
-        stripped: trimmed.slice(prefix.length).trimStart(),
-      };
-    }
-  }
-  return { triggered: false, stripped: text };
-}
-
-function extractZulipTopicDirective(text: string): { text: string; topic?: string } {
-  const match = text.match(/^\s*\[\[zulip_topic:\s*([^\]]+?)\s*\]\]\s*/i);
-  if (!match) {
-    return { text };
-  }
-  const topic = match[1]?.trim();
-  if (!topic) {
-    return { text: text.slice(match[0].length).trimStart() };
-  }
-  return {
-    text: text.slice(match[0].length).trimStart(),
-    topic,
-  };
-}
-
-function normalizeAllowEntry(entry: string): string {
-  const trimmed = entry.trim();
-  if (!trimmed) {
-    return "";
-  }
-  if (trimmed === "*") {
-    return "*";
-  }
-  return trimmed
-    .replace(/^(zulip|user):/i, "")
-    .replace(/^@/, "")
-    .toLowerCase();
-}
-
-function normalizeAllowList(entries: Array<string | number>): string[] {
-  const normalized = entries.map((entry) => normalizeAllowEntry(String(entry))).filter(Boolean);
-  return Array.from(new Set(normalized));
-}
-
-function isSenderAllowed(params: {
-  senderId: string;
-  senderName?: string;
-  allowFrom: string[];
-}): boolean {
-  const allowFrom = params.allowFrom;
-  if (allowFrom.length === 0) {
-    return false;
-  }
-  if (allowFrom.includes("*")) {
-    return true;
-  }
-  const normalizedSenderId = normalizeAllowEntry(params.senderId);
-  const normalizedSenderName = params.senderName ? normalizeAllowEntry(params.senderName) : "";
-  return allowFrom.some(
-    (entry) =>
-      entry === normalizedSenderId || (normalizedSenderName && entry === normalizedSenderName),
-  );
-}
-
-async function saveZulipMediaBuffer(params: {
-  core: ReturnType<typeof getZulipRuntime>;
-  buffer: Buffer;
-  contentType: string;
-  filename: string;
-  maxBytes: number;
-}): Promise<{ path: string; contentType: string } | null> {
-  const { core, buffer, contentType, filename, maxBytes } = params;
-  if (core.channel.media?.saveMediaBuffer) {
-    const saved = await core.channel.media.saveMediaBuffer(
-      buffer,
-      contentType,
-      "inbound",
-      maxBytes,
-      filename,
-    );
-    return {
-      path: saved.path,
-      contentType: saved.contentType ?? contentType,
-    };
-  }
-  const baseDir = core.paths?.dataDir ?? path.join(os.tmpdir(), "openclaw-zulip");
-  if (!checkedMediaDirs.has(baseDir)) {
-    await fs.mkdir(baseDir, { recursive: true }).catch(() => {});
-    checkedMediaDirs.add(baseDir);
-  }
-  const dir = await fs.mkdtemp(path.join(baseDir, "zulip-upload-"));
-  const filePath = path.join(dir, filename);
-  await fs.writeFile(filePath, buffer);
-  return { path: filePath, contentType };
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise<void> {
   const core = getZulipRuntime();
   core.log?.(formatZulipLog("zulip monitor starting", { accountId: opts.accountId }));
 
   try {
-    const cfg = opts.config ?? core.config.loadConfig();
-    const runtime = resolveRuntime(opts);
-    const account = resolveZulipAccount({
+    const {
       cfg,
-      accountId: opts.accountId,
-    });
-
-    const apiKey = opts.apiKey?.trim() || account.apiKey?.trim();
-    const email = opts.email?.trim() || account.email?.trim();
-    if (!apiKey || !email) {
-      throw new Error(
-        `Zulip apiKey/email missing for account "${account.accountId}" (set channels.zulip.accounts.${account.accountId}.apiKey/email or ZULIP_API_KEY/ZULIP_EMAIL for default).`,
-      );
-    }
-    const baseUrl = normalizeZulipBaseUrl(opts.baseUrl ?? account.baseUrl);
-    if (!baseUrl) {
-      throw new Error(
-        `Zulip url missing for account "${account.accountId}" (set channels.zulip.accounts.${account.accountId}.url or ZULIP_URL for default).`,
-      );
-    }
-
-    const client = createZulipClient({ baseUrl, email, apiKey });
-    const botUser = await fetchZulipMe(client);
-    const botUserId = botUser.id;
-    const botEmail = botUser.email ?? "";
-    const botUsername = botUser.full_name ?? "";
-
-    core.log?.(
-      formatZulipLog("zulip connected", {
-        accountId: account.accountId,
-        botUsername,
-        botUserId,
-        botEmail: maskPII(botEmail),
-      }),
-    );
-
-    if (account.enableAdminActions) {
-      core.log?.(
-        formatZulipLog("zulip admin actions enabled", {
-          accountId: account.accountId,
-        }),
-      );
-    }
+      account,
+      client,
+      botUserId,
+      botEmail,
+      botUsername,
+      baseUrl,
+    } = await initializeZulipMonitor({ opts, core });
 
     const logger = core.logging.getChildLogger({ module: "zulip" });
     const logVerboseMessage = core.logging.shouldLogVerbose()
@@ -265,7 +72,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
     const oncharPrefixes = resolveOncharPrefixes(account.oncharPrefixes);
     const oncharEnabled = account.chatmode === "onchar";
-    const channelHistories = new Map<string, HistoryEntry[]>();
 
     const mediaMaxBytes =
       resolveChannelMediaMaxBytes({
@@ -306,7 +112,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       if (!senderId) {
         return;
       }
-      // Safety check: ignore bot's own messages to prevent infinite loops.
       if (senderId === botEmail || String(message.sender_id) === botUserId) {
         return;
       }
@@ -354,42 +159,16 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       const oncharResult = stripOncharPrefix(rawText, oncharPrefixes);
 
       const uploadUrls = extractZulipUploadUrls(message.content ?? "", baseUrl);
-      const mediaPaths: string[] = [];
-      const mediaTypes: string[] = [];
-      const mediaUrls: string[] = [];
-      if (uploadUrls.length > 0) {
-        for (const uploadUrl of uploadUrls) {
-          try {
-            const downloaded = await downloadZulipUpload(
-              uploadUrl,
-              baseUrl,
-              client.authHeader,
-              mediaMaxBytes,
-            );
-            const saved = await saveZulipMediaBuffer({
-              core,
-              buffer: downloaded.buffer,
-              contentType: downloaded.contentType,
-              filename: downloaded.filename,
-              maxBytes: mediaMaxBytes,
-            });
-            if (saved) {
-              mediaPaths.push(saved.path);
-              mediaTypes.push(saved.contentType);
-              mediaUrls.push(uploadUrl);
-            }
-          } catch (err) {
-            core.error?.(
-              formatZulipLog("zulip attachment download failed", {
-                accountId: account.accountId,
-                messageId,
-                url: uploadUrl,
-                error: String(err),
-              }),
-            );
-          }
-        }
-      }
+      const { mediaPaths, mediaTypes, mediaUrls } = await downloadAttachments({
+        core,
+        uploadUrls,
+        baseUrl,
+        authHeader: client.authHeader,
+        mediaMaxBytes,
+        accountId: account.accountId,
+        messageId,
+      });
+
       const oncharTriggered = oncharEnabled && oncharResult.triggered;
 
       const mentionRegexes = core.channel.mentions.buildMentionRegexes(cfg, "main");
@@ -575,14 +354,12 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         },
       });
 
-      // Use the SDK-provided session key (includes agent: prefix from routing)
       const baseSessionKey = route.sessionKey ?? `zulip:${account.accountId}:${channelId}`;
       const threadKeys = resolveThreadSessionKeys({
         baseSessionKey,
         threadId: topic !== DEFAULT_TOPIC ? topic : undefined,
       });
       const sessionKey = threadKeys.sessionKey;
-      const historyKey = kind === "dm" ? null : sessionKey;
 
       const preview = bodyText.replace(/\s+/g, " ").slice(0, 160);
       const inboundLabel =
@@ -668,30 +445,13 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         }),
       );
 
-      const addReactionSafe = async (emojiName: string) => {
-        if (!reactionsEnabled || !emojiName) {
-          return;
-        }
-        try {
-          await addZulipReaction(client, { messageId, emojiName });
-        } catch (err) {
-          logVerboseMessage(`zulip: failed to add reaction ${emojiName}: ${String(err)}`);
-        }
-      };
-      const removeReactionSafe = async (emojiName: string) => {
-        if (!reactionsEnabled || !emojiName) {
-          return;
-        }
-        try {
-          await removeZulipReaction(client, { messageId, emojiName });
-        } catch (err) {
-          logVerboseMessage(`zulip: failed to remove reaction ${emojiName}: ${String(err)}`);
-        }
-      };
-
-      if (reactionsEnabled) {
-        await addReactionSafe(reactionStart);
-      }
+      await addReactionSafe({
+        client,
+        messageId,
+        emojiName: reactionStart,
+        reactionsEnabled,
+        logVerbose: logVerboseMessage,
+      });
 
       const textLimit = core.channel.text.resolveTextChunkLimit(cfg, "zulip", account.accountId, {
         fallbackLimit: account.textChunkLimit ?? 4000,
@@ -709,128 +469,61 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         accountId: account.accountId,
       });
 
-      const typingParams = isDM
-        ? { op: "start" as const, type: "direct" as const, to: [Number(message.sender_id)] }
-        : streamId
-          ? { op: "start" as const, type: "stream" as const, streamId: Number(streamId), topic }
-          : null;
-
-      const typingCallbacks = createTypingCallbacks({
-        start: async () => {
-          if (typingParams) {
-            await sendZulipTyping(client, typingParams);
-          }
-        },
-        stop: async () => {
-          if (typingParams) {
-            await sendZulipTyping(client, { ...typingParams, op: "stop" });
-          }
-        },
-        onStartError: (err) => {
-          logTypingFailure({
-            log: logVerboseMessage,
-            channel: "zulip",
-            target: isDM ? senderId : `stream:${streamId}:${topic}`,
-            error: err,
-          });
-        },
-        onStopError: (err) => {
-          logTypingFailure({
-            log: logVerboseMessage,
-            channel: "zulip",
-            target: isDM ? senderId : `stream:${streamId}:${topic}`,
-            error: err,
-          });
-        },
+      const dispatchError = await dispatchZulipReply({
+        core,
+        cfg,
+        account,
+        route,
+        client,
+        ctxPayload,
+        isDM,
+        senderId,
+        senderNumericId: Number(message.sender_id),
+        streamId,
+        topic,
+        messageId,
+        botUsername,
+        onModelSelected,
+        prefixOptions,
+        tableMode,
+        textLimit,
+        to,
+        statusSink: opts.statusSink,
+        logVerboseMessage,
       });
-
-      const { dispatcher, replyOptions, markDispatchIdle } =
-        core.channel.reply.createReplyDispatcherWithTyping({
-          ...prefixOptions,
-          humanDelay: core.channel.reply.resolveHumanDelayConfig(cfg, route.agentId),
-          onReplyStart: typingCallbacks.onReplyStart,
-          deliver: async (payload: ReplyPayload) => {
-            const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
-            const rawText = core.channel.text.convertMarkdownTables(payload.text ?? "", tableMode);
-            const { text, topic: topicOverride } = extractZulipTopicDirective(rawText);
-            const resolvedTopic = topicOverride ? topicOverride.slice(0, 60) : topic;
-            if (mediaUrls.length === 0) {
-              const chunkMode = core.channel.text.resolveChunkMode(cfg, "zulip", account.accountId);
-              const chunks = core.channel.text.chunkMarkdownTextWithMode(text, textLimit, chunkMode);
-              for (const chunk of chunks.length > 0 ? chunks : [text]) {
-                if (!chunk) {
-                  continue;
-                }
-                await sendMessageZulip(to, chunk, {
-                  accountId: account.accountId,
-                  topic: resolvedTopic,
-                });
-              }
-            } else {
-              let first = true;
-              for (const mediaUrl of mediaUrls) {
-                const caption = first ? text : "";
-                first = false;
-                await sendMessageZulip(to, caption, {
-                  accountId: account.accountId,
-                  mediaUrl,
-                  topic: resolvedTopic,
-                });
-              }
-            }
-            opts.statusSink?.({ lastOutboundAt: Date.now() });
-          },
-          onError: (err: unknown) => {
-            core.error?.(`zulip reply failed: ${String(err)}`);
-          },
-        });
-
-      let dispatchError: unknown;
-      try {
-        await core.channel.reply.dispatchReplyFromConfig({
-          ctx: ctxPayload,
-          cfg,
-          dispatcher,
-          replyOptions: {
-            ...replyOptions,
-            disableBlockStreaming:
-              typeof account.blockStreaming === "boolean" ? !account.blockStreaming : undefined,
-            onModelSelected,
-          },
-        });
-      } catch (err) {
-        dispatchError = err;
-        core.error?.(
-          formatZulipLog("zulip reply failed", {
-            accountId: account.accountId,
-            messageId,
-            senderId: maskPII(senderId),
-            error: String(err),
-          }),
-        );
-      } finally {
-        markDispatchIdle();
-      }
 
       if (reactionsEnabled) {
         if (reactionClearOnFinish) {
-          await removeReactionSafe(reactionStart);
+          await removeReactionSafe({
+            client,
+            messageId,
+            emojiName: reactionStart,
+            reactionsEnabled,
+            logVerbose: logVerboseMessage,
+          });
         }
         if (dispatchError) {
-          await addReactionSafe(reactionError);
+          await addReactionSafe({
+            client,
+            messageId,
+            emojiName: reactionError,
+            reactionsEnabled,
+            logVerbose: logVerboseMessage,
+          });
         } else {
-          await addReactionSafe(reactionSuccess);
+          await addReactionSafe({
+            client,
+            messageId,
+            emojiName: reactionSuccess,
+            reactionsEnabled,
+            logVerbose: logVerboseMessage,
+          });
         }
-      }
-
-      if (historyKey) {
-        // History cleanup skipped - SDK method removed
       }
 
       opts.statusSink?.({ lastInboundAt: Date.now() });
     };
 
-    // Initialize queue manager
     const streams = account.streams ?? ["*"];
     const queueManager = new ZulipQueueManager({
       accountId: account.accountId,
@@ -872,105 +565,21 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       return;
     }
 
-    // Long-polling loop
     core.log?.(formatZulipLog("zulip monitor loop entering", { accountId: account.accountId }));
     while (!opts.abortSignal?.aborted) {
-      let queue;
-      try {
-        queue = await queueManager.ensureQueue();
-      } catch (err) {
-        core.error?.(
-          formatZulipLog("zulip queue management failed", {
-            accountId: account.accountId,
-            error: String(err),
-          }),
-        );
-        await delay(5000);
-        continue;
-      }
-
-      try {
-        const response = await getZulipEventsWithRetry(client, {
-          queueId: queue.queueId,
-          lastEventId: queue.lastEventId,
-          timeoutMs: 90000,
-          retryBaseDelayMs: 1000,
-        });
-
-        if (response.result === "error") {
-          const msg = response.msg ?? "";
-          const isBadQueue =
-            response.code === "BAD_EVENT_QUEUE_ID" || msg.toLowerCase().includes("bad event queue");
-          if (isBadQueue) {
-            await queueManager.markQueueExpired();
-            resetPollBackoff();
-            continue;
-          }
-          throw new Error(`Zulip events error: ${response.msg}`);
-        }
-
-        const events = response.events ?? [];
-        if (events.length > 0) {
-          core.log?.(
-            formatZulipLog("zulip events received", {
-              accountId: account.accountId,
-              queueId: queue.queueId,
-              count: events.length,
-            }),
-          );
-          opts.statusSink?.({
-            connected: true,
-            lastConnectedAt: Date.now(),
-          });
-        }
-
-        if (events.length === 0) {
-          await delay(1000);
-        }
-
-        resetPollBackoff();
-
-        for (const event of events) {
-          if (event.type === "message" && event.message) {
-            await processMessage(event.message);
-          }
-          const nextEventId = Number((event as { id?: unknown })?.id);
-          if (!Number.isNaN(nextEventId) && nextEventId > 0) {
-            await queueManager.updateLastEventId(nextEventId);
-          }
-        }
-      } catch (err) {
-        if (opts.abortSignal?.aborted) {
-          break;
-        }
-        const errStr = String(err);
-        if (errStr.toLowerCase().includes("bad event queue")) {
-          await queueManager.markQueueExpired();
-          resetPollBackoff();
-          continue;
-        }
-        const status = (err as { status?: number })?.status;
-        const retryAfterMs = (err as { retryAfterMs?: number })?.retryAfterMs;
-        core.error?.(
-          formatZulipLog("zulip polling error", {
-            accountId: account.accountId,
-            error: String(err),
-            status,
-          }),
-        );
-        opts.statusSink?.({
-          connected: false,
-          lastError: String(err),
-        });
-        const baseDelay = status === 429 ? 10000 : 1000;
-        if (!pollBackoffMs) {
-          pollBackoffMs = baseDelay;
-        } else {
-          pollBackoffMs = Math.min(30000, pollBackoffMs * 2);
-        }
-        const waitMs =
-          retryAfterMs && retryAfterMs > 0 ? Math.min(30000, retryAfterMs) : pollBackoffMs;
-        await delay(waitMs);
+      const result = await pollOnce({
+        client,
+        queueManager,
+        core,
+        accountId: account.accountId,
+        opts,
+        pollBackoffMs,
+        resetPollBackoff,
+        processMessage,
+      });
+      pollBackoffMs = result.pollBackoffMs;
+      if (!result.shouldContinue) {
+        break;
       }
     }
     core.log?.(
@@ -980,7 +589,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       }),
     );
 
-    // Cleanup
     if (queueManager) {
       const queue = queueManager.getQueue();
       if (queue) {
