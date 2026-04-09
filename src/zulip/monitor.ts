@@ -346,35 +346,44 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     const mediaTypes: string[] = [];
     const mediaUrls: string[] = [];
     if (uploadUrls.length > 0) {
-      for (const uploadUrl of uploadUrls) {
-        try {
-          const downloaded = await downloadZulipUpload(
-            uploadUrl,
-            baseUrl,
-            client.authHeader,
-            mediaMaxBytes,
-          );
-          const saved = await saveZulipMediaBuffer({
-            core,
-            buffer: downloaded.buffer,
-            contentType: downloaded.contentType,
-            filename: downloaded.filename,
-            maxBytes: mediaMaxBytes,
-          });
-          if (saved) {
-            mediaPaths.push(saved.path);
-            mediaTypes.push(saved.contentType);
-            mediaUrls.push(uploadUrl);
+      const results = await Promise.all(
+        uploadUrls.map(async (uploadUrl) => {
+          try {
+            const downloaded = await downloadZulipUpload(
+              uploadUrl,
+              baseUrl,
+              client.authHeader,
+              mediaMaxBytes,
+            );
+            const saved = await saveZulipMediaBuffer({
+              core,
+              buffer: downloaded.buffer,
+              contentType: downloaded.contentType,
+              filename: downloaded.filename,
+              maxBytes: mediaMaxBytes,
+            });
+            if (saved) {
+              return { path: saved.path, contentType: saved.contentType, url: uploadUrl };
+            }
+          } catch (err) {
+            core.error?.(
+              formatZulipLog("zulip attachment download failed", {
+                accountId: account.accountId,
+                messageId,
+                url: uploadUrl,
+                error: String(err),
+              }),
+            );
           }
-        } catch (err) {
-          core.error?.(
-            formatZulipLog("zulip attachment download failed", {
-              accountId: account.accountId,
-              messageId,
-              url: uploadUrl,
-              error: String(err),
-            }),
-          );
+          return null;
+        })
+      );
+
+      for (const result of results) {
+        if (result) {
+          mediaPaths.push(result.path);
+          mediaTypes.push(result.contentType);
+          mediaUrls.push(result.url);
         }
       }
     }
