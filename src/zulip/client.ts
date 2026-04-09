@@ -468,7 +468,9 @@ export async function uploadZulipFile(
 
   const isInside = (p: string, base: string) => {
     const rel = path.relative(base, p);
-    return !rel.startsWith("..") && !path.isAbsolute(rel);
+    if (rel === "") return true;
+    const isParent = rel.startsWith("..") && (rel.length === 2 || rel[2] === path.sep);
+    return !isParent && !path.isAbsolute(rel);
   };
 
   if (!isInside(realPath, tmpDir) && (!dataDir || !isInside(realPath, dataDir))) {
