@@ -16,23 +16,8 @@ The OpenClaw Zulip Bridge is a high-performance channel plugin for OpenClaw that
 ## Prerequisites
 
 Before installing the Zulip bridge, ensure you have:
-- **OpenClaw**: Version `>=2026.3.28`
-- **Node.js**: Latest LTS recommended (Node 22+ preferred)
-
-## Compatibility & CI
-
-This plugin is tested against the OpenClaw SDK to ensure stability and prevent regressions.
-
-### Supported Versions
-- **OpenClaw Runtime**: `>=2026.3.28`
-- **OpenClaw SDK**: Consistent with the `openclaw.compat` field in `package.json`.
-
-### CI Safeguards
-Every commit and pull request undergoes the following automated checks:
-- **Type Validation**: Full TypeScript type-check against SDK definitions.
-- **Unit & Integration Tests**: Functional verification of core logic (deduplication, policy, etc.).
-- **Package Integrity**: Verification of metadata consistency and existence of required build artifacts.
-- **Import Smoke Test**: Confirms the compiled `dist/` entry points can be imported without errors in a clean environment.
+- **OpenClaw**: Version `>=2026.3.23`
+- **Node.js**: Latest LTS recommended
 - **Zulip Bot**: A registered bot on your Zulip realm.
   1. Go to **Settings → Your Bots → Add a new bot**.
   2. Choose **Generic bot** type.
@@ -174,8 +159,6 @@ The bridge supports complex setups, including multiple accounts and custom traff
    ```
 
 This `npm install` step is for **contributing to or testing the plugin codebase**; it is not the command for installing the plugin into your OpenClaw runtime.
-
-> **Note on `devDependencies`**: This project requires `typescript` and other dev tools for its build and validation steps. A `.npmrc` file is included to ensure these are installed even if `NODE_ENV=production` is set in your environment.
 
 ### Project Structure
 
