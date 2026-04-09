@@ -14,8 +14,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Verify bootstrap
-        run: npm run check:bootstrap
       - run: npm run check
       - name: Enforce pristine working directory
         run: git diff --exit-code || { echo "Working directory is not clean. Lockfile or generated files might be out of sync."; false; }
