@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { test, describe, beforeEach, afterEach } from "node:test";
-import { resolveZulipAccount, resolveDefaultZulipAccountId } from "../src/zulip/accounts.ts";
+import { resolveZulipAccount, listZulipAccountIds } from "../src/zulip/accounts.ts";
 import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/core";
 
 describe("resolveZulipAccount Precedence", () => {
@@ -87,38 +87,40 @@ describe("resolveZulipAccount Precedence", () => {
   });
 });
 
-describe("resolveDefaultZulipAccountId", () => {
-  test("returns default account ID if no accounts are configured", () => {
-    const accountId = resolveDefaultZulipAccountId({ channels: { zulip: {} } } as any);
-    assert.strictEqual(accountId, DEFAULT_ACCOUNT_ID);
+describe("listZulipAccountIds", () => {
+  test("returns [DEFAULT_ACCOUNT_ID] when no zulip configuration is present", () => {
+    const ids = listZulipAccountIds({} as any);
+    assert.deepStrictEqual(ids, [DEFAULT_ACCOUNT_ID]);
   });
 
-  test("returns default account ID if it is present in accounts", () => {
-    const accountId = resolveDefaultZulipAccountId({
-      channels: {
-        zulip: {
-          accounts: {
-            "other": {},
-            [DEFAULT_ACCOUNT_ID]: {}
-          }
-        }
-      }
+  test("returns [DEFAULT_ACCOUNT_ID] when accounts object is empty", () => {
+    const ids = listZulipAccountIds({
+      channels: { zulip: { accounts: {} } }
     } as any);
-    assert.strictEqual(accountId, DEFAULT_ACCOUNT_ID);
+    assert.deepStrictEqual(ids, [DEFAULT_ACCOUNT_ID]);
   });
 
-  test("returns the first sorted account ID if default is not present", () => {
-    const accountId = resolveDefaultZulipAccountId({
+  test("returns [DEFAULT_ACCOUNT_ID] when accounts property is invalid", () => {
+    const ids = listZulipAccountIds({
+      channels: { zulip: { accounts: null } }
+    } as any);
+    assert.deepStrictEqual(ids, [DEFAULT_ACCOUNT_ID]);
+  });
+
+  test("returns sorted account IDs when accounts are configured", () => {
+    const ids = listZulipAccountIds({
       channels: {
         zulip: {
           accounts: {
-            "b-account": {},
+            "z-account": {},
             "a-account": {},
-            "c-account": {}
+            "m-account": {},
+            "": {} // Should be filtered out by filter(Boolean)
           }
         }
       }
     } as any);
-    assert.strictEqual(accountId, "a-account");
+
+    assert.deepStrictEqual(ids, ["a-account", "m-account", "z-account"]);
   });
 });
