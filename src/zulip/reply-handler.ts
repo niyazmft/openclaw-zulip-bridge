@@ -18,6 +18,7 @@ export async function dispatchZulipReply(params: {
   ctxPayload: any;
   isDM: boolean;
   senderId: string;
+  senderNumericId: number;
   streamId: string;
   topic: string | undefined;
   messageId: string;
@@ -39,6 +40,7 @@ export async function dispatchZulipReply(params: {
     ctxPayload,
     isDM,
     senderId,
+    senderNumericId,
     streamId,
     topic,
     messageId,
@@ -52,14 +54,10 @@ export async function dispatchZulipReply(params: {
   } = params;
 
   const typingParams = isDM
-    ? { op: "start" as const, type: "direct" as const, to: [Number(senderId.match(/^\d+$/) ? senderId : 0)] } // Note: simplified senderId to Number conversion, might need Zulip numeric ID
+    ? { op: "start" as const, type: "direct" as const, to: [senderNumericId] }
     : streamId
       ? { op: "start" as const, type: "stream" as const, streamId: Number(streamId), topic }
       : null;
-
-  // If we don't have a numeric sender ID in DM, we might need to find it.
-  // The original code used Number(message.sender_id).
-  // Let's pass it in instead of trying to guess.
 
   const typingCallbacks = createTypingCallbacks({
     start: async () => {
