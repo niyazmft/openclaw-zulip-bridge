@@ -24,7 +24,7 @@ import {
   type ResolvedZulipAccount,
 } from "./zulip/accounts.js";
 import { normalizeZulipBaseUrl } from "./zulip/client.js";
-import { maskPII } from "./zulip/monitor-helpers.js";
+import { maskPII, formatZulipLog } from "./zulip/monitor-helpers.js";
 import { monitorZulipProvider } from "./zulip/monitor.js";
 import { probeZulip } from "./zulip/probe.js";
 import { sendMessageZulip } from "./zulip/send.js";
@@ -198,17 +198,32 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         apiKeySource: account.apiKeySource,
         emailSource: account.emailSource,
       } as ChannelAccountSnapshot);
-      ctx.log?.info(`[${account.accountId}] starting channel`);
-      return monitorZulipProvider({
-        apiKey: account.apiKey ?? undefined,
-        email: account.email ?? undefined,
-        baseUrl: account.baseUrl ?? undefined,
-        accountId: account.accountId,
-        config: ctx.cfg,
-        runtime: ctx.runtime,
-        abortSignal: ctx.abortSignal,
-        statusSink: (patch) => ctx.setStatus({ accountId: ctx.accountId, ...patch }),
-      });
+      ctx.log?.info(formatZulipLog("zulip channel starting", { accountId: account.accountId }));
+      try {
+        await monitorZulipProvider({
+          apiKey: account.apiKey ?? undefined,
+          email: account.email ?? undefined,
+          baseUrl: account.baseUrl ?? undefined,
+          accountId: account.accountId,
+          config: ctx.cfg,
+          runtime: ctx.runtime,
+          abortSignal: ctx.abortSignal,
+          statusSink: (patch) => ctx.setStatus({ accountId: ctx.accountId, ...patch }),
+        });
+        ctx.log?.info(
+          formatZulipLog("zulip channel monitor finished normally", {
+            accountId: account.accountId,
+          }),
+        );
+      } catch (err) {
+        ctx.log?.error(
+          formatZulipLog("zulip channel monitor failed", {
+            accountId: account.accountId,
+            error: String(err),
+          }),
+        );
+        throw err;
+      }
     },
   },
   security: {
