@@ -9,7 +9,6 @@
   },
   "include": [
     "index.ts",
-    "setup-entry.ts",
     "src/**/*.ts",
     "types/**/*.d.ts"
   ]

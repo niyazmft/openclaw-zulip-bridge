@@ -184,21 +184,6 @@ export function maskPII(value: string | number | undefined | null): string {
     return "";
   }
 
-  // Handle prefixed targets like user:email or stream:name
-  if (str.startsWith("user:")) {
-    return `user:${maskPII(str.slice(5))}`;
-  }
-  if (str.startsWith("dm:")) {
-    return `dm:${maskPII(str.slice(3))}`;
-  }
-  if (str.startsWith("stream:")) {
-    const rest = str.slice(7);
-    const parts = rest.split(/[:#/]/);
-    const streamName = parts[0];
-    const maskedStream = streamName.length > 2 ? `${streamName.slice(0, 2)}***` : "***";
-    return `stream:${maskedStream}${parts.length > 1 ? ":" + parts.slice(1).join(":") : ""}`;
-  }
-
   // Handle email
   if (str.includes("@")) {
     const [user, domain] = str.split("@");
@@ -218,6 +203,19 @@ export function maskPII(value: string | number | undefined | null): string {
     }
     return `${str.slice(0, 2)}***${str.slice(-2)}`;
   }
+
+  // Handle prefixed targets like user:email or stream:name
+  if (str.startsWith("user:")) {
+    return `user:${maskPII(str.slice(5))}`;
+  }
+  if (str.startsWith("stream:")) {
+    const rest = str.slice(7);
+    const parts = rest.split(/[:#/]/);
+    const streamName = parts[0];
+    const maskedStream = streamName.length > 2 ? `${streamName.slice(0, 2)}***` : "***";
+    return `stream:${maskedStream}${parts.length > 1 ? ":" + parts.slice(1).join(":") : ""}`;
+  }
+
   // Fallback for other strings that might be sensitive
   if (str.length <= 2) {
     return "**";
