@@ -93,6 +93,18 @@ Restart OpenClaw to apply the changes.
 
 Success is confirmed when the bot is both **registered** in logs and **responding** to messages.
 
+## ClawHub Resources
+
+The bridge is published and maintained on [ClawHub](https://clawhub.ai):
+
+- **Plugin**: [OpenClaw Zulip Bridge](https://clawhub.ai/plugins/%40openclaw%2Fzulip) (`@openclaw/zulip`) — The core channel engine.
+- **Skill**: [Zulip Bridge](https://clawhub.ai/niyazmft/zulip-bridge) (`zulip-bridge`) — The AI agent instructions.
+
+To install via ClawHub:
+```bash
+openclaw plugins install clawhub:@openclaw/zulip
+```
+
 ## Configuration Fields
 
 The setup is designed to work within `~/.openclaw/openclaw.json`. Here are the core fields you can configure:

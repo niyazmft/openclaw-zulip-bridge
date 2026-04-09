@@ -20,29 +20,10 @@ export const zulipSetupAdapter: ChannelSetupAdapter = createPatchedAccountSetupA
   validateInput: createSetupInputPresenceValidator({
     defaultAccountOnlyEnvError:
       "ZULIP_API_KEY/ZULIP_EMAIL/ZULIP_URL can only be used for the default account.",
-    whenNotUseEnv: [
-      {
-        someOf: ["token", "botToken"],
-        message: "Zulip requires --token (or --bot-token), --token-file for email, and --http-url (or --use-env).",
-      },
-      {
-        someOf: ["tokenFile"],
-        message: "Zulip requires --token (or --bot-token), --token-file for email, and --http-url (or --use-env).",
-      },
-      {
-        someOf: ["httpUrl"],
-        message: "Zulip requires --token (or --bot-token), --token-file for email, and --http-url (or --use-env).",
-      },
-    ],
     validate: ({ input }) => {
-      const apiKey = input.token ?? input.botToken;
-      const email = input.tokenFile;
       const baseUrl = normalizeZulipBaseUrl(input.httpUrl);
-      if (!input.useEnv && (!apiKey || !email || !baseUrl)) {
-        return "Zulip requires --token (or --bot-token), --token-file for email, and --http-url (or --use-env).";
-      }
       if (input.httpUrl && !baseUrl) {
-        return "Zulip --http-url must include a valid base URL.";
+        return "Zulip site URL must include protocol and host (for example: https://chat.example.com).";
       }
       return null;
     },
@@ -51,14 +32,18 @@ export const zulipSetupAdapter: ChannelSetupAdapter = createPatchedAccountSetupA
     const apiKey = input.token ?? input.botToken;
     const email = input.tokenFile?.trim();
     const baseUrl = normalizeZulipBaseUrl(input.httpUrl);
+    const dmPolicy = input.dmPolicy ?? "pairing";
+    const streaming = input.streaming !== "false";
     return {
       enabled: true,
+      dmPolicy,
+      streaming,
       ...(input.useEnv
         ? {}
         : {
             ...(apiKey ? { apiKey } : {}),
             ...(email ? { email } : {}),
-            ...(baseUrl ? { url: baseUrl } : {}),
+            ...(baseUrl ? { url: baseUrl, site: baseUrl } : {}),
           }),
     };
   },

@@ -62,6 +62,8 @@ export type ZulipAccountConfig = {
   blockStreaming?: boolean;
   /** Merge streamed block replies before sending. */
   blockStreamingCoalesce?: BlockStreamingCoalesceConfig;
+  /** Explicitly enable/disable message receiving (streaming mode). */
+  streaming?: boolean;
   /** Outbound response prefix override for this channel/account. */
   responsePrefix?: string;
 };

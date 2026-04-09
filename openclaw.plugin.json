@@ -2,7 +2,7 @@
   "id": "zulip",
   "name": "Zulip",
   "description": "OpenClaw Zulip channel plugin",
-  "version": "2026.3.31",
+  "version": "2026.4.8",
   "kind": "channel",
   "channels": ["zulip"],
   "providerAuthEnvVars": {
@@ -13,6 +13,10 @@
       "ZULIP_SITE",
       "ZULIP_REALM"
     ]
+  },
+  "securityExemptions": {
+    "envAccess": ["ZULIP_API_KEY", "ZULIP_EMAIL", "ZULIP_URL", "ZULIP_SITE", "ZULIP_REALM"],
+    "reason": "Zulip credentials from environment variables (documented pattern)"
   },
   "configSchema": {
     "type": "object",

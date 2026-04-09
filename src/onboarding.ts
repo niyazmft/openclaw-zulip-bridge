@@ -3,6 +3,8 @@ import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk";
 import type { ZulipAccountConfig, ZulipConfig } from "./types.js";
 import { promptAccountId } from "./onboarding-helpers.js";
 import {
+  getZulipEnvSecret,
+  hasZulipEnvSecrets,
   listZulipAccountIds,
   resolveDefaultZulipAccountId,
   resolveZulipAccount,
@@ -80,11 +82,7 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
       resolvedAccount.apiKey && resolvedAccount.email && resolvedAccount.baseUrl,
     );
     const allowEnv = accountId === DEFAULT_ACCOUNT_ID;
-    const canUseEnv =
-      allowEnv &&
-      Boolean(process.env.ZULIP_API_KEY?.trim()) &&
-      Boolean(process.env.ZULIP_EMAIL?.trim()) &&
-      Boolean(process.env.ZULIP_URL?.trim());
+    const canUseEnv = allowEnv && hasZulipEnvSecrets();
     const hasConfigValues =
       Boolean(resolvedAccount.config.apiKey) ||
       Boolean(resolvedAccount.config.email) ||
@@ -114,9 +112,9 @@ export const zulipOnboardingAdapter: ChannelOnboardingAdapter = {
             return { cfg, accountId };
           }
           if (keepEnv) {
-            apiKey = process.env.ZULIP_API_KEY?.trim() ?? null;
-            email = process.env.ZULIP_EMAIL?.trim() ?? null;
-            baseUrl = process.env.ZULIP_URL?.trim() ?? null;
+            apiKey = getZulipEnvSecret("ZULIP_API_KEY") ?? null;
+            email = getZulipEnvSecret("ZULIP_EMAIL") ?? null;
+            baseUrl = getZulipEnvSecret("ZULIP_URL") ?? null;
             useEnv = true;
           } else {
             declinedEnv = true;
