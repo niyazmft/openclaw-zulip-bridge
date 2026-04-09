@@ -1,17 +1,21 @@
-import type { OpenClawConfig, ChannelAccountSnapshot } from "openclaw/plugin-sdk/core";
+import type {
+  ChannelAccountSnapshot,
+} from "openclaw/plugin-sdk/irc";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/core";
 import type { ReplyPayload } from "openclaw/plugin-sdk/reply-payload";
 import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { logInboundDrop, resolveControlCommandGate } from "openclaw/plugin-sdk/irc";
-import { logTypingFailure } from "openclaw/plugin-sdk/channel-feedback";
 import {
+  logInboundDrop,
+  logTypingFailure,
   buildPendingHistoryContextFromMap,
   DEFAULT_GROUP_HISTORY_LIMIT,
   recordPendingHistoryEntryIfEnabled,
+  resolveControlCommandGate,
   type HistoryEntry,
-} from "openclaw/plugin-sdk/reply-history";
+} from "openclaw/plugin-sdk/irc";
 import {
   createReplyPrefixOptions,
   createTypingCallbacks,
@@ -346,7 +350,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     const mediaTypes: string[] = [];
     const mediaUrls: string[] = [];
     if (uploadUrls.length > 0) {
-      const results = await Promise.all(
+      const uploadResults = await Promise.all(
         uploadUrls.map(async (uploadUrl) => {
           try {
             const downloaded = await downloadZulipUpload(
@@ -363,7 +367,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
               maxBytes: mediaMaxBytes,
             });
             if (saved) {
-              return { path: saved.path, contentType: saved.contentType, url: uploadUrl };
+              return {
+                path: saved.path,
+                contentType: saved.contentType,
+                url: uploadUrl,
+              };
             }
           } catch (err) {
             core.error?.(
@@ -376,14 +384,13 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             );
           }
           return null;
-        })
+        }),
       );
-
-      for (const result of results) {
-        if (result) {
-          mediaPaths.push(result.path);
-          mediaTypes.push(result.contentType);
-          mediaUrls.push(result.url);
+      for (const res of uploadResults) {
+        if (res) {
+          mediaPaths.push(res.path);
+          mediaTypes.push(res.contentType);
+          mediaUrls.push(res.url);
         }
       }
     }
@@ -972,7 +979,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
   // Cleanup
   if (queueManager) {
-    const queue = queueManager.getQueue();
+    const queue = await queueManager.ensureQueue().catch(() => null);
     if (queue) {
       await deleteZulipQueue(client, queue.queueId);
     }
