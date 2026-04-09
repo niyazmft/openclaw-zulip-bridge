@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { test, describe, beforeEach, afterEach } from "node:test";
-import { resolveZulipAccount } from "../src/zulip/accounts.ts";
+import { resolveZulipAccount, resolveDefaultZulipAccountId } from "../src/zulip/accounts.ts";
 import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/core";
 
 describe("resolveZulipAccount Precedence", () => {
@@ -84,5 +84,41 @@ describe("resolveZulipAccount Precedence", () => {
 
     assert.strictEqual(resolved.apiKey, "other-config-api-key");
     assert.strictEqual(resolved.apiKeySource, "config");
+  });
+});
+
+describe("resolveDefaultZulipAccountId", () => {
+  test("returns default account ID if no accounts are configured", () => {
+    const accountId = resolveDefaultZulipAccountId({ channels: { zulip: {} } } as any);
+    assert.strictEqual(accountId, DEFAULT_ACCOUNT_ID);
+  });
+
+  test("returns default account ID if it is present in accounts", () => {
+    const accountId = resolveDefaultZulipAccountId({
+      channels: {
+        zulip: {
+          accounts: {
+            "other": {},
+            [DEFAULT_ACCOUNT_ID]: {}
+          }
+        }
+      }
+    } as any);
+    assert.strictEqual(accountId, DEFAULT_ACCOUNT_ID);
+  });
+
+  test("returns the first sorted account ID if default is not present", () => {
+    const accountId = resolveDefaultZulipAccountId({
+      channels: {
+        zulip: {
+          accounts: {
+            "b-account": {},
+            "a-account": {},
+            "c-account": {}
+          }
+        }
+      }
+    } as any);
+    assert.strictEqual(accountId, "a-account");
   });
 });
