@@ -168,7 +168,7 @@ export function resolveThreadSessionKeys(params: {
 /**
  * Formats a log message with standardized, machine-parseable identifiers.
  */
-export function formatZulipLog(message: string, fields: Record<string, any>): string {
+export function formatZulipLog(message: string, fields: Record<string, unknown>): string {
   const parts = Object.entries(fields)
     .filter(([_, v]) => v !== undefined && v !== null && v !== "")
     .map(([k, v]) => `${k}=${v}`);
