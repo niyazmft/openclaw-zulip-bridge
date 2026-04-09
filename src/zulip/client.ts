@@ -1,4 +1,3 @@
-import fsPromises from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { getZulipRuntime } from "../runtime.js";
@@ -454,33 +453,30 @@ export async function uploadZulipFile(
   client: ZulipClient,
   filePath: string,
 ): Promise<{ url: string }> {
-  const realPath = await fsPromises.realpath(filePath);
-  const tmpDir = await fsPromises.realpath(os.tmpdir());
+  const absolutePath = path.resolve(filePath);
+  const tmpDir = path.resolve(os.tmpdir());
   let dataDir: string | undefined;
   try {
-    const runtimeDataDir = getZulipRuntime().paths?.dataDir;
-    if (runtimeDataDir) {
-      dataDir = await fsPromises.realpath(runtimeDataDir);
+    dataDir = getZulipRuntime().paths?.dataDir;
+    if (dataDir) {
+      dataDir = path.resolve(dataDir);
     }
   } catch {
     // runtime may not be initialized in all test contexts
   }
 
-  const isInside = (p: string, base: string) => {
-    const rel = path.relative(base, p);
-    if (rel === "") return true;
-    const isParent = rel.startsWith("..") && (rel.length === 2 || rel[2] === path.sep);
-    return !isParent && !path.isAbsolute(rel);
-  };
+  const isUnderTmp = absolutePath.startsWith(tmpDir + path.sep) || absolutePath === tmpDir;
+  const isUnderData =
+    dataDir && (absolutePath.startsWith(dataDir + path.sep) || absolutePath === dataDir);
 
-  if (!isInside(realPath, tmpDir) && (!dataDir || !isInside(realPath, dataDir))) {
+  if (!isUnderTmp && !isUnderData) {
     throw new Error(
       `Security violation: upload path "${filePath}" is outside of allowed directories.`,
     );
   }
 
-  const filename = path.basename(realPath) || "upload.bin";
-  const buffer = await readSafeLocalFile(realPath);
+  const filename = path.basename(filePath) || "upload.bin";
+  const buffer = await readSafeLocalFile(filePath);
   const form = new FormData();
   form.append("file", new Blob([buffer]), filename);
   const payload = await zulipRequestWithRetry<ZulipApiResponse & { uri?: string }>(
