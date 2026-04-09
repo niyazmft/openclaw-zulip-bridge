@@ -32,6 +32,10 @@ export class ZulipQueueManager {
     this.registerFn = opts.registerFn;
   }
 
+  getQueue(): QueueMetadata | null {
+    return this.currentQueue;
+  }
+
   async ensureQueue(): Promise<QueueMetadata> {
     if (this.currentQueue) {
       return this.currentQueue;
@@ -134,10 +138,10 @@ export class ZulipQueueManager {
           queueId: this.currentQueue.queueId,
         }),
       );
-      this.currentQueue = null;
-      const p = this.getPersistencePath();
-      await fs.unlink(p).catch(() => {});
     }
+    this.currentQueue = null;
+    const p = this.getPersistencePath();
+    await fs.unlink(p).catch(() => {});
   }
 
   async updateLastEventId(lastEventId: number): Promise<void> {

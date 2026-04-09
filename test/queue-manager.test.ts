@@ -132,3 +132,57 @@ test("ZulipQueueManager: persistence across instances", async () => {
   // Cleanup
   await manager3.markQueueExpired();
 });
+
+test("ZulipQueueManager: getQueue does not trigger registration", async () => {
+  const accountId = "test-account-get-" + Date.now();
+  let registerCalled = 0;
+
+  const manager = new ZulipQueueManager({
+    accountId,
+    runtime: mockRuntime,
+    registerFn: async () => {
+      registerCalled++;
+      return { queueId: "q_get", lastEventId: 100 };
+    },
+  });
+
+  assert.equal(manager.getQueue(), null);
+  assert.equal(registerCalled, 0);
+
+  await manager.ensureQueue();
+  assert.equal(registerCalled, 1);
+  assert.equal(manager.getQueue()?.queueId, "q_get");
+  assert.equal(registerCalled, 1);
+});
+
+test("ZulipQueueManager: markQueueExpired clears persistence even if not loaded in memory", async () => {
+  const accountId = "test-account-clear-pers-" + Date.now();
+  const registerFn = async () => ({ queueId: "q_clear", lastEventId: 100 });
+
+  const manager1 = new ZulipQueueManager({ accountId, runtime: mockRuntime, registerFn });
+  await manager1.ensureQueue();
+
+  // Create a new manager instance, it doesn't have it in memory yet
+  const manager2 = new ZulipQueueManager({ accountId, runtime: mockRuntime, registerFn });
+  assert.equal(manager2.getQueue(), null);
+
+  // Expire it - should clear the file created by manager1
+  await manager2.markQueueExpired();
+
+  // Manager 3 should now NOT find any persisted metadata
+  let registerCalled = 0;
+  const manager3 = new ZulipQueueManager({
+    accountId,
+    runtime: mockRuntime,
+    registerFn: async () => {
+      registerCalled++;
+      return { queueId: "q_new", lastEventId: 1 };
+    },
+  });
+
+  const q3 = await manager3.ensureQueue();
+  assert.equal(q3.queueId, "q_new");
+  assert.equal(registerCalled, 1);
+
+  await manager3.markQueueExpired();
+});
