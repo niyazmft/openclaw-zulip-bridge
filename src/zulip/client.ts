@@ -1,3 +1,7 @@
+import fsPromises from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { getZulipRuntime } from "../runtime.js";
 import { readSafeLocalFile } from "./fs-utils.js";
 
 export type ZulipClient = {
@@ -450,8 +454,31 @@ export async function uploadZulipFile(
   client: ZulipClient,
   filePath: string,
 ): Promise<{ url: string }> {
-  const filename = filePath.split("/").pop() || "upload.bin";
-  const buffer = await readSafeLocalFile(filePath);
+  const realPath = await fsPromises.realpath(filePath);
+  const tmpDir = await fsPromises.realpath(os.tmpdir());
+  let dataDir: string | undefined;
+  try {
+    const runtimeDataDir = getZulipRuntime().paths?.dataDir;
+    if (runtimeDataDir) {
+      dataDir = await fsPromises.realpath(runtimeDataDir);
+    }
+  } catch {
+    // runtime may not be initialized in all test contexts
+  }
+
+  const isInside = (p: string, base: string) => {
+    const rel = path.relative(base, p);
+    return !rel.startsWith("..") && !path.isAbsolute(rel);
+  };
+
+  if (!isInside(realPath, tmpDir) && (!dataDir || !isInside(realPath, dataDir))) {
+    throw new Error(
+      `Security violation: upload path "${filePath}" is outside of allowed directories.`,
+    );
+  }
+
+  const filename = path.basename(realPath) || "upload.bin";
+  const buffer = await readSafeLocalFile(realPath);
   const form = new FormData();
   form.append("file", new Blob([buffer]), filename);
   const payload = await zulipRequestWithRetry<ZulipApiResponse & { uri?: string }>(
