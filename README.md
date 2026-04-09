@@ -160,8 +160,6 @@ The bridge supports complex setups, including multiple accounts and custom traff
 
 This `npm install` step is for **contributing to or testing the plugin codebase**; it is not the command for installing the plugin into your OpenClaw runtime.
 
-> **Note on `devDependencies`**: This project requires `typescript` and other dev tools for its build and validation steps. A `.npmrc` file is included to ensure these are installed even if `NODE_ENV=production` is set in your environment.
-
 ### Project Structure
 
 - `src/` — Plugin source code

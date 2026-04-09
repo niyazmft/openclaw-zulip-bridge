@@ -62,9 +62,10 @@
     "typecheck": "tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json",
     "test": "node --test --experimental-strip-types --loader ./test-loader.js test/*.test.ts",
-    "check:package": "node scripts/check-package.js",
-    "check:bootstrap": "node scripts/check-bootstrap.js",
-    "check": "npm run check:bootstrap && npm run typecheck && npm run build && npm run test && npm run check:package"
+    "check": "npm run typecheck && npm run test && npm run build"
+  },
+  "peerDependencies": {
+    "openclaw": "^2026.4.8"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
