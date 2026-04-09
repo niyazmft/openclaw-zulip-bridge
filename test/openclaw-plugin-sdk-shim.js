@@ -22,7 +22,7 @@ export function readStringParam() {
 
 const noOp = () => undefined;
 
-export const emptyPluginConfigSchema = () => ({});
+export const emptyPluginConfigSchema = {};
 export const definePluginEntry = (entry) => entry;
 export const defineSetupPluginEntry = (entry) => entry;
 export const defineChannelPluginEntry = (entry) => entry;
@@ -42,11 +42,15 @@ export const buildPendingHistoryContextFromMap = () => [];
 export const DEFAULT_GROUP_HISTORY_LIMIT = 20;
 export const recordPendingHistoryEntryIfEnabled = noOp;
 export const resolveControlCommandGate = () => ({ allow: true });
+export const BlockStreamingCoalesceSchema = {};
+export const DmPolicySchema = {};
+export const GroupPolicySchema = {};
+export const MarkdownConfigSchema = {};
 export const requireOpenAllowFrom = noOp;
-export const buildChannelConfigSchema = () => zodMock;
-export const buildCatchallMultiAccountChannelSchema = () => zodMock;
+export const buildChannelConfigSchema = () => ({});
+export const buildCatchallMultiAccountChannelSchema = () => ({});
 export const buildDefaultChannelConfigSchemaOptions = () => ({});
-export const createChannelConfigSectionSchema = () => zodMock;
+export const createChannelConfigSectionSchema = () => ({});
 export const markLegacyAlias = (v) => v;
 
 export const createReplyPrefixOptions = () => ({});
@@ -59,17 +63,10 @@ export const resolveSetupFieldValue = () => undefined;
 export const createSetupInputPresenceValidator = () => () => true;
 export const createStandardChannelSetupStatus = () => ({ ok: true });
 export const formatDocsLink = (label, url) => `${label}: ${url}`;
-export const formatPairingApproveHint = () => '';
 
-const zodMock = new Proxy(
-  () => zodMock,
+export const z = new Proxy(
+  {},
   {
-    get: () => zodMock,
+    get: () => () => z,
   },
 );
-
-export const z = zodMock;
-export const MarkdownConfigSchema = zodMock;
-export const DmPolicySchema = zodMock;
-export const GroupPolicySchema = zodMock;
-export const BlockStreamingCoalesceSchema = zodMock;
