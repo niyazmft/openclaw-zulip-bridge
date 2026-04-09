@@ -257,8 +257,8 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
   pairing: {
     idLabel: "zulipUserId",
     normalizeAllowEntry: (entry) => normalizeAllowEntry(entry),
-    notifyApproval: async ({ id }) => {
-      console.log(`[zulip] User ${maskPII(id)} approved for pairing`);
+    notifyApproval: async ({ id, env }) => {
+      env.logger.info(`[zulip] User ${maskPII(id)} approved for pairing`);
     },
   },
   outbound: {
