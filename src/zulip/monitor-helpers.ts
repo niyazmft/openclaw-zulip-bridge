@@ -188,6 +188,9 @@ export function maskPII(value: string | number | undefined | null): string {
   if (str.startsWith("user:")) {
     return `user:${maskPII(str.slice(5))}`;
   }
+  if (str.startsWith("dm:")) {
+    return `dm:${maskPII(str.slice(3))}`;
+  }
   if (str.startsWith("stream:")) {
     const rest = str.slice(7);
     const parts = rest.split(/[:#/]/);
