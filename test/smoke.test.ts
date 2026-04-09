@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { formatZulipLog } from "../src/zulip/monitor-helpers.js";
 import { decidePolicy } from "../src/zulip/policy.js";
-import { extractZulipUploadUrls } from "../src/zulip/uploads.js";
+import { extractZulipUploadUrls, normalizeZulipEmojiName } from "../src/zulip/uploads.js";
 
 test("smoke test extractZulipUploadUrls with tightened regex", () => {
   const baseUrl = "https://zulip.example.com";
@@ -86,4 +86,19 @@ test("smoke test decidePolicy enforces rules correctly", () => {
     canDetectMention: true,
   });
   assert.equal(resGroupDrop.shouldDrop, true);
+});
+
+test("smoke test normalizeZulipEmojiName handles various formats", () => {
+
+  assert.equal(normalizeZulipEmojiName("smile"), "smile");
+  assert.equal(normalizeZulipEmojiName(":smile:"), "smile");
+  assert.equal(normalizeZulipEmojiName("::smile::"), "smile");
+  assert.equal(normalizeZulipEmojiName("  smile  "), "smile");
+  assert.equal(normalizeZulipEmojiName(" :smile: "), "smile");
+  assert.equal(normalizeZulipEmojiName(""), "");
+  assert.equal(normalizeZulipEmojiName(null), "");
+  assert.equal(normalizeZulipEmojiName(undefined), "");
+  assert.equal(normalizeZulipEmojiName("smile:cry"), "smile:cry");
+  assert.equal(normalizeZulipEmojiName(":smile:cry:"), "smile:cry");
+  assert.equal(normalizeZulipEmojiName(":::"), ""); // edge case: only colons
 });

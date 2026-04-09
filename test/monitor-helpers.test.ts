@@ -1,51 +1,121 @@
-import test, { describe } from "node:test";
-import assert from "node:assert/strict";
-import { maskPII } from "../src/zulip/monitor-helpers.js";
+import assert from "node:assert";
+import { test, describe } from "node:test";
+import { formatInboundFromLabel } from "../src/zulip/monitor-helpers.ts";
 
-describe("maskPII", () => {
-  test("handles empty and nullish values", () => {
-    assert.equal(maskPII(""), "");
-    assert.equal(maskPII(undefined), "");
-    assert.equal(maskPII(null), "");
-    assert.equal(maskPII("   "), "");
+describe("formatInboundFromLabel", () => {
+  describe("when isGroup is true", () => {
+    test("uses groupLabel and groupId when provided", () => {
+      const result = formatInboundFromLabel({
+        isGroup: true,
+        groupLabel: "My Group",
+        groupId: "123",
+        directLabel: "Ignored"
+      });
+      assert.equal(result, "My Group id:123");
+    });
+
+    test("trims whitespace from groupLabel and groupId", () => {
+      const result = formatInboundFromLabel({
+        isGroup: true,
+        groupLabel: "  My Group  ",
+        groupId: "  123  ",
+        directLabel: "Ignored"
+      });
+      assert.equal(result, "My Group id:123");
+    });
+
+    test("falls back to groupFallback if groupLabel is missing or blank", () => {
+      const result = formatInboundFromLabel({
+        isGroup: true,
+        groupLabel: "   ",
+        groupId: "123",
+        groupFallback: "Fallback Group",
+        directLabel: "Ignored"
+      });
+      assert.equal(result, "Fallback Group id:123");
+    });
+
+    test("falls back to 'Group' if groupLabel and groupFallback are missing or blank", () => {
+      const result = formatInboundFromLabel({
+        isGroup: true,
+        groupLabel: "   ",
+        groupId: "123",
+        directLabel: "Ignored"
+      });
+      assert.equal(result, "Group id:123");
+    });
+
+    test("omits id section if groupId is absent or blank", () => {
+      const result = formatInboundFromLabel({
+        isGroup: true,
+        groupLabel: "My Group",
+        groupId: "   ",
+        directLabel: "Ignored"
+      });
+      assert.equal(result, "My Group");
+    });
+
+    test("handles only groupFallback", () => {
+      const result = formatInboundFromLabel({
+        isGroup: true,
+        groupFallback: "Fallback",
+        directLabel: "Ignored"
+      });
+      assert.equal(result, "Fallback");
+    });
   });
 
-  test("masks emails correctly", () => {
-    assert.equal(maskPII("user@example.com"), "u***@example.com");
-    assert.equal(maskPII("a@example.com"), "***@example.com");
-    assert.equal(maskPII("firstname.lastname@company.co.uk"), "f***@company.co.uk");
-  });
+  describe("when isGroup is false", () => {
+    test("returns directLabel if directId is absent", () => {
+      const result = formatInboundFromLabel({
+        isGroup: false,
+        directLabel: "Alice"
+      });
+      assert.equal(result, "Alice");
+    });
 
-  test("masks numeric IDs correctly", () => {
-    assert.equal(maskPII(1), "**");
-    assert.equal(maskPII(12), "**");
-    assert.equal(maskPII("1"), "**");
-    assert.equal(maskPII("12"), "**");
-    assert.equal(maskPII("123"), "1***3");
-    assert.equal(maskPII("12345"), "1***5");
-    assert.equal(maskPII("123456"), "12***56");
-    assert.equal(maskPII("1234567890"), "12***90");
-    assert.equal(maskPII(123456), "12***56");
-  });
+    test("trims whitespace from directLabel", () => {
+      const result = formatInboundFromLabel({
+        isGroup: false,
+        directLabel: "  Alice  "
+      });
+      assert.equal(result, "Alice");
+    });
 
-  test("masks prefixed targets correctly", () => {
-    // user: prefix
-    assert.equal(maskPII("user:someone@example.com"), "user:s***@example.com");
-    assert.equal(maskPII("user:123456"), "user:12***56");
+    test("returns only directLabel if directId matches directLabel", () => {
+      const result = formatInboundFromLabel({
+        isGroup: false,
+        directLabel: "Alice",
+        directId: "Alice"
+      });
+      assert.equal(result, "Alice");
+    });
 
-    // stream: prefix
-    assert.equal(maskPII("stream:general"), "stream:ge***");
-    assert.equal(maskPII("stream:ab"), "stream:***");
-    assert.equal(maskPII("stream:general:123"), "stream:ge***:123");
-    assert.equal(maskPII("stream:general/topic"), "stream:ge***:topic");
-    assert.equal(maskPII("stream:general#topic"), "stream:ge***:topic");
-  });
+    test("trims whitespace before comparing directId and directLabel", () => {
+      const result = formatInboundFromLabel({
+        isGroup: false,
+        directLabel: " Alice ",
+        directId: "  Alice  "
+      });
+      assert.equal(result, "Alice");
+    });
 
-  test("masks fallback strings correctly", () => {
-    assert.equal(maskPII("ab"), "**");
-    assert.equal(maskPII("a"), "**");
-    assert.equal(maskPII("abc"), "ab***bc"); // The fallback does str.slice(0, 2) + "***" + str.slice(-2). If length is 3, 0-2 is 'ab', -2 is 'bc'. So 'ab***bc'.
-    assert.equal(maskPII("abcd"), "ab***cd");
-    assert.equal(maskPII("hello-world"), "he***ld");
+    test("appends directId if it differs from directLabel", () => {
+      const result = formatInboundFromLabel({
+        isGroup: false,
+        directLabel: "Alice",
+        directId: "alice@example.com"
+      });
+      assert.equal(result, "Alice id:alice@example.com");
+    });
+
+    test("omits id section if directId is only whitespace", () => {
+      const result = formatInboundFromLabel({
+        isGroup: false,
+        directLabel: "Alice",
+        directId: "   "
+      });
+      assert.equal(result, "Alice");
+    });
   });
 });

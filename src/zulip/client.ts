@@ -1,4 +1,5 @@
 import { readSafeLocalFile } from "./fs-utils.js";
+import { formatZulipLog } from "./monitor-helpers.js";
 
 export type ZulipClient = {
   baseUrl: string;
@@ -196,7 +197,20 @@ export async function zulipRequestWithRetry<T>(
     if (init?.body && !headers.has("Content-Type") && typeof init.body === "string") {
       headers.set("Content-Type", "application/x-www-form-urlencoded");
     }
-    const res = await client.fetchImpl(url, { ...init, headers });
+    let res: Response;
+    try {
+      res = await client.fetchImpl(url, { ...init, headers });
+    } catch (err) {
+      if (attempt >= maxRetries) {
+        throw err;
+      }
+      const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt);
+      // We don't always have easy access to a logger here without passing it through,
+      // but we can at least ensure the error is retryable.
+      await delay(backoff);
+      continue;
+    }
+
     if (res.ok) {
       return (await res.json()) as T;
     }
