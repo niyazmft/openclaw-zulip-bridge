@@ -64,13 +64,7 @@ export const formatPairingApproveHint = () => '';
 const zodMock = new Proxy(
   () => zodMock,
   {
-    get: (target, prop) => {
-      if (prop === 'optional') return () => zodMock;
-      if (prop === 'describe') return () => zodMock;
-      if (prop === 'superRefine') return () => zodMock;
-      if (prop === 'catchall') return () => zodMock;
-      return zodMock;
-    },
+    get: () => zodMock,
   },
 );
 

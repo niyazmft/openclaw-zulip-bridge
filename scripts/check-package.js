@@ -1,5 +1,4 @@
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 const manifest = JSON.parse(readFileSync('openclaw.plugin.json', 'utf8'));
@@ -29,8 +28,9 @@ if (pkg.files) {
 }
 
 // 4. Existence of built artifacts
+const extensions = pkg.openclaw?.extensions || [];
 const artifacts = [
-  pkg.openclaw?.extensions?.[0],
+  ...extensions,
   pkg.openclaw?.setupEntry
 ].filter(Boolean);
 
