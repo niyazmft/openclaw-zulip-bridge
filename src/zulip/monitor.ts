@@ -1,17 +1,21 @@
-import type { OpenClawConfig, ChannelAccountSnapshot } from "openclaw/plugin-sdk/core";
+import type {
+  ChannelAccountSnapshot,
+} from "openclaw/plugin-sdk/irc";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/core";
 import type { ReplyPayload } from "openclaw/plugin-sdk/reply-payload";
 import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { logInboundDrop, resolveControlCommandGate } from "openclaw/plugin-sdk/irc";
-import { logTypingFailure } from "openclaw/plugin-sdk/channel-feedback";
 import {
+  logInboundDrop,
+  logTypingFailure,
   buildPendingHistoryContextFromMap,
   DEFAULT_GROUP_HISTORY_LIMIT,
   recordPendingHistoryEntryIfEnabled,
+  resolveControlCommandGate,
   type HistoryEntry,
-} from "openclaw/plugin-sdk/reply-history";
+} from "openclaw/plugin-sdk/irc";
 import {
   createReplyPrefixOptions,
   createTypingCallbacks,
@@ -975,7 +979,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
   // Cleanup
   if (queueManager) {
-    const queue = queueManager.getQueue();
+    const queue = await queueManager.ensureQueue().catch(() => null);
     if (queue) {
       await deleteZulipQueue(client, queue.queueId);
     }
