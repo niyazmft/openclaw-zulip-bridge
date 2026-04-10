@@ -168,8 +168,8 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
       }
       return await probeZulip(baseUrl, email, apiKey, timeoutMs);
     },
-    buildAccountSnapshot: ({ account, runtime, probe }) =>
-      ({
+    buildAccountSnapshot: ({ account, runtime, probe }) => {
+      const snapshot: ChannelAccountSnapshot = {
         accountId: account.accountId,
         name: account.name,
         enabled: account.enabled,
@@ -184,10 +184,17 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         lastStartAt: runtime?.lastStartAt ?? null,
         lastStopAt: runtime?.lastStopAt ?? null,
         lastError: runtime?.lastError ?? null,
-        probe,
+        probe: probe
+          ? {
+              ...probe,
+              email: probe.email ? maskPII(probe.email) : undefined,
+            }
+          : undefined,
         lastInboundAt: runtime?.lastInboundAt ?? null,
         lastOutboundAt: runtime?.lastOutboundAt ?? null,
-      }) as ChannelAccountSnapshot,
+      };
+      return snapshot;
+    },
   },
   gateway: {
     startAccount: async (ctx) => {

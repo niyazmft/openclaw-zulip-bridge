@@ -1,7 +1,7 @@
 import type { PluginRuntime } from "openclaw/plugin-sdk";
 import type { ZulipMessage } from "./client.js";
 import { getZulipEventsWithRetry } from "./client.js";
-import { formatZulipLog, delay } from "./monitor-helpers.js";
+import { formatZulipLog, delay, maskPII } from "./monitor-helpers.js";
 import { ZulipQueueManager } from "./queue-manager.js";
 import type { MonitorZulipOpts } from "./monitor.js";
 
@@ -68,7 +68,7 @@ export async function pollOnce(params: {
       core.log?.(
         formatZulipLog("zulip events received", {
           accountId,
-          queueId: queue.queueId,
+          queueId: maskPII(queue.queueId),
           count: events.length,
         }),
       );

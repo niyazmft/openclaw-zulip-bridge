@@ -56,16 +56,30 @@ export function maskPII(value: string | number | undefined | null): string {
     return "";
   }
 
-  // Handle prefixed targets like user:email or stream:name
+  // Handle prefixed targets like user:email, dm:email, zulip:email, or stream:name
   if (str.startsWith("user:")) {
     return `user:${maskPII(str.slice(5))}`;
+  }
+  if (str.startsWith("dm:")) {
+    return `dm:${maskPII(str.slice(3))}`;
+  }
+  if (str.startsWith("zulip:")) {
+    const rest = str.slice(6);
+    if (rest.startsWith("channel:")) {
+      return `zulip:channel:${maskPII(rest.slice(8))}`;
+    }
+    return `zulip:${maskPII(rest)}`;
   }
   if (str.startsWith("stream:")) {
     const rest = str.slice(7);
     const parts = rest.split(/[:#/]/);
     const streamName = parts[0];
     const maskedStream = streamName.length > 2 ? `${streamName.slice(0, 2)}***` : "***";
-    return `stream:${maskedStream}${parts.length > 1 ? ":" + parts.slice(1).join(":") : ""}`;
+    if (parts.length > 1) {
+      const topic = parts.slice(1).join(":");
+      return `stream:${maskedStream}:${maskPII(topic)}`;
+    }
+    return `stream:${maskedStream}`;
   }
 
   // Handle email

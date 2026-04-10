@@ -135,8 +135,8 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           messageId,
           senderId: maskPII(senderId),
           kind,
-          stream: streamName || streamId,
-          topic,
+          stream: maskPII(streamName || streamId),
+          topic: topic ? maskPII(topic) : undefined,
         }),
       );
 
@@ -439,10 +439,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           accountId: account.accountId,
           messageId,
           senderId: maskPII(senderId),
-          from: ctxPayload.From,
-          sessionKey,
+          from: maskPII(ctxPayload.From),
+          to: maskPII(ctxPayload.To),
+          sessionKey: maskPII(sessionKey),
           len: bodyText.length,
-          preview: previewLine,
+          preview: maskPII(previewLine),
         }),
       );
 
@@ -596,7 +597,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         core.log?.(
           formatZulipLog("zulip monitor cleaning up queue", {
             accountId: account.accountId,
-            queueId: queue.queueId,
+            queueId: maskPII(queue.queueId),
           }),
         );
         await deleteZulipQueue(client, queue.queueId);

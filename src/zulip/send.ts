@@ -201,7 +201,7 @@ export async function sendMessageZulip(
       core.log?.(
         formatZulipLog("zulip outbound security warning: rejected non-http mediaUrl", {
           accountId: account.accountId,
-          mediaUrl,
+          mediaUrl: maskPII(mediaUrl),
         }),
       );
       mediaUrl = undefined;

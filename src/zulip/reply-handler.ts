@@ -74,7 +74,7 @@ export async function dispatchZulipReply(params: {
       logTypingFailure({
         log: logVerboseMessage,
         channel: "zulip",
-        target: isDM ? senderId : `stream:${streamId}:${topic}`,
+        target: maskPII(isDM ? senderId : `stream:${streamId}:${topic}`),
         error: err,
       });
     },
@@ -82,7 +82,7 @@ export async function dispatchZulipReply(params: {
       logTypingFailure({
         log: logVerboseMessage,
         channel: "zulip",
-        target: isDM ? senderId : `stream:${streamId}:${topic}`,
+        target: maskPII(isDM ? senderId : `stream:${streamId}:${topic}`),
         error: err,
       });
     },
