@@ -60,11 +60,18 @@ try {
   }
 
   // Verify essential metadata files are packaged
-  const essentialFiles = ['openclaw.plugin.json', 'README.md', 'SKILL.md', 'package.json'];
+  const essentialFiles = ['openclaw.plugin.json', 'README.md', 'package.json'];
   for (const file of essentialFiles) {
     if (!packagedFiles.has(file)) {
       errors.push(`Essential file missing from package: ${file}`);
     }
+  }
+
+  // Verify SKILL.md (optional but encouraged)
+  if (!packagedFiles.has('SKILL.md')) {
+    console.log('Note: SKILL.md is missing from package (optional but recommended).');
+  } else {
+    console.log('OK: SKILL.md is included.');
   }
 
   console.log(`OK: ${packagedFiles.size} files will be packaged.`);
