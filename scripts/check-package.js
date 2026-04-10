@@ -1,9 +1,12 @@
 import { readFileSync, existsSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 const manifest = JSON.parse(readFileSync('openclaw.plugin.json', 'utf8'));
 
 let errors = [];
+
+console.log('Validating package configuration and contents...');
 
 // 1. Version consistency
 if (pkg.version !== manifest.version) {
@@ -27,7 +30,7 @@ if (pkg.files) {
   }
 }
 
-// 4. Existence of built artifacts
+// 4. Existence of built artifacts (local filesystem check)
 const extensions = pkg.openclaw?.extensions || [];
 const artifacts = [
   ...extensions,
@@ -36,14 +39,43 @@ const artifacts = [
 
 for (const artifact of artifacts) {
   if (!existsSync(artifact)) {
-    errors.push(`Built artifact does not exist: ${artifact}`);
+    errors.push(`Built artifact does not exist on disk: ${artifact}`);
   }
 }
 
+// 5. Packaged files validation (npm pack --dry-run)
+try {
+  console.log('Running npm pack --dry-run to verify packaged artifacts...');
+  const packOutput = execSync('npm pack --dry-run --json', { encoding: 'utf8' });
+  const packData = JSON.parse(packOutput)[0];
+  const packagedFiles = new Set(packData.files.map(f => f.path));
+
+  // Verify entry points are packaged
+  for (const artifact of artifacts) {
+    // npm pack output uses paths relative to package root without leading ./
+    const normalizedArtifact = artifact.startsWith('./') ? artifact.slice(2) : artifact;
+    if (!packagedFiles.has(normalizedArtifact)) {
+      errors.push(`Critical artifact missing from package: ${normalizedArtifact}`);
+    }
+  }
+
+  // Verify essential metadata files are packaged
+  const essentialFiles = ['openclaw.plugin.json', 'README.md', 'SKILL.md', 'package.json'];
+  for (const file of essentialFiles) {
+    if (!packagedFiles.has(file)) {
+      errors.push(`Essential file missing from package: ${file}`);
+    }
+  }
+
+  console.log(`OK: ${packagedFiles.size} files will be packaged.`);
+} catch (err) {
+  errors.push(`Failed to run npm pack or parse output: ${err.message}`);
+}
+
 if (errors.length > 0) {
-  console.error('Package validation failed:');
+  console.error('\nPackage validation failed:');
   errors.forEach(err => console.error(`- ${err}`));
   process.exit(1);
 }
 
-console.log('Package validation passed.');
+console.log('\nPackage validation passed.');
