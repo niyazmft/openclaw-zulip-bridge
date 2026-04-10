@@ -81,36 +81,26 @@ export const zulipSetupWizard: ChannelSetupWizard = {
     },
     apply: ({ cfg }) => cfg,
   },
-  credentials: [
-    {
-      inputKey: "token",
-      providerHint: channel,
-      credentialLabel: "api key",
-      preferredEnvVar: "ZULIP_API_KEY",
-      envPrompt: "ZULIP_API_KEY + ZULIP_EMAIL + ZULIP_URL detected. Use env vars?",
-      keepPrompt: "Zulip API key already configured. Keep it?",
-      inputPrompt: "Enter Zulip API key",
-      allowEnv: ({ accountId, cfg }) => resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID,
-      inspect: ({ cfg, accountId }) => {
-        const resolved = resolveZulipAccount({
-          cfg,
-          accountId: resolveSetupAccountId(cfg, accountId),
-        });
-        return {
-          accountConfigured: isZulipConfigured(resolved),
-          hasConfiguredValue: Boolean(resolved.config.apiKey?.trim()),
-          resolvedValue: resolved.apiKey?.trim() || undefined,
-          envValue:
-            resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
-              ? process.env.ZULIP_API_KEY?.trim() || undefined
-              : undefined,
-        };
-      },
-    },
-  ],
   textInputs: [
     {
-      inputKey: "tokenFile",
+      inputKey: "apiKey",
+      message: "Enter Zulip API key",
+      confirmCurrentValue: false,
+      currentValue: ({ cfg, accountId }) =>
+        resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).apiKey ??
+        (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
+          ? process.env.ZULIP_API_KEY?.trim()
+          : undefined),
+      initialValue: ({ cfg, accountId }) =>
+        resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).apiKey ??
+        (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
+          ? process.env.ZULIP_API_KEY?.trim()
+          : undefined),
+      validate: ({ value }) => (value?.trim() ? undefined : "Zulip API key is required."),
+      normalizeValue: ({ value }) => value.trim(),
+    },
+    {
+      inputKey: "email",
       message: "Enter Zulip bot email",
       confirmCurrentValue: false,
       currentValue: ({ cfg, accountId }) =>

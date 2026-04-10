@@ -29,8 +29,8 @@ export const zulipSetupAdapter: ChannelSetupAdapter = createPatchedAccountSetupA
     },
   }),
   buildPatch: (input) => {
-    const apiKey = input.token ?? input.botToken;
-    const email = input.tokenFile?.trim();
+    const apiKey = input.apiKey ?? input.token ?? input.botToken;
+    const email = (input.email ?? input.tokenFile)?.trim();
     const baseUrl = normalizeZulipBaseUrl(input.httpUrl);
     const dmPolicy = input.dmPolicy ?? "pairing";
     const streaming = input.streaming !== "false";
