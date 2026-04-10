@@ -4,7 +4,7 @@ import path from "node:path";
 import type { PluginRuntime } from "openclaw/plugin-sdk";
 import { getZulipRuntime } from "../runtime.js";
 import { downloadZulipUpload } from "./uploads.js";
-import { formatZulipLog } from "./monitor-helpers.js";
+import { formatZulipLog, maskPII } from "./monitor-helpers.js";
 
 const checkedMediaDirs = new Set<string>();
 
@@ -84,7 +84,7 @@ export async function downloadAttachments(params: {
           formatZulipLog("zulip attachment download failed", {
             accountId,
             messageId,
-            url: uploadUrl,
+            url: maskPII(uploadUrl),
             error: String(err),
           }),
         );
