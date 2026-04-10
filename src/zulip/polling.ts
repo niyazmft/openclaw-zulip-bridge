@@ -1,16 +1,9 @@
 import type { PluginRuntime } from "openclaw/plugin-sdk";
 import type { ZulipMessage } from "./client.js";
 import { getZulipEventsWithRetry } from "./client.js";
-import { formatZulipLog } from "./monitor-helpers.js";
+import { formatZulipLog, delay } from "./monitor-helpers.js";
 import { ZulipQueueManager } from "./queue-manager.js";
 import type { MonitorZulipOpts } from "./monitor.js";
-
-/**
- * Delays execution for a given number of milliseconds.
- */
-export function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * Performs a single polling cycle for Zulip events.

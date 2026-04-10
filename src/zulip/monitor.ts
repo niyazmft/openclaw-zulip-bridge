@@ -13,6 +13,7 @@ import {
   resolveThreadSessionKeys,
   formatZulipLog,
   maskPII,
+  delay,
 } from "./monitor-helpers.js";
 import { ZulipDedupeStore } from "./dedupe-store.js";
 import { sendMessageZulip } from "./send.js";
@@ -32,7 +33,7 @@ import {
 import { downloadAttachments } from "./media-utils.js";
 import { addReactionSafe, removeReactionSafe } from "./reactions.js";
 import { initializeZulipMonitor } from "./bootstrap.js";
-import { pollOnce, delay } from "./polling.js";
+import { pollOnce } from "./polling.js";
 import { dispatchZulipReply } from "./reply-handler.js";
 
 export type MonitorZulipOpts = {
