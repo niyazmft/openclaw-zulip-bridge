@@ -1,5 +1,5 @@
 import { readSafeLocalFile } from "./fs-utils.js";
-import { formatZulipLog } from "./monitor-helpers.js";
+import { formatZulipLog, delay } from "./monitor-helpers.js";
 
 export type ZulipClient = {
   baseUrl: string;
@@ -103,10 +103,6 @@ function resolveRetryAfterMs(res: Response): number | undefined {
     return Math.max(0, dateMs - Date.now());
   }
   return undefined;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function readZulipError(res: Response): Promise<string> {
