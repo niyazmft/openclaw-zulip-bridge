@@ -44,7 +44,6 @@ export type MonitorZulipOpts = {
   runtime?: any;
   abortSignal?: AbortSignal;
   statusSink?: (patch: Partial<ChannelAccountSnapshot>) => void;
-  fetchImpl?: typeof fetch;
 };
 
 const RECENT_MESSAGE_TTL_MS = 5 * 60_000;
