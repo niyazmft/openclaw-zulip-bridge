@@ -43,7 +43,7 @@ export function resolveThreadSessionKeys(params: {
 export function formatZulipLog(message: string, fields: Record<string, unknown>): string {
   const parts = Object.entries(fields)
     .filter(([_, v]) => v !== undefined && v !== null && v !== "")
-    .map(([k, v]) => `${k}=${v}`);
+    .map(([k, v]) => `${k}=${String(v)}`);
   return parts.length > 0 ? `${message} [${parts.join(" ")}]` : message;
 }
 
