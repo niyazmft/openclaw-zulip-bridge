@@ -44,7 +44,6 @@ import { uploadZulipFile } from "../src/zulip/client.ts";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { setZulipRuntime } from "../src/runtime.ts";
 
 test("uploadZulipFile rejects files outside authorized paths", async () => {
   const client = createZulipClient({

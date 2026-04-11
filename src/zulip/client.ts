@@ -1,8 +1,8 @@
-import { readSafeLocalFile } from "./fs-utils.js";
-import { formatZulipLog, delay } from "./monitor-helpers.js";
 import os from "node:os";
 import path from "node:path";
 import { getZulipRuntime } from "../runtime.js";
+import { readSafeLocalFile } from "./fs-utils.js";
+import { formatZulipLog, delay } from "./monitor-helpers.js";
 
 export type ZulipClient = {
   baseUrl: string;
@@ -472,8 +472,10 @@ export async function uploadZulipFile(
     // runtime not initialized, ignore
   }
 
-  const isInsideTmp = !path.relative(tmpDir, absolutePath).startsWith("..") && !path.isAbsolute(path.relative(tmpDir, absolutePath));
-  const isInsideData = dataDir ? (!path.relative(dataDir, absolutePath).startsWith("..") && !path.isAbsolute(path.relative(dataDir, absolutePath))) : false;
+  const relTmp = path.relative(tmpDir, absolutePath);
+  const isInsideTmp = !relTmp.startsWith("..") && relTmp !== ".." && !path.isAbsolute(relTmp);
+  const relData = dataDir ? path.relative(dataDir, absolutePath) : null;
+  const isInsideData = relData ? (!relData.startsWith("..") && relData !== ".." && !path.isAbsolute(relData)) : false;
 
   if (!isInsideTmp && !isInsideData) {
     throw new Error(`Refusing to upload file from unauthorized path: ${filePath}`);
