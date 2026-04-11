@@ -1,5 +1,8 @@
 import { readSafeLocalFile } from "./fs-utils.js";
 import { formatZulipLog, delay } from "./monitor-helpers.js";
+import os from "node:os";
+import path from "node:path";
+import { getZulipRuntime } from "../runtime.js";
 
 export type ZulipClient = {
   baseUrl: string;
@@ -460,8 +463,24 @@ export async function uploadZulipFile(
   client: ZulipClient,
   filePath: string,
 ): Promise<{ url: string }> {
-  const filename = filePath.split("/").pop() || "upload.bin";
-  const buffer = await readSafeLocalFile(filePath);
+  const absolutePath = path.resolve(filePath);
+  const tmpDir = os.tmpdir();
+  let dataDir: string | undefined;
+  try {
+    dataDir = getZulipRuntime().paths?.dataDir;
+  } catch {
+    // runtime not initialized, ignore
+  }
+
+  const isInsideTmp = !path.relative(tmpDir, absolutePath).startsWith("..") && !path.isAbsolute(path.relative(tmpDir, absolutePath));
+  const isInsideData = dataDir ? (!path.relative(dataDir, absolutePath).startsWith("..") && !path.isAbsolute(path.relative(dataDir, absolutePath))) : false;
+
+  if (!isInsideTmp && !isInsideData) {
+    throw new Error(`Refusing to upload file from unauthorized path: ${filePath}`);
+  }
+
+  const filename = path.basename(absolutePath) || "upload.bin";
+  const buffer = await readSafeLocalFile(absolutePath);
   const form = new FormData();
   form.append("file", new Blob([buffer]), filename);
   const payload = await zulipRequestWithRetry<ZulipApiResponse & { uri?: string }>(
