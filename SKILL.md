@@ -1,6 +1,6 @@
 ---
 name: zulip-bridge
-version: 2026.4.10
+version: 2026.4.11
 description: 💬 High-performance Zulip bridge skill. Enables messaging, stream monitoring, and administrative actions on Zulip servers.
 user-invocable: true
 metadata: {
