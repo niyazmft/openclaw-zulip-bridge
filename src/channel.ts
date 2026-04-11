@@ -108,6 +108,7 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         apiKeySource: account.apiKeySource,
         emailSource: account.emailSource,
         baseUrl: account.baseUrl,
+        enableAdminActions: account.enableAdminActions ?? false,
       }),
       resolveAllowFrom: ({ cfg, accountId }) =>
         (resolveZulipAccount({ cfg, accountId }).config.allowFrom ?? []).map((entry) =>
