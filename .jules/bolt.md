@@ -1,3 +1,6 @@
 ## 2024-05-18 - [Hoist Redundant Runtime Config out of Polling Loop]
 **Learning:** In highly trafficked chat channels (like Zulip streams), evaluating plugin-level channel settings (such as allowlists, mention regexes, and policy modes) per message creates unnecessary CPU overhead and GC pressure. Because these configs resolve exactly once at the channel start boundary, they should not be re-parsed or re-compiled inside the tight message handler loop.
 **Action:** Always check the innermost message/event loop for invariant config resolution calls and loop operations (like building Regex patterns or running array loops for `normalizeAllowList`), and hoist them to the surrounding provider scope.
+## 2025-03-03 - Hoisting Static Configurations Out of Message Loops
+**Learning:** In highly active integration monitors (like Zulip polling), initializing channel configurations, permissions lists, and expensive Regex objects inside the tight event loop (`handleMessage`) leads to unnecessary CPU cycles and heavy garbage collection per event.
+**Action:** Always hoist static channel configuration fetching, regex compilation, and permissions parsing out of the tight polling and event handler loops where they only depend on the static environment config, rather than per-event data.
