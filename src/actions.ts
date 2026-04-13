@@ -422,10 +422,9 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
       "pin",
       "unpin",
     ]);
-    // TODO: These actions are implemented below but not yet exposed because core's
-    // MESSAGE_ACTION_TARGET_MODE does not yet support plugin-registered action target modes.
-    // Track: https://github.com/niyazmft/openclaw-zulip-bridge/issues
-    // Re-enable once the SDK exposes a plugin-registered action target mode API.
+    // TODO: These actions require core SDK changes to MESSAGE_ACTION_TARGET_MODE.
+    // Re-enable once the SDK supports plugin-registered action target modes.
+    // See: https://github.com/openclaw/openclaw/issues/TBD
     // actions.add("channel-subscribe" as ChannelMessageActionName);
     // actions.add("invite" as ChannelMessageActionName);
     // actions.add("resolve-topic" as ChannelMessageActionName);

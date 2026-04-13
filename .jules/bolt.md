@@ -1,4 +1,3 @@
-
-## 2026-04-11 - Optimize media uploads sending
-**Learning:** Promise.all is great for executing independent async tasks like uploading different media files.
-**Action:** Use Promise.all() when sending media replies to improve speed and reduce wait times.
+## 2024-05-18 - [Hoist Redundant Runtime Config out of Polling Loop]
+**Learning:** In highly trafficked chat channels (like Zulip streams), evaluating plugin-level channel settings (such as allowlists, mention regexes, and policy modes) per message creates unnecessary CPU overhead and GC pressure. Because these configs resolve exactly once at the channel start boundary, they should not be re-parsed or re-compiled inside the tight message handler loop.
+**Action:** Always check the innermost message/event loop for invariant config resolution calls and loop operations (like building Regex patterns or running array loops for `normalizeAllowList`), and hoist them to the surrounding provider scope.
