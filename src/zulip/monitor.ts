@@ -103,6 +103,32 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     });
     await dedupeStore.load();
 
+    // ⚡ Bolt Performance Optimization:
+    // Hoist static configurations and expensive regex/object compilations outside the tight message loop
+    // to prevent CPU overhead and redundant garbage collection on every single incoming event.
+    const mentionRegexes = core.channel.mentions.buildMentionRegexes(cfg, "main");
+    const dmPolicy = account.config.dmPolicy ?? "pairing";
+    const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
+    const groupPolicy = account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
+    const configAllowFrom = normalizeAllowList(account.config.allowFrom ?? []);
+    const configGroupAllowFrom = normalizeAllowList(account.config.groupAllowFrom ?? []);
+
+    const allowTextCommands = core.channel.commands.shouldHandleTextCommands({
+      cfg,
+      surface: "zulip",
+    });
+    const useAccessGroups = cfg.commands?.useAccessGroups !== false;
+    const canDetectMention = Boolean(botUsername) || mentionRegexes.length > 0;
+
+    const textLimit = core.channel.text.resolveTextChunkLimit(cfg, "zulip", account.accountId, {
+      fallbackLimit: account.textChunkLimit ?? 4000,
+    });
+    const tableMode = core.channel.text.resolveMarkdownTableMode({
+      cfg,
+      channel: "zulip",
+      accountId: account.accountId,
+    });
+
     const handleMessage = async (message: ZulipMessage) => {
       const messageId = String(message.id ?? "");
       if (!messageId) {
@@ -172,17 +198,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
       const oncharTriggered = oncharEnabled && oncharResult.triggered;
 
-      const mentionRegexes = core.channel.mentions.buildMentionRegexes(cfg, "main");
       const wasMentioned =
         !isDM &&
         (rawText.toLowerCase().includes(`@${botUsername.toLowerCase()}`) ||
           core.channel.mentions.matchesMentionPatterns(rawText, mentionRegexes));
 
-      const dmPolicy = account.config.dmPolicy ?? "pairing";
-      const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
-      const groupPolicy = account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
-      const configAllowFrom = normalizeAllowList(account.config.allowFrom ?? []);
-      const configGroupAllowFrom = normalizeAllowList(account.config.groupAllowFrom ?? []);
       const storeAllowFrom = normalizeAllowList(
         await core.channel.pairing.readAllowFromStore("zulip").catch(() => []),
       );
@@ -194,13 +214,8 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         ]),
       );
 
-      const allowTextCommands = core.channel.commands.shouldHandleTextCommands({
-        cfg,
-        surface: "zulip",
-      });
       const hasControlCommand = core.channel.text.hasControlCommand(rawText, cfg);
       const isControlCommand = allowTextCommands && hasControlCommand;
-      const useAccessGroups = cfg.commands?.useAccessGroups !== false;
       const senderAllowedForCommands = isSenderAllowed({
         senderId,
         senderName,
@@ -237,7 +252,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           groupId: channelId,
           requireMentionOverride: account.config.requireMention,
         });
-      const canDetectMention = Boolean(botUsername) || mentionRegexes.length > 0;
 
       const policyResult = decidePolicy({
         kind,
@@ -453,15 +467,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         emojiName: reactionStart,
         reactionsEnabled,
         logVerbose: logVerboseMessage,
-      });
-
-      const textLimit = core.channel.text.resolveTextChunkLimit(cfg, "zulip", account.accountId, {
-        fallbackLimit: account.textChunkLimit ?? 4000,
-      });
-      const tableMode = core.channel.text.resolveMarkdownTableMode({
-        cfg,
-        channel: "zulip",
-        accountId: account.accountId,
       });
 
       const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
