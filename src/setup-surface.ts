@@ -33,73 +33,6 @@ function resolveSetupAccountId(cfg: OpenClawConfig, accountId: string): string {
   return accountId || resolveDefaultZulipAccountId(cfg) || DEFAULT_ACCOUNT_ID;
 }
 
-/**
- * Credential text inputs (API key, email, site URL) shared by the setup wizard.
- * Kept as a named constant so the allowFrom follow-up input can be appended
- * after the dmPolicy select without duplicating the credential definitions.
- */
-const ZULIP_CREDENTIAL_TEXT_INPUTS = [
-  {
-    inputKey: "apiKey",
-    message: "Enter Zulip API key",
-    confirmCurrentValue: false,
-    currentValue: ({ cfg, accountId }: { cfg: OpenClawConfig; accountId: string }) =>
-      resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).apiKey ??
-      (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
-        ? process.env.ZULIP_API_KEY?.trim()
-        : undefined),
-    initialValue: ({ cfg, accountId }: { cfg: OpenClawConfig; accountId: string }) =>
-      resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).apiKey ??
-      (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
-        ? process.env.ZULIP_API_KEY?.trim()
-        : undefined),
-    validate: ({ value }: { value: string }) => (value?.trim() ? undefined : "Zulip API key is required."),
-    normalizeValue: ({ value }: { value: string }) => value.trim(),
-  },
-  {
-    inputKey: "email",
-    message: "Enter Zulip bot email",
-    confirmCurrentValue: false,
-    currentValue: ({ cfg, accountId }: { cfg: OpenClawConfig; accountId: string }) =>
-      resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).email ??
-      (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
-        ? process.env.ZULIP_EMAIL?.trim()
-        : undefined),
-    initialValue: ({ cfg, accountId }: { cfg: OpenClawConfig; accountId: string }) =>
-      resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).email ??
-      (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
-        ? process.env.ZULIP_EMAIL?.trim()
-        : undefined),
-    validate: ({ value }: { value: string }) => (value?.trim() ? undefined : "Zulip bot email is required."),
-    normalizeValue: ({ value }: { value: string }) => value.trim(),
-  },
-  {
-    inputKey: "httpUrl",
-    message: "Enter Zulip site URL",
-    confirmCurrentValue: false,
-    currentValue: ({ cfg, accountId }: { cfg: OpenClawConfig; accountId: string }) =>
-      resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).baseUrl ??
-      (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
-        ? process.env.ZULIP_URL?.trim()
-        : undefined),
-    initialValue: ({ cfg, accountId }: { cfg: OpenClawConfig; accountId: string }) =>
-      resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).baseUrl ??
-      (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
-        ? process.env.ZULIP_URL?.trim()
-        : undefined),
-    validate: ({ value }: { value: string }) => {
-      const trimmed = value?.trim();
-      if (!trimmed) {
-        return "Zulip site URL is required.";
-      }
-      return normalizeZulipBaseUrl(trimmed)
-        ? undefined
-        : "Enter a valid URL including protocol, for example: https://chat.example.com";
-    },
-    normalizeValue: ({ value }: { value: string }) => normalizeZulipBaseUrl(value) ?? value.trim(),
-  },
-] as const;
-
 export const zulipSetupWizard: ChannelSetupWizard = {
   channel,
   status: createStandardChannelSetupStatus({
@@ -149,41 +82,64 @@ export const zulipSetupWizard: ChannelSetupWizard = {
     apply: ({ cfg }) => cfg,
   },
   textInputs: [
-    ...ZULIP_CREDENTIAL_TEXT_INPUTS,
     {
-      // Conditionally shown when dmPolicy is set to "allowlist".
-      inputKey: "allowFrom",
-      message: "Enter allowed sender emails (comma-separated)",
-      hint: "Only these Zulip email addresses can DM the bot. Example: alice@example.com, bob@example.com",
-      placeholder: "e.g. alice@example.com, bob@example.com",
-      shouldPrompt: ({ cfg, accountId }: { cfg: OpenClawConfig; accountId: string }) => {
-        const resolved = resolveZulipAccount({
-          cfg,
-          accountId: resolveSetupAccountId(cfg, accountId),
-        });
-        return (resolved.config.dmPolicy ?? "pairing") === "allowlist";
-      },
-      currentValue: ({ cfg, accountId }: { cfg: OpenClawConfig; accountId: string }) => {
-        const resolved = resolveZulipAccount({
-          cfg,
-          accountId: resolveSetupAccountId(cfg, accountId),
-        });
-        return (resolved.config.allowFrom ?? []).join(", ");
-      },
-      initialValue: ({ cfg, accountId }: { cfg: OpenClawConfig; accountId: string }) => {
-        const resolved = resolveZulipAccount({
-          cfg,
-          accountId: resolveSetupAccountId(cfg, accountId),
-        });
-        return (resolved.config.allowFrom ?? []).join(", ");
-      },
-      validate: ({ value }: { value: string }) => {
-        if (!value?.trim()) {
-          return "At least one email is required when dmPolicy is allowlist.";
+      inputKey: "apiKey",
+      message: "Enter Zulip API key",
+      confirmCurrentValue: false,
+      currentValue: ({ cfg, accountId }) =>
+        resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).apiKey ??
+        (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
+          ? process.env.ZULIP_API_KEY?.trim()
+          : undefined),
+      initialValue: ({ cfg, accountId }) =>
+        resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).apiKey ??
+        (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
+          ? process.env.ZULIP_API_KEY?.trim()
+          : undefined),
+      validate: ({ value }) => (value?.trim() ? undefined : "Zulip API key is required."),
+      normalizeValue: ({ value }) => value.trim(),
+    },
+    {
+      inputKey: "email",
+      message: "Enter Zulip bot email",
+      confirmCurrentValue: false,
+      currentValue: ({ cfg, accountId }) =>
+        resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).email ??
+        (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
+          ? process.env.ZULIP_EMAIL?.trim()
+          : undefined),
+      initialValue: ({ cfg, accountId }) =>
+        resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).email ??
+        (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
+          ? process.env.ZULIP_EMAIL?.trim()
+          : undefined),
+      validate: ({ value }) => (value?.trim() ? undefined : "Zulip bot email is required."),
+      normalizeValue: ({ value }) => value.trim(),
+    },
+    {
+      inputKey: "httpUrl",
+      message: "Enter Zulip site URL",
+      confirmCurrentValue: false,
+      currentValue: ({ cfg, accountId }) =>
+        resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).baseUrl ??
+        (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
+          ? process.env.ZULIP_URL?.trim()
+          : undefined),
+      initialValue: ({ cfg, accountId }) =>
+        resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) }).baseUrl ??
+        (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
+          ? process.env.ZULIP_URL?.trim()
+          : undefined),
+      validate: ({ value }) => {
+        const trimmed = value?.trim();
+        if (!trimmed) {
+          return "Zulip site URL is required.";
         }
-        return undefined;
+        return normalizeZulipBaseUrl(trimmed)
+          ? undefined
+          : "Enter a valid URL including protocol, for example: https://chat.example.com";
       },
-      normalizeValue: ({ value }: { value: string }) => value.trim(),
+      normalizeValue: ({ value }) => normalizeZulipBaseUrl(value) ?? value.trim(),
     },
   ],
   selects: [
