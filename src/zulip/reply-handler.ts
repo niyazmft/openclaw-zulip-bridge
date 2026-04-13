@@ -111,16 +111,14 @@ export async function dispatchZulipReply(params: {
             });
           }
         } else {
-          let first = true;
-          for (const mediaUrl of mediaUrls) {
-            const caption = first ? text : "";
-            first = false;
+          await Promise.all(mediaUrls.map(async (mediaUrl, index) => {
+            const caption = index === 0 ? text : "";
             await sendMessageZulip(to, caption, {
               accountId: account.accountId,
               mediaUrl,
               topic: resolvedTopic,
             });
-          }
+          }));
         }
         statusSink?.({ lastOutboundAt: Date.now() });
       },

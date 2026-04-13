@@ -103,14 +103,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     });
     await dedupeStore.load();
 
-    // ⚡ Bolt: Hoist static configuration and regex resolution out of the hot path
-    // to prevent redundant CPU and GC overhead on every incoming message.
     const mentionRegexes = core.channel.mentions.buildMentionRegexes(cfg, "main");
-    const dmPolicy = account.config.dmPolicy ?? "pairing";
-    const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
-    const groupPolicy = account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
-    const configAllowFrom = normalizeAllowList(account.config.allowFrom ?? []);
-    const configGroupAllowFrom = normalizeAllowList(account.config.groupAllowFrom ?? []);
 
     const handleMessage = async (message: ZulipMessage) => {
       const messageId = String(message.id ?? "");
