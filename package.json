@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/zulip",
-  "version": "2026.4.11",
+  "version": "2026.4.9",
   "description": "OpenClaw Zulip channel plugin",
   "type": "module",
   "openclaw": {
@@ -27,13 +27,7 @@
       "docsPath": "/channels/zulip",
       "docsLabel": "zulip",
       "blurb": "Zulip streams/topics with reaction-based reply indicators (plugin, installed separately).",
-      "order": 70,
-      "exposure": {
-        "configured": true,
-        "setup": true,
-        "docs": true
-      },
-      "quickstartAllowFrom": true
+      "order": 70
     },
     "install": {
       "localPath": ".",
