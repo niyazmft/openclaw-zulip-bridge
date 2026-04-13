@@ -25,7 +25,6 @@ const noOp = () => undefined;
 export const emptyPluginConfigSchema = () => ({});
 export const definePluginEntry = (entry) => entry;
 export const defineSetupPluginEntry = (entry) => entry;
-export const defineChannelPluginEntry = (entry) => entry;
 export const createChatChannelPlugin = (entry) => entry;
 export const defineChannelTargetParser = (parser) => parser;
 export const defineOnboardingProvider = (provider) => provider;

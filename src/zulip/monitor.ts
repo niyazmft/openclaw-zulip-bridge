@@ -103,6 +103,8 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     });
     await dedupeStore.load();
 
+    const mentionRegexes = core.channel.mentions.buildMentionRegexes(cfg, "main");
+
     const handleMessage = async (message: ZulipMessage) => {
       const messageId = String(message.id ?? "");
       if (!messageId) {
@@ -172,7 +174,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
       const oncharTriggered = oncharEnabled && oncharResult.triggered;
 
-      const mentionRegexes = core.channel.mentions.buildMentionRegexes(cfg, "main");
       const wasMentioned =
         !isDM &&
         (rawText.toLowerCase().includes(`@${botUsername.toLowerCase()}`) ||
