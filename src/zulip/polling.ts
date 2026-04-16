@@ -85,13 +85,26 @@ export async function pollOnce(params: {
     resetPollBackoff();
     pollBackoffMs = 0;
 
-    for (const event of events) {
-      if (event.type === "message" && event.message) {
-        await processMessage(event.message);
+    let maxEventId = -1;
+
+    try {
+      for (const event of events) {
+        if (event.type === "message" && event.message) {
+          await processMessage(event.message);
+        }
+        const nextEventId = Number((event as { id?: unknown })?.id);
+        if (!Number.isNaN(nextEventId) && nextEventId > maxEventId) {
+          maxEventId = nextEventId;
+        }
       }
-      const nextEventId = Number((event as { id?: unknown })?.id);
-      if (!Number.isNaN(nextEventId) && nextEventId > 0) {
-        await queueManager.updateLastEventId(nextEventId);
+    } finally {
+      if (maxEventId > 0) {
+        // ⚡ Bolt Optimization: Batch disk I/O updates for event ID
+        // Previously, we updated the queue manager (which writes to disk) for every event.
+        // By keeping track of the maxEventId and updating once per batch, we turn
+        // O(N) disk writes into O(1) writes, drastically reducing I/O operations.
+        // It's in a finally block to make sure progress is not lost upon errors.
+        await queueManager.updateLastEventId(maxEventId);
       }
     }
   } catch (err) {
