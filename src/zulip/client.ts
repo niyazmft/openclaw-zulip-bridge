@@ -254,7 +254,7 @@ export async function fetchZulipMe(client: ZulipClient): Promise<ZulipUser> {
 export async function fetchZulipUser(client: ZulipClient, userId: string): Promise<ZulipUser> {
   const payload = await client.request<
     ZulipApiResponse & { user?: { user_id: number; email?: string; full_name?: string } }
-  >(`/users/${userId}`);
+  >(`/users/${encodeURIComponent(userId)}`);
   assertSuccess(payload, "Zulip /users/{id} failed");
   const user = payload.user;
   return {
@@ -281,7 +281,7 @@ export async function fetchZulipStream(
 ): Promise<ZulipStream> {
   const payload = await client.request<
     ZulipApiResponse & { stream?: { stream_id: number; name?: string; description?: string } }
-  >(`/streams/${streamId}`);
+  >(`/streams/${encodeURIComponent(streamId)}`);
   assertSuccess(payload, "Zulip /streams/{id} failed");
   const stream = payload.stream;
   return {
@@ -389,9 +389,12 @@ export async function deleteZulipQueue(client: ZulipClient, queueId: string): Pr
     return;
   }
   try {
-    const payload = await client.request<ZulipApiResponse>(`/events?queue_id=${queueId}`, {
-      method: "DELETE",
-    });
+    const payload = await client.request<ZulipApiResponse>(
+      `/events?queue_id=${encodeURIComponent(queueId)}`,
+      {
+        method: "DELETE",
+      },
+    );
     assertSuccess(payload, "Zulip delete event queue failed");
   } catch {
     // ignore cleanup errors
@@ -673,17 +676,23 @@ export async function updateZulipStream(
   if (params.isDefaultStream !== undefined) {
     body.set("is_default_stream", String(params.isDefaultStream));
   }
-  const payload = await client.request<ZulipApiResponse>(`/streams/${params.streamId}` as const, {
-    method: "PATCH",
-    body: body.toString(),
-  });
+  const payload = await client.request<ZulipApiResponse>(
+    `/streams/${encodeURIComponent(params.streamId)}` as const,
+    {
+      method: "PATCH",
+      body: body.toString(),
+    },
+  );
   assertSuccess(payload, "Zulip stream update failed");
 }
 
 export async function deleteZulipStream(client: ZulipClient, streamId: string): Promise<void> {
-  const payload = await client.request<ZulipApiResponse>(`/streams/${streamId}` as const, {
-    method: "DELETE",
-  });
+  const payload = await client.request<ZulipApiResponse>(
+    `/streams/${encodeURIComponent(streamId)}` as const,
+    {
+      method: "DELETE",
+    },
+  );
   assertSuccess(payload, "Zulip stream delete failed");
 }
 
@@ -707,7 +716,7 @@ export async function addZulipReaction(
   }
   const payload = await zulipRequestWithRetry<ZulipApiResponse>(
     client,
-    `/messages/${params.messageId}/reactions`,
+    `/messages/${encodeURIComponent(params.messageId)}/reactions`,
     { method: "POST", body: body.toString() },
   );
   assertSuccess(payload, "Zulip add reaction failed");
@@ -735,7 +744,7 @@ export async function removeZulipReaction(
   const suffix = qs.toString();
   const payload = await zulipRequestWithRetry<ZulipApiResponse>(
     client,
-    `/messages/${params.messageId}/reactions${suffix ? `?${suffix}` : ""}`,
+    `/messages/${encodeURIComponent(params.messageId)}/reactions${suffix ? `?${suffix}` : ""}`,
     { method: "DELETE" },
   );
   assertSuccess(payload, "Zulip remove reaction failed");
@@ -751,10 +760,13 @@ export async function editZulipMessage(
   const body = new URLSearchParams({
     content: params.content,
   });
-  const payload = await client.request<ZulipApiResponse>(`/messages/${params.messageId}`, {
-    method: "PATCH",
-    body: body.toString(),
-  });
+  const payload = await client.request<ZulipApiResponse>(
+    `/messages/${encodeURIComponent(params.messageId)}`,
+    {
+      method: "PATCH",
+      body: body.toString(),
+    },
+  );
   assertSuccess(payload, "Zulip edit message failed");
 }
 
@@ -764,9 +776,12 @@ export async function deleteZulipMessage(
     messageId: string;
   },
 ): Promise<void> {
-  const payload = await client.request<ZulipApiResponse>(`/messages/${params.messageId}`, {
-    method: "DELETE",
-  });
+  const payload = await client.request<ZulipApiResponse>(
+    `/messages/${encodeURIComponent(params.messageId)}`,
+    {
+      method: "DELETE",
+    },
+  );
   assertSuccess(payload, "Zulip delete message failed");
 }
 
@@ -808,10 +823,13 @@ export async function updateZulipMessageTopic(
     topic: params.topic,
     propagate_mode: params.propagateMode ?? "change_all",
   });
-  const payload = await client.request<ZulipApiResponse>(`/messages/${params.messageId}`, {
-    method: "PATCH",
-    body: body.toString(),
-  });
+  const payload = await client.request<ZulipApiResponse>(
+    `/messages/${encodeURIComponent(params.messageId)}`,
+    {
+      method: "PATCH",
+      body: body.toString(),
+    },
+  );
   assertSuccess(payload, "Zulip update message topic failed");
 }
 
@@ -892,9 +910,12 @@ export async function deactivateZulipUser(client: ZulipClient, userId: string): 
   if (!trimmed) {
     throw new Error("userId is required to deactivate a Zulip user.");
   }
-  const payload = await client.request<ZulipApiResponse>(`/users/${trimmed}` as const, {
-    method: "DELETE",
-  });
+  const payload = await client.request<ZulipApiResponse>(
+    `/users/${encodeURIComponent(trimmed)}` as const,
+    {
+      method: "DELETE",
+    },
+  );
   assertSuccess(payload, "Zulip deactivate user failed");
 }
 
@@ -903,9 +924,12 @@ export async function reactivateZulipUser(client: ZulipClient, userId: string): 
   if (!trimmed) {
     throw new Error("userId is required to reactivate a Zulip user.");
   }
-  const payload = await client.request<ZulipApiResponse>(`/users/${trimmed}/reactivate` as const, {
-    method: "POST",
-  });
+  const payload = await client.request<ZulipApiResponse>(
+    `/users/${encodeURIComponent(trimmed)}/reactivate` as const,
+    {
+      method: "POST",
+    },
+  );
   assertSuccess(payload, "Zulip reactivate user failed");
 }
 
