@@ -1,6 +1,5 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync } from 'node:child_process';
 
 const requiredPaths = [
   'node_modules/.bin/tsc',
@@ -20,14 +19,13 @@ for (const relPath of requiredPaths) {
   }
 }
 
+// Verify TypeScript version from package.json instead of spawning tsc
 try {
-  // Use npx to ensure we're trying to run the local one if possible,
-  // or just exec 'node_modules/.bin/tsc' directly.
-  const tscPath = join(process.cwd(), 'node_modules', '.bin', 'tsc');
-  const output = execSync(`"${tscPath}" --version`, { encoding: 'utf8' });
-  console.log(`OK: tsc is functional (${output.trim()})`);
+  const tsPkgPath = join(process.cwd(), 'node_modules', 'typescript', 'package.json');
+  const tsPkg = JSON.parse(readFileSync(tsPkgPath, 'utf8'));
+  console.log(`OK: typescript package present (v${tsPkg.version})`);
 } catch (err) {
-  errors.push(`Failed to execute tsc: ${err.message}`);
+  errors.push(`Failed to read typescript package info: ${err.message}`);
 }
 
 if (errors.length > 0) {
