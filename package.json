@@ -54,7 +54,8 @@
     "dist/",
     "openclaw.plugin.json",
     "SKILL.md",
-    "README.md"
+    "README.md",
+    "package.json"
   ],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

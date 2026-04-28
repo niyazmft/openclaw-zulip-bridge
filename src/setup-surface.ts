@@ -35,6 +35,9 @@ function resolveSetupAccountId(cfg: OpenClawConfig, accountId: string): string {
 
 export const zulipSetupWizard: ChannelSetupWizard = {
   channel,
+  // credentials array required by OpenClaw host's isDeclarativeChannelSetupWizard() check.
+  // We keep our richer textInputs below; these credentials just satisfy the structural requirement.
+  credentials: [],
   status: createStandardChannelSetupStatus({
     channelLabel: "Zulip",
     configuredLabel: "configured",
