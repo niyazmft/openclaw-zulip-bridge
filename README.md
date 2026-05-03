@@ -53,7 +53,7 @@ openclaw plugins setup zulip
 # Check OpenClaw version (>= 2026.4.29 recommended)
     openclaw --version
     # Check plugins.allow includes "zulip"
-   openclaw config get plugins.allow --json
+    openclaw config get plugins.allow --json
    # Ensure no stale zulip config exists
    openclaw plugins list --json | grep zulip
    ```
