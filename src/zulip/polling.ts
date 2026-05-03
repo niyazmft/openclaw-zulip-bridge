@@ -49,6 +49,7 @@ export async function pollOnce(params: {
       lastEventId: queue.lastEventId,
       timeoutMs: 90000,
       retryBaseDelayMs: 1000,
+      signal: opts.abortSignal,
     });
 
     if (response.result === "error") {
@@ -72,11 +73,12 @@ export async function pollOnce(params: {
           count: events.length,
         }),
       );
-      opts.statusSink?.({
-        connected: true,
-        lastConnectedAt: Date.now(),
-      });
     }
+    // Heartbeat: assert health on every poll cycle regardless of event count
+    opts.statusSink?.({
+      connected: true,
+      lastConnectedAt: Date.now(),
+    });
 
     if (events.length === 0) {
       await delay(1000);

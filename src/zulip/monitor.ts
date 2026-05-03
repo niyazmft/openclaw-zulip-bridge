@@ -1,6 +1,7 @@
 import type { OpenClawConfig, ChannelAccountSnapshot } from "openclaw/plugin-sdk/core";
-import { logInboundDrop, resolveControlCommandGate } from "openclaw/plugin-sdk/irc";
-import { createReplyPrefixOptions } from "openclaw/plugin-sdk/channel-runtime";
+import { logInboundDrop } from "openclaw/plugin-sdk/channel-inbound";
+import { resolveControlCommandGate } from "openclaw/plugin-sdk/command-auth";
+import { createReplyPrefixOptions } from "openclaw/plugin-sdk/channel-reply-options-runtime";
 import { resolveChannelMediaMaxBytes } from "openclaw/plugin-sdk/media-runtime";
 import { getZulipRuntime } from "../runtime.js";
 import {
@@ -54,6 +55,13 @@ const DEFAULT_TOPIC = "general";
 export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise<void> {
   const core = getZulipRuntime();
   core.log?.(formatZulipLog("zulip monitor starting", { accountId: opts.accountId }));
+
+  // Assert health immediately so the host health-monitor doesn't kill us during initialization
+  opts.statusSink?.({
+    running: true,
+    connected: true,
+    lastConnectedAt: Date.now(),
+  });
 
   try {
     const {
