@@ -15,16 +15,16 @@ The OpenClaw Zulip Bridge is a high-performance channel plugin for OpenClaw that
 
 ## Prerequisites
 
-- **OpenClaw**: Version `>=2026.3.28`
+- **OpenClaw**: Version `>=2026.4.29` (recommended)
 - **Node.js**: Latest LTS recommended (Node 22+)
 - **Zulip Bot**: A registered bot on your Zulip realm (Settings -> Your Bots -> Add a new bot).
-- **plugins.allow**: Your OpenClaw config must include `"channel"` in `plugins.allow` for channel plugins to work:
+- **plugins.allow**: Your OpenClaw config must include `"zulip"` in `plugins.allow` for the plugin to be recognized:
 
   ```bash
   # Check current allow list
   openclaw config get plugins.allow --json
-  # If "channel" is missing, add it (replace [...] with your current list + "channel")
-  openclaw config set plugins.allow '["exa","ollama","zulip","telegram","memory-core","channel"]'
+  # If "zulip" is missing, add it
+  openclaw config set plugins.allow '["zulip","telegram","memory-core","exa","ollama"]'
   ```
 
 ## Installation
@@ -50,9 +50,9 @@ openclaw plugins setup zulip
    ```bash
    # Check Node.js version (>= 22 recommended)
    node --version
-   # Check OpenClaw version (>= 2026.3.28 required)
-   openclaw --version
-   # Check plugins.allow includes "channel"
+# Check OpenClaw version (>= 2026.4.29 recommended)
+    openclaw --version
+    # Check plugins.allow includes "zulip"
    openclaw config get plugins.allow --json
    # Ensure no stale zulip config exists
    openclaw plugins list --json | grep zulip

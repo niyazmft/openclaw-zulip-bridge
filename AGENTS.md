@@ -54,24 +54,26 @@ Dev dependencies must be installed. `.npmrc` sets `include=dev` to prevent npm f
 
 ## Deployment (y6 / Android/Termux)
 
-- Target device: `y6` (Android/Termux, OpenClaw `2026.4.29`)
+- Target device: `y6` (Android/Termux, OpenClaw `2026.5.2`)
 - Deploy via rsync: `rsync -avh --delete dist/ y6:.openclaw/extensions/zulip/dist/`
 - Restart: `ssh y6 "openclaw run --restart"`
 - Logs: `ssh y6 "tail -f /data/data/com.termux/files/usr/tmp/openclaw-*/openclaw-*.log"`
 - Config lives at `~/.openclaw/openclaw.json`; remove plugin via `plugins.allow` list + `channels` section
 
-## SDK Migration Notes (2026.4.23 → 2026.4.29)
+## SDK Migration Notes (2026.4.29 → 2026.5.x)
 
-Breaking changes in `openclaw/plugin-sdk`:
-- `openclaw/plugin-sdk/irc` → `openclaw/plugin-sdk/channel-inbound` + `openclaw/plugin-sdk/command-auth`
+Migration complete as of v2026.5.1:
+- `openclaw/plugin-sdk/irc` → `channel-inbound` + `command-auth` subpaths
 - `channel-runtime` → `channel-reply-options-runtime`
-- Type shims in `types/openclaw-plugin-sdk.d.ts` must be updated to match new subpath imports
+- Manifest uses `channelConfigs` (cold-path config schema) + `channelEnvVars` (env var mapping)
+- Type shims cover: channel-core, account-core, config-types
 
 ## Troubleshooting
 
-- **Health-monitor restarts every ~5 min** with `reason: stopped`: Call `statusSink({ running: true, connected: true })` at the START of your monitor function, not conditionally inside event handlers. The host checks `snapshot.running` to decide if channel is alive.
-- **Deprecation warnings** about `channelConfigs` in manifest are non-blocking (just metadata warnings). Plugin loads fine without them.
-- **No startup logs** for your channel? Check that host is actually calling `startAccount`. Verify `listAccountIds` returns expected account IDs.
+- **Health-monitor restarts every ~5 min** with `reason: stopped**: Call `statusSink({ running: true, connected: true })` at the START of your monitor function, not conditionally inside event handlers. The host checks `snapshot.running` to decide if channel is alive.
+- **Missing channelConfigs warning**: Ensure openclaw.plugin.json has `channelConfigs` section with `schema` and `uiHints`.
+- **Deprecated providerAuthEnvVars**: Migrate to `channelEnvVars` in manifest and package.json.
+- **No startup logs** for your channel? Verify host calls `startAccount` and `listAccountIds` returns expected account IDs.
 - **Telegram fetch timeouts**: Separate network issue on y6, not related to your plugin.
 
 **Note**: `AGENTS.md` itself is listed in `.gitignore` (line 11); it is maintained locally for agent sessions and should not be committed.
