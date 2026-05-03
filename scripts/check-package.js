@@ -42,17 +42,7 @@ for (const artifact of artifacts) {
   }
 }
 
-// 5. Compute expected packaged files from "files" list instead of running npm pack
-const packagedFiles = new Set();
-function collectFiles(dir) {
-  // Basic check: for dirs, assume contents match what npm pack would include
-  if (existsSync(dir)) { packagedFiles.add(dir); }
-}
-if (pkg.files) {
-  for (const f of pkg.files) { collectFiles(f); }
-}
-
-// Verify entry points are in the files list
+// 5. Verify entry points are in the files list
 for (const artifact of artifacts) {
   const normalizedArtifact = artifact.startsWith('./') ? artifact.slice(2) : artifact;
   let found = false;

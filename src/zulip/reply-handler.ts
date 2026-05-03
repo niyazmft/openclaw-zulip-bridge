@@ -1,4 +1,4 @@
-import { createTypingCallbacks } from "openclaw/plugin-sdk/channel-runtime";
+import { createTypingCallbacks } from "openclaw/plugin-sdk/channel-reply-options-runtime";
 import { logTypingFailure } from "openclaw/plugin-sdk/channel-feedback";
 import { sendZulipTyping } from "./client.js";
 import { sendMessageZulip } from "./send.js";

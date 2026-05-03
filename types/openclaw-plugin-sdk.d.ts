@@ -41,20 +41,54 @@ declare module "openclaw/plugin-sdk/core" {
   export const readStringParam: any;
 }
 
-declare module "openclaw/plugin-sdk/irc" {
-  export type ChannelPlugin<T = any> = any;
-  export const logInboundDrop: any;
+declare module "openclaw/plugin-sdk/channel-core" {
+  export type OpenClawPluginApi = any;
+  export type OpenClawConfig = any;
+  export type OpenClawChannelPlugin = any;
+  export type ChannelSetupResult = any;
+  export type ChannelAccountSnapshot = any;
+  export type ChannelMessageActionName = any;
+  export const DEFAULT_ACCOUNT_ID: string;
+  export const normalizeAccountId: any;
+  export const getChatChannelMeta: any;
+  export const applyAccountNameToChannelSection: any;
+  export const deleteAccountFromConfigSection: any;
+  export const migrateBaseNameToDefaultAccount: any;
+  export const setAccountEnabledInConfigSection: any;
+  export const emptyPluginConfigSchema: any;
+  export const createChatChannelPlugin: <T = any>(params: any) => any;
+  export const createChannelPluginBase: any;
+  export const defineChannelPluginEntry: any;
+  export const definePluginEntry: any;
+  export const defineSetupPluginEntry: any;
+  export const formatPairingApproveHint: any;
+  export const jsonResult: any;
+  export const readNumberParam: any;
+  export const readStringParam: any;
+}
+
+declare module "openclaw/plugin-sdk/config-types" {
+  export type OpenClawConfig = any;
+}
+
+declare module "openclaw/plugin-sdk/account-core" {
+  export const applyAccountNameToChannelSection: any;
+  export const deleteAccountFromConfigSection: any;
+  export const migrateBaseNameToDefaultAccount: any;
+  export const setAccountEnabledInConfigSection: any;
+}
+
+declare module "openclaw/plugin-sdk/command-auth" {
   export const resolveControlCommandGate: any;
-  export const BlockStreamingCoalesceSchema: any;
-  export const DmPolicySchema: any;
-  export const GroupPolicySchema: any;
-  export const MarkdownConfigSchema: any;
-  export const requireOpenAllowFrom: any;
-  export const buildChannelConfigSchema: any;
-  export const createChannelPluginScaffold: any;
-  export const defineChannelAction: any;
-  export const defineChannelConfigNormalizer: any;
-  export const defineChannelStatusProvider: any;
+}
+
+declare module "openclaw/plugin-sdk/channel-inbound" {
+  export const logInboundDrop: any;
+}
+
+declare module "openclaw/plugin-sdk/channel-reply-options-runtime" {
+  export const createReplyPrefixOptions: any;
+  export const createTypingCallbacks: any;
 }
 
 declare module "openclaw/plugin-sdk/channel-contract" {

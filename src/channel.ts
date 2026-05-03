@@ -6,9 +6,10 @@ import {
   normalizeAccountId,
   setAccountEnabledInConfigSection,
   createChatChannelPlugin,
+  createChannelPluginBase,
   formatPairingApproveHint,
   type ChannelAccountSnapshot,
-} from "openclaw/plugin-sdk/core";
+} from "openclaw/plugin-sdk/channel-core";
 import type { ZulipConfig } from "./types.js";
 import { zulipMessageActions } from "./actions.js";
 import { ZulipChannelConfigSchema } from "./config-schema.js";

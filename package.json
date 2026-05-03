@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/zulip",
-  "version": "2026.4.13",
+  "version": "2026.5.1",
   "description": "OpenClaw Zulip channel plugin",
   "type": "module",
   "openclaw": {
@@ -11,7 +11,7 @@
       "./dist/index.js"
     ],
     "setupEntry": "./dist/setup-entry.js",
-    "providerAuthEnvVars": {
+    "channelEnvVars": {
       "zulip": [
         "ZULIP_API_KEY",
         "ZULIP_EMAIL",
@@ -32,10 +32,10 @@
     "install": {
       "localPath": ".",
       "defaultChoice": "local",
-      "minHostVersion": ">=2026.3.28"
+      "minHostVersion": ">=2026.4.29"
     },
     "build": {
-      "openclawVersion": "2026.3.28",
+      "openclawVersion": "2026.4.29",
       "stageRuntimeDependencies": true
     },
     "securityExemptions": {

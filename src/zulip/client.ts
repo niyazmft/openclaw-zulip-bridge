@@ -358,6 +358,7 @@ export async function getZulipEventsWithRetry(
     lastEventId: number;
     timeoutMs?: number;
     retryBaseDelayMs?: number;
+    signal?: AbortSignal;
   },
 ): Promise<
   ZulipApiResponse & { events?: Array<{ id: number; type: string; message?: ZulipMessage }> }
@@ -370,6 +371,18 @@ export async function getZulipEventsWithRetry(
   const controller = new AbortController();
   const timeoutMs = params.timeoutMs ?? 90000;
   const timeout = setTimeout(() => controller.abort(), timeoutMs + 15000);
+
+  // Wire host-level abort so we exit cleanly within ~90s instead of blocking 105s
+  const hostAbort = params.signal;
+  const onHostAbort = () => controller.abort();
+  if (hostAbort) {
+    if (hostAbort.aborted) {
+      controller.abort();
+    } else {
+      hostAbort.addEventListener("abort", onHostAbort);
+    }
+  }
+
   try {
     return await zulipRequestWithRetry<
       ZulipApiResponse & { events?: Array<{ id: number; type: string; message?: ZulipMessage }> }
@@ -381,6 +394,9 @@ export async function getZulipEventsWithRetry(
     );
   } finally {
     clearTimeout(timeout);
+    if (hostAbort) {
+      hostAbort.removeEventListener("abort", onHostAbort);
+    }
   }
 }
 
