@@ -37,14 +37,18 @@ export class ZulipQueueManager {
   }
 
   async ensureQueue(): Promise<QueueMetadata> {
+    console.error("[ZULIP_DEBUG] ensureQueue called, currentQueue:", !!this.currentQueue, "registrationPromise:", !!this.registrationPromise);
     if (this.currentQueue) {
+      console.error("[ZULIP_DEBUG] ensureQueue: returning existing queue");
       return this.currentQueue;
     }
 
     if (this.registrationPromise) {
+      console.error("[ZULIP_DEBUG] ensureQueue: returning existing promise");
       return this.registrationPromise;
     }
 
+    console.error("[ZULIP_DEBUG] ensureQueue: calling performRegistration");
     this.registrationPromise = this.performRegistration();
     try {
       this.currentQueue = await this.registrationPromise;

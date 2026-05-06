@@ -42,6 +42,8 @@ function listConfiguredAccountIds(cfg: OpenClawConfig): string[] {
 }
 
 export function listZulipAccountIds(cfg: OpenClawConfig): string[] {
+  console.warn("[ZULIP_DEBUG] listZulipAccountIds called");
+  try { require('fs').appendFileSync('/data/data/com.termux/files/home/zulip-debug.log', `listZulipAccountIds called\n`); } catch {}
   const ids = listConfiguredAccountIds(cfg);
   if (ids.length === 0) {
     return [DEFAULT_ACCOUNT_ID];

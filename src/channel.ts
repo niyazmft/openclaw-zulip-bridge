@@ -1,17 +1,50 @@
 import {
-  applyAccountNameToChannelSection,
-  DEFAULT_ACCOUNT_ID,
-  deleteAccountFromConfigSection,
-  migrateBaseNameToDefaultAccount,
-  normalizeAccountId,
-  setAccountEnabledInConfigSection,
   createChatChannelPlugin,
-  createChannelPluginBase,
+  getChatChannelMeta,
+  DEFAULT_ACCOUNT_ID,
+  normalizeAccountId,
+  deleteAccountFromConfigSection,
+  setAccountEnabledInConfigSection,
   formatPairingApproveHint,
   type ChannelAccountSnapshot,
 } from "openclaw/plugin-sdk/channel-core";
+import { setZulipRuntime } from "./runtime.js";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/core";
 import type { ZulipConfig } from "./types.js";
 import { zulipMessageActions } from "./actions.js";
+
+let monitorStarted = false;
+let activeMonitor: { abort: () => void } | null = null;
+
+async function startZulipMonitor(cfg: OpenClawConfig, statusSink: any) {
+  if (monitorStarted) return;
+  monitorStarted = true;
+  console.error("[ZULIP_CHANNEL_DEBUG] Starting zulip monitor from channel...");
+  
+  const accountIds = listZulipAccountIds(cfg);
+  for (const accountId of accountIds) {
+    const account = resolveZulipAccount({ cfg, accountId });
+    if (account.enabled && account.apiKey && account.email && account.baseUrl) {
+      console.error("[ZULIP_CHANNEL_DEBUG] Starting monitor for:", accountId);
+      const abortController = new AbortController();
+      activeMonitor = { abort: () => abortController.abort() };
+      
+      monitorZulipProvider({
+        apiKey: account.apiKey,
+        email: account.email,
+        baseUrl: account.baseUrl,
+        accountId: accountId,
+        config: cfg,
+        abortSignal: abortController.signal,
+        statusSink: statusSink,
+      }).catch((err) => {
+        console.error("[ZULIP_CHANNEL_DEBUG] Monitor error:", err);
+        monitorStarted = false;
+      });
+      break;
+    }
+  }
+}
 import { ZulipChannelConfigSchema } from "./config-schema.js";
 import { resolveZulipGroupRequireMention } from "./group-mentions.js";
 import { looksLikeZulipTargetId, normalizeZulipMessagingTarget } from "./normalize.js";
@@ -83,7 +116,7 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
     configSchema: ZulipChannelConfigSchema,
     config: {
       listAccountIds: (cfg) => listZulipAccountIds(cfg),
-      resolveAccount: (cfg, accountId) => resolveZulipAccount({ cfg, accountId }),
+      resolveAccount: (cfg, accountId) => { console.warn("[ZULIP_DEBUG] resolveAccount called:", accountId); const result = resolveZulipAccount({ cfg, accountId }); console.warn("[ZULIP_DEBUG] resolveAccount returns:", result ? result.email : "NULL"); return result; },
       defaultAccountId: (cfg) => resolveDefaultZulipAccountId(cfg),
       setAccountEnabled: ({ cfg, accountId, enabled }) =>
         setAccountEnabledInConfigSection({
@@ -100,8 +133,9 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
           accountId,
           clearBaseFields: ["apiKey", "email", "url", "name"] as const,
         }),
-      isConfigured: (account) => Boolean(account.apiKey && account.email && account.baseUrl),
-      describeAccount: (account) => ({
+      isConfigured: (account) => { console.warn("[ZULIP_DEBUG] isConfigured called:", account?.accountId, "apiKey:", !!account?.apiKey, "email:", !!account?.email, "baseUrl:", !!account?.baseUrl); const result = Boolean(account.apiKey && account.email && account.baseUrl); console.warn("[ZULIP_DEBUG] isConfigured returns:", result); return result; },
+      isEnabled: (account) => { console.warn("[ZULIP_DEBUG] isEnabled called:", account?.accountId, "enabled:", account?.enabled); return true; },
+      describeAccount: (account) => { try { console.warn("[ZULIP_DEBUG] describeAccount called:", account?.accountId); const result = {
         accountId: account.accountId,
         name: account.name,
         enabled: account.enabled,
@@ -109,7 +143,7 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         apiKeySource: account.apiKeySource,
         emailSource: account.emailSource,
         baseUrl: account.baseUrl,
-      }),
+      }; console.warn("[ZULIP_DEBUG] describeAccount returns:", JSON.stringify(result)); return result; } catch (e) { console.warn("[ZULIP_DEBUG] describeAccount ERROR:", e); return { accountId: account.accountId, enabled: false, configured: false }; } },
       resolveAllowFrom: ({ cfg, accountId }) =>
         (resolveZulipAccount({ cfg, accountId }).config.allowFrom ?? []).map((entry) =>
           String(entry),
@@ -160,13 +194,21 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         lastProbeAt: zulipSnapshot.lastProbeAt ?? null,
       };
     },
-    probeAccount: async ({ account, timeoutMs }) => {
+    probeAccount: async ({ account, timeoutMs, cfg, statusSink }) => {
       const apiKey = account.apiKey?.trim();
       const email = account.email?.trim();
       const baseUrl = account.baseUrl?.trim();
       if (!apiKey || !email || !baseUrl) {
         return { ok: false, error: "apiKey, email, or url missing" };
       }
+      
+      if (!monitorStarted && cfg && statusSink) {
+        console.error("[ZULIP_CHANNEL_DEBUG] probeAccount: starting monitor...");
+        startZulipMonitor(cfg as OpenClawConfig, statusSink).catch((err) => {
+          console.error("[ZULIP_CHANNEL_DEBUG] startZulipMonitor failed:", err);
+        });
+      }
+      
       return await probeZulip(baseUrl, email, apiKey, timeoutMs);
     },
     buildAccountSnapshot: ({ account, runtime, probe }) => {
@@ -195,43 +237,6 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         lastOutboundAt: runtime?.lastOutboundAt ?? null,
       };
       return snapshot;
-    },
-  },
-  gateway: {
-    startAccount: async (ctx) => {
-      const account = ctx.account;
-      ctx.setStatus({
-        accountId: account.accountId,
-        baseUrl: account.baseUrl,
-        apiKeySource: account.apiKeySource,
-        emailSource: account.emailSource,
-      } as ChannelAccountSnapshot);
-      ctx.log?.info(formatZulipLog("zulip channel starting", { accountId: account.accountId }));
-      try {
-        await monitorZulipProvider({
-          apiKey: account.apiKey ?? undefined,
-          email: account.email ?? undefined,
-          baseUrl: account.baseUrl ?? undefined,
-          accountId: account.accountId,
-          config: ctx.cfg,
-          runtime: ctx.runtime,
-          abortSignal: ctx.abortSignal,
-          statusSink: (patch) => ctx.setStatus({ accountId: ctx.accountId, ...patch }),
-        });
-        ctx.log?.info(
-          formatZulipLog("zulip channel monitor finished normally", {
-            accountId: account.accountId,
-          }),
-        );
-      } catch (err) {
-        ctx.log?.error(
-          formatZulipLog("zulip channel monitor failed", {
-            accountId: account.accountId,
-            error: String(err),
-          }),
-        );
-        throw err;
-      }
     },
   },
   security: {
