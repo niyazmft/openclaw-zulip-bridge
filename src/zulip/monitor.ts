@@ -63,7 +63,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     lastConnectedAt: Date.now(),
   });
 
+  console.error("[ZULIP_DEBUG] monitor: about to call initializeZulipMonitor");
   try {
+    console.error("[ZULIP_DEBUG] monitor: inside try, calling initializeZulipMonitor...");
     const {
       cfg,
       account,
@@ -582,19 +584,22 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
     core.log?.(formatZulipLog("zulip monitor loop entering", { accountId: account.accountId }));
     while (!opts.abortSignal?.aborted) {
-      const result = await pollOnce({
-        client,
-        queueManager,
-        core,
-        accountId: account.accountId,
-        opts,
-        pollBackoffMs,
-        resetPollBackoff,
-        processMessage,
-      });
-      pollBackoffMs = result.pollBackoffMs;
-      if (!result.shouldContinue) {
-        break;
+      try {
+        const result = await pollOnce({
+          client,
+          queueManager,
+          core,
+          accountId: account.accountId,
+          opts,
+          pollBackoffMs,
+          resetPollBackoff,
+          processMessage,
+        });
+        pollBackoffMs = result.pollBackoffMs;
+        if (!result.shouldContinue) {
+          break;
+        }
+      } catch (err: any) {
       }
     }
     core.log?.(
