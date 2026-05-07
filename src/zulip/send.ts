@@ -118,7 +118,7 @@ export async function sendMessageZulip(
   opts: ZulipSendOpts = {},
 ): Promise<ZulipSendResult> {
   const core = getCore();
-  const cfg = core.config.loadConfig();
+  const cfg = core.config.current();
   const account = resolveZulipAccount({
     cfg,
     accountId: opts.accountId,

@@ -19,13 +19,13 @@ let activeMonitor: { abort: () => void } | null = null;
 async function startZulipMonitor(cfg: OpenClawConfig, statusSink: any) {
   if (monitorStarted) return;
   monitorStarted = true;
-  console.error("[ZULIP_CHANNEL_DEBUG] Starting zulip monitor from channel...");
+  
   
   const accountIds = listZulipAccountIds(cfg);
   for (const accountId of accountIds) {
     const account = resolveZulipAccount({ cfg, accountId });
     if (account.enabled && account.apiKey && account.email && account.baseUrl) {
-      console.error("[ZULIP_CHANNEL_DEBUG] Starting monitor for:", accountId);
+      
       const abortController = new AbortController();
       activeMonitor = { abort: () => abortController.abort() };
       
@@ -38,7 +38,7 @@ async function startZulipMonitor(cfg: OpenClawConfig, statusSink: any) {
         abortSignal: abortController.signal,
         statusSink: statusSink,
       }).catch((err) => {
-        console.error("[ZULIP_CHANNEL_DEBUG] Monitor error:", err);
+        
         monitorStarted = false;
       });
       break;
@@ -116,7 +116,7 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
     configSchema: ZulipChannelConfigSchema,
     config: {
       listAccountIds: (cfg) => listZulipAccountIds(cfg),
-      resolveAccount: (cfg, accountId) => { console.warn("[ZULIP_DEBUG] resolveAccount called:", accountId); const result = resolveZulipAccount({ cfg, accountId }); console.warn("[ZULIP_DEBUG] resolveAccount returns:", result ? result.email : "NULL"); return result; },
+      resolveAccount: (cfg, accountId) => resolveZulipAccount({ cfg, accountId }),
       defaultAccountId: (cfg) => resolveDefaultZulipAccountId(cfg),
       setAccountEnabled: ({ cfg, accountId, enabled }) =>
         setAccountEnabledInConfigSection({
@@ -133,9 +133,9 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
           accountId,
           clearBaseFields: ["apiKey", "email", "url", "name"] as const,
         }),
-      isConfigured: (account) => { console.warn("[ZULIP_DEBUG] isConfigured called:", account?.accountId, "apiKey:", !!account?.apiKey, "email:", !!account?.email, "baseUrl:", !!account?.baseUrl); const result = Boolean(account.apiKey && account.email && account.baseUrl); console.warn("[ZULIP_DEBUG] isConfigured returns:", result); return result; },
-      isEnabled: (account) => { console.warn("[ZULIP_DEBUG] isEnabled called:", account?.accountId, "enabled:", account?.enabled); return true; },
-      describeAccount: (account) => { try { console.warn("[ZULIP_DEBUG] describeAccount called:", account?.accountId); const result = {
+      isConfigured: (account) => Boolean(account.apiKey && account.email && account.baseUrl),
+      isEnabled: (account) => true,
+      describeAccount: (account) => ({
         accountId: account.accountId,
         name: account.name,
         enabled: account.enabled,
@@ -143,7 +143,7 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         apiKeySource: account.apiKeySource,
         emailSource: account.emailSource,
         baseUrl: account.baseUrl,
-      }; console.warn("[ZULIP_DEBUG] describeAccount returns:", JSON.stringify(result)); return result; } catch (e) { console.warn("[ZULIP_DEBUG] describeAccount ERROR:", e); return { accountId: account.accountId, enabled: false, configured: false }; } },
+      }),
       resolveAllowFrom: ({ cfg, accountId }) =>
         (resolveZulipAccount({ cfg, accountId }).config.allowFrom ?? []).map((entry) =>
           String(entry),
@@ -203,9 +203,9 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
       }
       
       if (!monitorStarted && cfg && statusSink) {
-        console.error("[ZULIP_CHANNEL_DEBUG] probeAccount: starting monitor...");
+        
         startZulipMonitor(cfg as OpenClawConfig, statusSink).catch((err) => {
-          console.error("[ZULIP_CHANNEL_DEBUG] startZulipMonitor failed:", err);
+          
         });
       }
       
@@ -305,5 +305,5 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
       return { channel: "zulip", ...result };
     },
   },
-  threading: {},
+  threading: { topLevelReplyToMode: "reply" },
 });

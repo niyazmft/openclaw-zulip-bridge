@@ -34,7 +34,10 @@ export async function initializeZulipMonitor(params: {
   core: ReturnType<typeof getZulipRuntime>;
 }) {
   const { opts, core } = params;
-  const cfg = opts.config ?? core.config.loadConfig();
+  const cfg = opts.config ?? core.config.current();
+  
+  const zulipSection = cfg.channels?.zulip;
+  
   const runtime = resolveRuntime(opts);
   const account = resolveZulipAccount({
     cfg,

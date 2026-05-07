@@ -55,8 +55,13 @@ Dev dependencies must be installed. `.npmrc` sets `include=dev` to prevent npm f
 ## Deployment (y6 / Android/Termux)
 
 - Target device: `y6` (Android/Termux, OpenClaw `2026.5.2`)
-- Deploy via rsync: `rsync -avh --delete dist/ y6:.openclaw/extensions/zulip/dist/`
-- Restart: `ssh y6 "openclaw run --restart"`
+- Deploy via rsync: `rsync -avh --delete dist/ y6:.openclaw/extensions/zulip/`
+- Or use SSH to create directory first and copy:
+  ```
+  ssh y6 "rm -rf ~/.openclaw/extensions/zulip/ && mkdir -p ~/.openclaw/extensions/zulip/"
+  rsync -avh --delete dist/ y6:.openclaw/extensions/zulip/
+  ```
+- Restart: `ssh y6 "pm2 restart openclaw"`
 - Logs: `ssh y6 "tail -f /data/data/com.termux/files/usr/tmp/openclaw-*/openclaw-*.log"`
 - Config lives at `~/.openclaw/openclaw.json`; remove plugin via `plugins.allow` list + `channels` section
 

@@ -63,9 +63,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     lastConnectedAt: Date.now(),
   });
 
-  console.error("[ZULIP_DEBUG] monitor: about to call initializeZulipMonitor");
+  
   try {
-    console.error("[ZULIP_DEBUG] monitor: inside try, calling initializeZulipMonitor...");
+    
     const {
       cfg,
       account,
@@ -76,6 +76,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       baseUrl,
     } = await initializeZulipMonitor({ opts, core });
 
+    
     const logger = core.logging.getChildLogger({ module: "zulip" });
     const logVerboseMessage = core.logging.shouldLogVerbose()
       ? (message: string) => logger.debug?.(message)
@@ -84,9 +85,15 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     const oncharPrefixes = resolveOncharPrefixes(account.oncharPrefixes);
     const oncharEnabled = account.chatmode === "onchar";
 
+    let fullCfg: any = {};
+    try {
+      fullCfg = core.config.current() ?? {};
+    } catch(e) {
+    }
+    logger?.info?.("loadConfig result", { zulipSection: fullCfg?.channels?.zulip });
     const mediaMaxBytes =
       resolveChannelMediaMaxBytes({
-        cfg,
+        cfg: fullCfg,
         accountId: account.accountId,
         resolveChannelLimitMb: ({ cfg, accountId }) =>
           (
@@ -113,28 +120,29 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     });
     await dedupeStore.load();
 
-    // ⚡ Bolt Performance Optimization:
-    // Hoist static configurations and expensive regex/object compilations outside the tight message loop
-    // to prevent CPU overhead and redundant garbage collection on every single incoming event.
-    const mentionRegexes = core.channel.mentions.buildMentionRegexes(cfg, "main");
-    const dmPolicy = account.config.dmPolicy ?? "pairing";
-    const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
-    const groupPolicy = account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
-    const configAllowFrom = normalizeAllowList(account.config.allowFrom ?? []);
-    const configGroupAllowFrom = normalizeAllowList(account.config.groupAllowFrom ?? []);
+    // Use full config from runtime instead of passed cfg to get channel settings
+    // (fullCfg already loaded above at line ~90)
+    const mentionRegexes = core.channel.mentions.buildMentionRegexes(fullCfg, "main");
+    const zulipSection = fullCfg.channels?.zulip;
+    const accountSection = zulipSection?.accounts?.[account.accountId] ?? zulipSection ?? {};
+    const dmPolicy = accountSection.dmPolicy ?? account.config.dmPolicy ?? "pairing";
+    const configAllowFrom = normalizeAllowList(accountSection.allowFrom ?? account.config.allowFrom ?? []);
+    const configGroupAllowFrom = normalizeAllowList(accountSection.groupAllowFrom ?? account.config.groupAllowFrom ?? []);
+    const defaultGroupPolicy = fullCfg.channels?.defaults?.groupPolicy;
+    const groupPolicy = accountSection.groupPolicy ?? account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
 
     const allowTextCommands = core.channel.commands.shouldHandleTextCommands({
-      cfg,
+      cfg: fullCfg,
       surface: "zulip",
     });
-    const useAccessGroups = cfg.commands?.useAccessGroups !== false;
+    const useAccessGroups = fullCfg.commands?.useAccessGroups !== false;
     const canDetectMention = Boolean(botUsername) || mentionRegexes.length > 0;
 
-    const textLimit = core.channel.text.resolveTextChunkLimit(cfg, "zulip", account.accountId, {
+    const textLimit = core.channel.text.resolveTextChunkLimit(fullCfg, "zulip", account.accountId, {
       fallbackLimit: account.textChunkLimit ?? 4000,
     });
     const tableMode = core.channel.text.resolveMarkdownTableMode({
-      cfg,
+      cfg: fullCfg,
       channel: "zulip",
       accountId: account.accountId,
     });
@@ -149,6 +157,8 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       if (!senderId) {
         return;
       }
+      
+      
       if (senderId === botEmail || String(message.sender_id) === botUserId) {
         return;
       }
@@ -216,6 +226,8 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       const storeAllowFrom = normalizeAllowList(
         await core.channel.pairing.readAllowFromStore("zulip").catch(() => []),
       );
+      
+      
       const effectiveAllowFrom = Array.from(new Set([...configAllowFrom, ...storeAllowFrom]));
       const effectiveGroupAllowFrom = Array.from(
         new Set([
@@ -280,6 +292,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         canDetectMention,
       });
 
+      
       if (policyResult.shouldDrop) {
         if (policyResult.shouldPair) {
           const { code, created } = await core.channel.pairing.upsertPairingRequest({
@@ -442,7 +455,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       });
 
       if (kind === "dm") {
-        const sessionCfg = cfg.session;
+        const sessionCfg = fullCfg.session;
         const storePath = core.channel.session.resolveStorePath(sessionCfg?.store, {
           agentId: route.agentId,
         });
