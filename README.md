@@ -1,5 +1,8 @@
 # OpenClaw Zulip Bridge
 
+![Version](https://img.shields.io/badge/version-2026.5.1-blue)
+![OpenClaw](https://img.shields.io/badge/OpenClaw-%3E%3D2026.4.29-green)
+
 The OpenClaw Zulip Bridge is a high-performance channel plugin for OpenClaw that enables interaction with Zulip streams and private messages. It features a robust, persistent event queue system, flexible traffic policies, and comprehensive observability.
 
 ## Features

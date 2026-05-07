@@ -42,8 +42,6 @@ function listConfiguredAccountIds(cfg: OpenClawConfig): string[] {
 }
 
 export function listZulipAccountIds(cfg: OpenClawConfig): string[] {
-  console.warn("[ZULIP_DEBUG] listZulipAccountIds called");
-  try { require('fs').appendFileSync('/data/data/com.termux/files/home/zulip-debug.log', `listZulipAccountIds called\n`); } catch {}
   const ids = listConfiguredAccountIds(cfg);
   if (ids.length === 0) {
     return [DEFAULT_ACCOUNT_ID];
@@ -101,10 +99,10 @@ export function resolveZulipAccount(params: {
 }): ResolvedZulipAccount {
   const accountId = normalizeAccountId(params.accountId);
   const zulipSection = resolveZulipSection(params.cfg);
-  const baseEnabled = zulipSection?.enabled !== false;
-  const { accounts: _ignored, ...baseConfig } = (zulipSection ?? {}) as ZulipConfig;
   const accountConfig = resolveAccountConfig(params.cfg, accountId) ?? {};
+  const { accounts: _ignored, ...baseConfig } = (zulipSection ?? {}) as ZulipConfig;
   const merged = { ...baseConfig, ...accountConfig };
+  const baseEnabled = zulipSection?.enabled !== false;
   const accountEnabled = merged.enabled !== false;
   const enabled = baseEnabled && accountEnabled;
 

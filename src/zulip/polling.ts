@@ -52,6 +52,7 @@ export async function pollOnce(params: {
       signal: opts.abortSignal,
     });
 
+    
     if (response.result === "error") {
       const msg = response.msg ?? "";
       const isBadQueue =
@@ -66,6 +67,7 @@ export async function pollOnce(params: {
 
     const events = response.events ?? [];
     if (events.length > 0) {
+      
       core.log?.(
         formatZulipLog("zulip events received", {
           accountId,
@@ -92,6 +94,7 @@ export async function pollOnce(params: {
     try {
       for (const event of events) {
         if (event.type === "message" && event.message) {
+          
           await processMessage(event.message);
         }
         const nextEventId = Number((event as { id?: unknown })?.id);
