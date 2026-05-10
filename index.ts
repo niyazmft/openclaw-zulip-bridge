@@ -1,6 +1,33 @@
 import { defineChannelPluginEntry } from "openclaw/plugin-sdk/channel-core";
 import { zulipPlugin } from "./src/channel.js";
 import { setZulipRuntime } from "./src/runtime.js";
+import { monitorZulipProvider } from "./src/zulip/monitor.js";
+import { listZulipAccountIds, resolveZulipAccount } from "./src/zulip/accounts.js";
+
+setTimeout(async () => {
+  const accountIds = listZulipAccountIds({});
+  const accountId = accountIds[0] || "default";
+  const account = resolveZulipAccount({ cfg: {}, accountId });
+
+  if (!account?.apiKey || !account?.email || !account?.baseUrl) {
+    return;
+  }
+
+  const statusSink = (patch: any) => {
+    // Always ensure running:true is included
+    const patchedPatch = { ...patch, running: true };
+  };
+
+  await monitorZulipProvider({
+    apiKey: account.apiKey,
+    email: account.email,
+    baseUrl: account.baseUrl,
+    accountId,
+    config: {},
+    abortSignal: new AbortController().signal,
+    statusSink,
+  });
+}, 2000);
 
 export { zulipPlugin } from "./src/channel.js";
 export { setZulipRuntime } from "./src/runtime.js";

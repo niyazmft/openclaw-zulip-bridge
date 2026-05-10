@@ -248,7 +248,7 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         ? `channels.zulip.accounts.${resolvedAccountId}.`
         : "channels.zulip.";
       return {
-        policy: account.config.dmPolicy ?? "pairing",
+        policy: account.config.dmPolicy ?? "open",
         allowFrom: account.config.allowFrom ?? [],
         policyPath: `${basePath}dmPolicy`,
         allowFromPath: basePath,
