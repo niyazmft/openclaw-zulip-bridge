@@ -14,8 +14,9 @@ setTimeout(async () => {
   }
 
   const statusSink = (patch: any) => {
-    // Always ensure running:true is included
-    const patchedPatch = { ...patch, running: true };
+    // For external plugins, we log status updates but don't have access
+    // to OpenClaw's internal statusSink - the health-monitor relies on
+    // the channel's probeAccount responding to determine running state
   };
 
   await monitorZulipProvider({

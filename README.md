@@ -255,6 +255,27 @@ Ensure the bot is a member of the stream and that the stream is listed in your `
 ### Logs show "mention required"
 By default, the bot only responds to @mentions in streams. Check your `chatmode` setting.
 
+## Known Issues
+
+### Performance: Slower Response Times vs Built-in Channels
+
+**Status:** OpenClaw Core Issue - Not Fixable in Plugin
+
+**Problem:** Zulip responses are ~20-27s slower than built-in channels (e.g., Telegram: ~4s vs Zulip: ~31s total dispatch time).
+
+**Root Cause:** External plugins loaded via `plugins.load.paths` go through a slower initialization path in OpenClaw core:
+- Must resolve SDK aliases from user directory on each load
+- 3MB channel SDK bundle is eagerly loaded
+- No persistent caching for Jiti alias resolution
+- See OpenClaw issues [#56626](https://github.com/openclaw/openclaw/issues/56626), [#28587](https://github.com/openclaw/openclaw/issues/28587), [#63948](https://github.com/openclaw/openclaw/issues/63948)
+
+**Workarounds Attempted:**
+- `load.paths` - Required for plugin to load (causes provenance warning if missing)
+- `blockStreaming: false` - Already enabled by default, no improvement
+- Removing `load.paths` - Plugin won't load properly
+
+**Mitigation:** None available in plugin code. Waiting for OpenClaw core fixes.
+
 ## Development
 
 ### Local Setup
