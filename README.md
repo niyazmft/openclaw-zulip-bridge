@@ -30,8 +30,10 @@ High-performance OpenClaw channel plugin for Zulip streams and private messages 
 
 > ⚠️ **Important:** You must add "zulip" to `plugins.allow` for the plugin to load. Without this, you'll get "plugin not found: zulip" error.
 
+> ℹ️ **Note:** The ClawHub version may be outdated. For the latest version (2026.5.1+), install from source instead (see [Installation](#installation)).
+
 ```bash
-# 1. Install from ClawHub
+# 1. Install from ClawHub (may be outdated)
 openclaw plugins install clawhub:@openclaw/zulip
 
 # 2. Add to plugins.allow (REQUIRED - otherwise plugin won't load)
@@ -89,9 +91,11 @@ openclaw config set plugins.allow '["zulip","telegram","memory-core","exa","olla
 
 ## Installation
 
-### From ClawHub (Recommended)
+> ℹ️ **Recommendation:** For the latest features and bug fixes, install from source instead of ClawHub. The ClawHub version may be outdated.
 
-The easiest way to install the Zulip plugin is via ClawHub. This also ensures you get the latest version and avoids any security scanner issues that can occur with `--link` installs from source.
+### From ClawHub
+
+> ⚠️ **Note:** The ClawHub version may be outdated (last published: 2026.4.13). For the latest features and fixes, install from source instead.
 
 ```bash
 openclaw plugins install clawhub:@openclaw/zulip
@@ -357,6 +361,23 @@ Default requires @mentions. Check your `chatmode` setting.
 ---
 
 ## Known Issues
+
+### ClawHub Version Outdated
+
+**Status:** Publishing Blocked
+
+**Problem:** The ClawHub version (2026.4.13) lags behind the GitHub release (2026.5.1).
+
+**Workaround:** Install from source instead:
+
+```bash
+git clone https://github.com/niyazmft/openclaw-zulip-bridge.git /tmp/zulip
+cd /tmp/zulip
+pnpm install && pnpm run build
+openclaw plugins install ./ --link
+```
+
+---
 
 ### Performance: Slower Response Times vs Built-in Channels
 
