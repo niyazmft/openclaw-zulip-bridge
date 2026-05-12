@@ -147,6 +147,10 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       accountId: account.accountId,
     });
 
+    // ⚡ Bolt Optimization: Cache lowercase mention prefix outside the event loop
+    // to prevent redundant string allocations and .toLowerCase() calls for every message.
+    const botUsernameMention = `@${botUsername.toLowerCase()}`;
+
     const handleMessage = async (message: ZulipMessage) => {
       const messageId = String(message.id ?? "");
       if (!messageId) {
@@ -220,7 +224,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
       const wasMentioned =
         !isDM &&
-        (rawText.toLowerCase().includes(`@${botUsername.toLowerCase()}`) ||
+        (rawText.toLowerCase().includes(botUsernameMention) ||
           core.channel.mentions.matchesMentionPatterns(rawText, mentionRegexes));
 
       const storeAllowFrom = normalizeAllowList(
