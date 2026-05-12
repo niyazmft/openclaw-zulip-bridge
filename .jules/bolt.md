@@ -1,0 +1,3 @@
+## 2026-05-11 - Optimization: Hoist botUsernameMention computation outside message handler loop
+**Learning:** We observed that `botUsername.toLowerCase()` was being called repeatedly inside the `handleMessage` loop. Although a small operation, avoiding string allocation and processing on a hot path like checking every message string is a nice micro-optimization, especially for busy channels.
+**Action:** Lift static computations outside the event loop processing path to save memory and CPU on hot paths. E.g., caching `botUsernameMention = '@' + botUsername.toLowerCase()` directly below other config lookups.
