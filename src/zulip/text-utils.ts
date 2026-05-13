@@ -1,16 +1,22 @@
 export const DEFAULT_ONCHAR_PREFIXES = [">", "!"];
 
+const HTML_TAG_REGEX = /<[^>]+>/g;
+const MENTION_REGEX = /@\*\*([^*]+)\*\*/g;
+
 /**
  * Strips HTML tags and unescapes common HTML entities from Zulip message content.
  */
 export function stripHtmlToText(html: string): string {
+  if (!html.includes('<') && !html.includes('&') && !html.includes('@**')) {
+    return html.trim();
+  }
   return html
-    .replace(/<[^>]+>/g, "")
+    .replace(HTML_TAG_REGEX, "")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
-    .replace(/@\*\*([^*]+)\*\*/g, "@$1")
+    .replace(MENTION_REGEX, "@$1")
     .trim();
 }
 
@@ -19,9 +25,12 @@ export function stripHtmlToText(html: string): string {
  */
 export function normalizeMention(text: string, mention: string | undefined): string {
   if (!mention) {
-    return text.trim();
+    return text.replace(/\s+/g, " ").trim();
   }
-  const escaped = mention.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (!text.includes('@')) {
+    return text.replace(/\s+/g, " ").trim();
+  }
+  const escaped = mention.replace(/[.*+?^\$\{}()|[\]\\]/g, "\\$&");
   const re = new RegExp(`@${escaped}\\b`, "gi");
   return text.replace(re, " ").replace(/\s+/g, " ").trim();
 }
@@ -60,7 +69,7 @@ export function stripOncharPrefix(
  * Extracts a topic directive (e.g. [[zulip_topic: Topic Name]]) from the text.
  */
 export function extractZulipTopicDirective(text: string): { text: string; topic?: string } {
-  const match = text.match(/^\s*\[\[zulip_topic:\s*([^\]]+?)\s*\]\]\s*/i);
+  const match = text.match(/^\s*\[\[zulip_topic:\s*([^]]+?)\s*\]\]\s*/i);
   if (!match) {
     return { text };
   }
