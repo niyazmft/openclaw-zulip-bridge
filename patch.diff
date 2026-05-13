@@ -1,0 +1,9 @@
+--- test-loader.js
++++ test-loader.js
+@@ -1,6 +1,6 @@
+ import { resolve as pathResolve } from 'node:path';
+ import { existsSync } from 'node:fs';
+
+ const openclawShimUrl = new URL('./test/openclaw-plugin-sdk-shim.js', import.meta.url).href;
+
+ export function resolve(specifier, context, nextResolve) {
