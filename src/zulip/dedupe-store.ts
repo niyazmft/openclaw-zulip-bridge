@@ -10,6 +10,9 @@ export type DedupeStoreOpts = {
   maxSize: number;
 };
 
+// ⚡ Bolt Optimization: Debounce disk I/O to avoid synchronous writes on every message
+const SAVE_DEBOUNCE_MS = 5000; // Save at most once every 5 seconds
+
 export class ZulipDedupeStore {
   private accountId: string;
   private runtime: PluginRuntime;
@@ -17,6 +20,9 @@ export class ZulipDedupeStore {
   private maxSize: number;
   private cache = new Map<string, number>();
   private persistenceDirChecked = false;
+  // ⚡ Bolt: Simple timeout-based debounce - no promises to avoid memory leaks
+  private dirty = false;
+  private saveTimeout: NodeJS.Timeout | null = null;
 
   constructor(opts: DedupeStoreOpts) {
     this.accountId = opts.accountId;
@@ -61,6 +67,7 @@ export class ZulipDedupeStore {
       }
       const entries = Array.from(this.cache.entries());
       await fs.writeFile(p, JSON.stringify(entries), "utf8");
+      this.dirty = false;
     } catch (err) {
       this.runtime.error?.(
         `zulip dedupe store [${this.accountId}]: failed to save: ${String(err)}`,
@@ -69,9 +76,39 @@ export class ZulipDedupeStore {
   }
 
   /**
+   * ⚡ Bolt Optimization: Simple timeout-based debounce - no promises to avoid memory leaks
+   */
+  private scheduleSave(): void {
+    this.dirty = true;
+
+    // Clear existing timeout and schedule new one
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+
+    this.saveTimeout = setTimeout(() => {
+      this.saveTimeout = null;
+      void this.save();
+    }, SAVE_DEBOUNCE_MS);
+  }
+
+  /**
+   * ⚡ Bolt Optimization: Flush pending saves immediately (for graceful shutdown)
+   */
+  async flush(): Promise<void> {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
+    if (this.dirty) {
+      await this.save();
+    }
+  }
+
+  /**
    * Checks if a key has been seen recently.
    * Returns true if it was already in the cache (and not expired), false otherwise.
-   * If it's a new key, it's added to the cache and persisted.
+   * If it's a new key, it's added to the cache and persisted (debounced).
    */
   async check(key: string, now = Date.now()): Promise<boolean> {
     if (!key) {
@@ -86,7 +123,9 @@ export class ZulipDedupeStore {
 
     this.touch(key, now);
     this.prune(now);
-    await this.save();
+    // ⚡ Bolt Optimization: Debounce save to avoid disk I/O on every message
+    // Don't await - let it run in background with debounce
+    this.scheduleSave();
     return false;
   }
 

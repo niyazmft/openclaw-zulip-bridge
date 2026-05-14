@@ -3,6 +3,16 @@ export const DEFAULT_ONCHAR_PREFIXES = [">", "!"];
 const HTML_TAG_REGEX = /<[^>]+>/g;
 const MENTION_REGEX = /@\*\*([^*]+)\*\*/g;
 
+// ⚡ Bolt Optimization: Single-pass HTML entity replacement
+// Combined regex for all common entities - avoids 4 separate .replace() passes
+const HTML_ENTITY_REGEX = /&(lt|gt|amp|quot);/g;
+const HTML_ENTITY_MAP: Record<string, string> = {
+  '&lt;': '<',
+  '&gt;': '>',
+  '&amp;': '&',
+  '&quot;': '"',
+};
+
 // ⚡ Bolt Optimization: Pre-compile regex for bot mention matching
 // Exported for callers who want to cache the regex at initialization time
 export function createBotMentionRegex(botUsername: string): RegExp {
@@ -12,6 +22,7 @@ export function createBotMentionRegex(botUsername: string): RegExp {
 
 /**
  * Strips HTML tags and unescapes common HTML entities from Zulip message content.
+ * ⚡ Bolt Optimization: Single-pass entity replacement reduces string processing
  */
 export function stripHtmlToText(html: string): string {
   if (!html.includes('<') && !html.includes('&') && !html.includes('@**')) {
@@ -19,10 +30,8 @@ export function stripHtmlToText(html: string): string {
   }
   return html
     .replace(HTML_TAG_REGEX, "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
+    // ⚡ Bolt: Single-pass entity replacement instead of 4 separate replaces
+    .replace(HTML_ENTITY_REGEX, (match) => HTML_ENTITY_MAP[match] ?? match)
     .replace(MENTION_REGEX, "@$1")
     .trim();
 }
