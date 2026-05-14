@@ -26,6 +26,7 @@ import {
   normalizeMention,
   resolveOncharPrefixes,
   stripOncharPrefix,
+  createBotMentionRegex,
 } from "./text-utils.js";
 import {
   isSenderAllowed,
@@ -148,11 +149,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     // ⚡ Bolt Optimization: Cache lowercase mention prefix AND pre-compiled regex outside the event loop
     // to prevent redundant string allocations and .toLowerCase() calls for every message.
     const botUsernameMention = `@${botUsername.toLowerCase()}`;
-    // ⚡ Bolt Optimization: Pre-compile regex to avoid O(n) string processing + RegExp construction per message
-    const botUsernameMentionRegex = new RegExp(
-      `@${botUsername.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
-      "gi"
-    );
+    // ⚡ Bolt Optimization: Pre-compile regex using shared helper to avoid duplication
+    // Guard against null/undefined botUsername to prevent TypeError
+    const botUsernameMentionRegex = botUsername 
+      ? createBotMentionRegex(botUsername)
+      : /@\b/gi; // Fallback regex that won't match anything
 
     const handleMessage = async (message: ZulipMessage) => {
       const messageId = String(message.id ?? "");

@@ -3,6 +3,13 @@ export const DEFAULT_ONCHAR_PREFIXES = [">", "!"];
 const HTML_TAG_REGEX = /<[^>]+>/g;
 const MENTION_REGEX = /@\*\*([^*]+)\*\*/g;
 
+// ⚡ Bolt Optimization: Pre-compile regex for bot mention matching
+// Exported for callers who want to cache the regex at initialization time
+export function createBotMentionRegex(botUsername: string): RegExp {
+  const escaped = botUsername.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`@${escaped}\\b`, "gi");
+}
+
 /**
  * Strips HTML tags and unescapes common HTML entities from Zulip message content.
  */
@@ -35,9 +42,10 @@ export function normalizeMention(text: string, mention: string | RegExp | undefi
   }
   
   // ⚡ Bolt Optimization: Use pre-compiled regex if provided (avoids per-message allocation)
+  // Falls back to creating regex from string for backward compatibility
   const re = mention instanceof RegExp 
     ? mention 
-    : new RegExp(`@${mention.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
+    : createBotMentionRegex(mention);
   
   return text.replace(re, " ").replace(/\s+/g, " ").trim();
 }
