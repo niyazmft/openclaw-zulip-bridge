@@ -22,16 +22,23 @@ export function stripHtmlToText(html: string): string {
 
 /**
  * Removes a mention of the bot from the text.
+ * @param text - The text to process
+ * @param mention - The bot username as a string (will be escaped) OR a pre-compiled RegExp for performance
+ * @returns The text with the mention removed and whitespace normalized
  */
-export function normalizeMention(text: string, mention: string | undefined): string {
+export function normalizeMention(text: string, mention: string | RegExp | undefined): string {
   if (!mention) {
     return text.replace(/\s+/g, " ").trim();
   }
   if (!text.includes('@')) {
     return text.replace(/\s+/g, " ").trim();
   }
-  const escaped = mention.replace(/[.*+?^\$\{}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`@${escaped}\\b`, "gi");
+  
+  // ⚡ Bolt Optimization: Use pre-compiled regex if provided (avoids per-message allocation)
+  const re = mention instanceof RegExp 
+    ? mention 
+    : new RegExp(`@${mention.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
+  
   return text.replace(re, " ").replace(/\s+/g, " ").trim();
 }
 

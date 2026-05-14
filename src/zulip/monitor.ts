@@ -145,9 +145,14 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       accountId: account.accountId,
     });
 
-    // ⚡ Bolt Optimization: Cache lowercase mention prefix outside the event loop
+    // ⚡ Bolt Optimization: Cache lowercase mention prefix AND pre-compiled regex outside the event loop
     // to prevent redundant string allocations and .toLowerCase() calls for every message.
     const botUsernameMention = `@${botUsername.toLowerCase()}`;
+    // ⚡ Bolt Optimization: Pre-compile regex to avoid O(n) string processing + RegExp construction per message
+    const botUsernameMentionRegex = new RegExp(
+      `@${botUsername.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+      "gi"
+    );
 
     const handleMessage = async (message: ZulipMessage) => {
       const messageId = String(message.id ?? "");
@@ -362,7 +367,8 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         wasMentioned || (isControlCommand && commandAuthorized) || oncharTriggered;
 
       const bodySource = oncharTriggered ? oncharResult.stripped : rawText;
-      const bodyText = normalizeMention(bodySource, botUsername);
+      // ⚡ Bolt Optimization: Pass pre-compiled regex to avoid per-message RegExp construction
+      const bodyText = normalizeMention(bodySource, botUsernameMentionRegex);
       if (!bodyText) {
         return;
       }
