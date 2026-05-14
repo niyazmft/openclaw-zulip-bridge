@@ -11,6 +11,7 @@ import {
   sendZulipPrivateMessage,
   sendZulipStreamMessage,
   uploadZulipFile,
+  type ZulipClient,
 } from "./client.js";
 import { formatZulipLog, maskPII } from "./monitor-helpers.js";
 
@@ -37,6 +38,79 @@ type ZulipTarget =
 const DEFAULT_TOPIC = "general";
 
 const getCore = () => getZulipRuntime();
+
+// ⚡ Optimization: Cache clients per account to avoid repeated Buffer encoding and allocations
+const clientCache = new Map<string, ZulipClient>();
+// ⚡ Optimization: Cache parsed targets to avoid repeated string parsing
+const targetCache = new Map<string, ZulipTarget>();
+// Cache limits to prevent unbounded growth
+const MAX_CLIENT_CACHE_SIZE = 50;
+const MAX_TARGET_CACHE_SIZE = 500;
+
+function getCacheKeyForClient(
+  baseUrl: string,
+  email: string,
+  apiKey: string,
+): string {
+  // Simple concatenation is faster than JSON.stringify for cache keys
+  return `${baseUrl}\0${email}\0${apiKey}`;
+}
+
+function getCachedClient(
+  baseUrl: string,
+  email: string,
+  apiKey: string,
+): ZulipClient {
+  const key = getCacheKeyForClient(baseUrl, email, apiKey);
+  const existing = clientCache.get(key);
+  if (existing) {
+    // Move to end to maintain LRU order (re-insert as most recent)
+    clientCache.delete(key);
+    clientCache.set(key, existing);
+    return existing;
+  }
+  // Clean up old entries if cache is full (LRU eviction)
+  if (clientCache.size >= MAX_CLIENT_CACHE_SIZE) {
+    const firstKey = clientCache.keys().next().value;
+    if (firstKey !== undefined) {
+      clientCache.delete(firstKey);
+    }
+  }
+  const client = createZulipClient({ baseUrl, email, apiKey });
+  clientCache.set(key, client);
+  return client;
+}
+
+function getCachedTarget(raw: string): ZulipTarget {
+  const trimmed = raw.trim();
+  const existing = targetCache.get(trimmed);
+  if (existing) {
+    // Move to end to maintain LRU order (re-insert as most recent)
+    targetCache.delete(trimmed);
+    targetCache.set(trimmed, existing);
+    return existing;
+  }
+  // Parse and cache the result
+  const cached = parseZulipTarget(trimmed);
+  // Clean up old entries if cache is full (LRU eviction)
+  if (targetCache.size >= MAX_TARGET_CACHE_SIZE) {
+    const firstKey = targetCache.keys().next().value;
+    if (firstKey !== undefined) {
+      targetCache.delete(firstKey);
+    }
+  }
+  targetCache.set(trimmed, cached);
+  return cached;
+}
+
+/**
+ * Clear all caches. Useful for testing or when config changes require fresh clients.
+ * @internal
+ */
+export function clearSendCache(): void {
+  clientCache.clear();
+  targetCache.clear();
+}
 
 function normalizeMessage(text: string, mediaUrl?: string): string {
   const trimmed = text.trim();
@@ -137,8 +211,10 @@ export async function sendMessageZulip(
     );
   }
 
-  const client = createZulipClient({ baseUrl, email, apiKey });
-  const target = parseZulipTarget(to);
+  // ⚡ Optimization: Use cached client to avoid repeated Buffer encoding and allocations
+  const client = getCachedClient(baseUrl, email, apiKey);
+  // ⚡ Optimization: Use cached target parsing to avoid repeated string operations
+  const target = getCachedTarget(to);
 
   const kind = opts.kind || (target.kind === "user" ? "dm" : "channel");
   const stream = target.kind === "stream" ? target.stream : undefined;
