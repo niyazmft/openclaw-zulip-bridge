@@ -85,7 +85,10 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     const oncharPrefixes = resolveOncharPrefixes(account.oncharPrefixes);
     const oncharEnabled = account.chatmode === "onchar";
 
-    logger?.info?.("loadConfig result", { zulipSection: cfg?.channels?.zulip });
+    logger?.info?.("loadConfig result", {
+      zulipAccountIds: Object.keys(cfg?.channels?.zulip?.accounts || {}),
+      hasApiKey: Boolean(cfg?.channels?.zulip?.apiKey),
+    });
     const mediaMaxBytes =
       resolveChannelMediaMaxBytes({
         cfg: cfg,
