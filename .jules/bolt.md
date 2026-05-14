@@ -18,3 +18,7 @@
 **Review feedback learning:** 
 - Promise-based debounce can cause memory leaks with orphaned promises. Simple timeout-based approach is safer.
 - Caching storeAllowFrom improves performance but creates data freshness trade-off. Document the trade-off clearly - pairing changes require restart, which is acceptable for rare pairing events.
+
+## 2026-05-14 - Optimization: Lazily evaluate readAllowFromStore in message handler
+**Learning:** We observed that `core.channel.pairing.readAllowFromStore` was being called for every incoming message in `handleMessage` event loop. This involves disk I/O. For channels where senders are already explicitly allowed by static config (`configAllowFrom` or `configGroupAllowFrom`), reading the dynamic pairing store from disk is unnecessary and adds overhead.
+**Action:** Lazily evaluate dynamic state lookups (like disk reads) inside hot paths. Check static configurations first, and only perform the I/O if the user isn't already authorized by the static configuration, improving message processing throughput.

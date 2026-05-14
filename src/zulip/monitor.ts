@@ -130,21 +130,10 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
     const groupPolicy = accountSection.groupPolicy ?? account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
 
-    // ⚡ Bolt Optimization: Pre-compute effective allow lists outside message loop
-    // to avoid per-message Set/Array allocations. Store changes are rare (pairing updates),
-    // so we read once and cache for the monitor lifetime. Recompute on reload if needed.
-    // Trade-off: New pairings won't be recognized until next config reload (config change or restart).
-    // This is acceptable because pairing is typically done once per user and doesn't require immediate recognition.
-    const storeAllowFrom = normalizeAllowList(
-      await core.channel.pairing.readAllowFromStore("zulip").catch(() => []),
-    );
-    const effectiveAllowFrom = Array.from(new Set([...configAllowFrom, ...storeAllowFrom]));
-    const effectiveGroupAllowFrom = Array.from(
-      new Set([
-        ...(configGroupAllowFrom.length > 0 ? configGroupAllowFrom : configAllowFrom),
-        ...storeAllowFrom,
-      ]),
-    );
+    // ⚡ Bolt Optimization: Lazily evaluate readAllowFromStore
+    // Pre-compute the fallback for groupAllowFrom, but defer disk read until needed.
+    // This avoids disk I/O for messages where sender is already authorized by static config.
+    const configGroupAllowFromFallback = configGroupAllowFrom.length > 0 ? configGroupAllowFrom : configAllowFrom;
 
     const allowTextCommands = core.channel.commands.shouldHandleTextCommands({
       cfg: cfg,
@@ -247,21 +236,50 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         (rawText.toLowerCase().includes(botUsernameMention) ||
           core.channel.mentions.matchesMentionPatterns(rawText, mentionRegexes));
 
-      // ⚡ Bolt Optimization: effectiveAllowFrom and effectiveGroupAllowFrom are now
-      // pre-computed outside the message loop (see lines ~140-145) to avoid per-message allocations
+      // ⚡ Bolt Optimization: Lazily evaluate readAllowFromStore
+      // Check static config first to avoid unnecessary disk I/O for already-authorized senders
+      let senderAllowedForCommands = isSenderAllowed({
+        senderId,
+        senderName,
+        allowFrom: configAllowFrom,
+      });
+
+      let groupAllowedForCommands = isSenderAllowed({
+        senderId,
+        senderName,
+        allowFrom: configGroupAllowFromFallback,
+      });
+
+      let effectiveAllowFrom = configAllowFrom;
+      let effectiveGroupAllowFrom = configGroupAllowFromFallback;
+
+      if (!senderAllowedForCommands || !groupAllowedForCommands) {
+        const storeAllowFrom = normalizeAllowList(
+          await core.channel.pairing.readAllowFromStore("zulip").catch(() => []),
+        );
+
+        effectiveAllowFrom = Array.from(new Set([...configAllowFrom, ...storeAllowFrom]));
+        effectiveGroupAllowFrom = Array.from(new Set([...configGroupAllowFromFallback, ...storeAllowFrom]));
+
+        if (!senderAllowedForCommands) {
+          senderAllowedForCommands = isSenderAllowed({
+            senderId,
+            senderName,
+            allowFrom: effectiveAllowFrom,
+          });
+        }
+        if (!groupAllowedForCommands) {
+          groupAllowedForCommands = isSenderAllowed({
+            senderId,
+            senderName,
+            allowFrom: effectiveGroupAllowFrom,
+          });
+        }
+      }
 
       const hasControlCommand = core.channel.text.hasControlCommand(rawText, cfg);
       const isControlCommand = allowTextCommands && hasControlCommand;
-      const senderAllowedForCommands = isSenderAllowed({
-        senderId,
-        senderName,
-        allowFrom: effectiveAllowFrom,
-      });
-      const groupAllowedForCommands = isSenderAllowed({
-        senderId,
-        senderName,
-        allowFrom: effectiveGroupAllowFrom,
-      });
+
       const commandGate = resolveControlCommandGate({
         useAccessGroups,
         authorizers: [
