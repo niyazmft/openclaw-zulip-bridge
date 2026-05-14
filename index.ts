@@ -46,16 +46,17 @@ export default defineChannelPluginEntry({
       const account = resolveZulipAccount({ cfg, accountId });
       const isConfigured = account?.apiKey && account?.email && account?.baseUrl;
 
-      if (isConfigured) {
+      if (isConfigured && account.enabled) {
         logger.info(`[zulip] [${accountId}] Starting monitor for ${account.email}`);
 
+        const controller = new AbortController();
         monitorZulipProvider({
           apiKey: account.apiKey,
           email: account.email,
           baseUrl: account.baseUrl,
           accountId,
           config: cfg,
-          abortSignal: new AbortController().signal,
+          abortSignal: controller.signal,
           statusSink: (patch) => {
             // For external plugins, we log status updates but don't have access
             // to OpenClaw's internal statusSink - the health-monitor relies on
