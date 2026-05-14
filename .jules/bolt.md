@@ -1,3 +1,9 @@
 ## 2026-05-11 - Optimization: Hoist botUsernameMention computation outside message handler loop
 **Learning:** We observed that `botUsername.toLowerCase()` was being called repeatedly inside the `handleMessage` loop. Although a small operation, avoiding string allocation and processing on a hot path like checking every message string is a nice micro-optimization, especially for busy channels.
 **Action:** Lift static computations outside the event loop processing path to save memory and CPU on hot paths. E.g., caching `botUsernameMention = '@' + botUsername.toLowerCase()` directly below other config lookups.
+
+## 2026-05-14 - Optimization: Pre-compile RegExp for normalizeMention to avoid per-message allocation
+**Learning:** The `normalizeMention` function in `text-utils.ts` was creating a new `RegExp` object for **every message** by escaping the username and constructing a regex pattern on each call. For busy channels processing hundreds of messages, this creates significant garbage collection pressure.
+**Key insight:** RegExp objects are relatively expensive to create compared to reusing pre-compiled ones. The pattern `mention.replace(/[.*+?^${}()|[\]\\]/g, "\\$")` escapes special regex characters, then `new RegExp()` constructs the object - both operations run on every message.
+**Action:** Accept `string | RegExp` in function signatures to allow callers to pre-compile patterns. In monitor initialization, compile the regex once and pass it through. This eliminates ~100% of regex construction overhead on the hot path. Always maintain backward compatibility by supporting both types.
+**Follow-up learning:** Extracting the regex construction into a shared helper function (`createBotMentionRegex`) improves code maintainability by avoiding duplication between the fallback path and the pre-compilation path. Also added null-safety guard for `botUsername` to prevent runtime errors during edge case initialization.

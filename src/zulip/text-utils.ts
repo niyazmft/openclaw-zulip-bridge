@@ -3,6 +3,13 @@ export const DEFAULT_ONCHAR_PREFIXES = [">", "!"];
 const HTML_TAG_REGEX = /<[^>]+>/g;
 const MENTION_REGEX = /@\*\*([^*]+)\*\*/g;
 
+// ⚡ Bolt Optimization: Pre-compile regex for bot mention matching
+// Exported for callers who want to cache the regex at initialization time
+export function createBotMentionRegex(botUsername: string): RegExp {
+  const escaped = botUsername.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`@${escaped}\\b`, "gi");
+}
+
 /**
  * Strips HTML tags and unescapes common HTML entities from Zulip message content.
  */
@@ -22,16 +29,24 @@ export function stripHtmlToText(html: string): string {
 
 /**
  * Removes a mention of the bot from the text.
+ * @param text - The text to process
+ * @param mention - The bot username as a string (will be escaped) OR a pre-compiled RegExp for performance
+ * @returns The text with the mention removed and whitespace normalized
  */
-export function normalizeMention(text: string, mention: string | undefined): string {
+export function normalizeMention(text: string, mention: string | RegExp | undefined): string {
   if (!mention) {
     return text.replace(/\s+/g, " ").trim();
   }
   if (!text.includes('@')) {
     return text.replace(/\s+/g, " ").trim();
   }
-  const escaped = mention.replace(/[.*+?^\$\{}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`@${escaped}\\b`, "gi");
+  
+  // ⚡ Bolt Optimization: Use pre-compiled regex if provided (avoids per-message allocation)
+  // Falls back to creating regex from string for backward compatibility
+  const re = mention instanceof RegExp 
+    ? mention 
+    : createBotMentionRegex(mention);
+  
   return text.replace(re, " ").replace(/\s+/g, " ").trim();
 }
 
