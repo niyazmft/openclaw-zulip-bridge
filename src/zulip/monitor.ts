@@ -238,7 +238,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       // ⚡ Bolt Optimization: Skip disk read if user is already allowed via config
       // We only need to check the store allowlist if they aren't authorized yet.
       // This saves a filesystem access on the hot path for authorized users.
-      if (!senderAllowedForCommands || !groupAllowedForCommands) {
+      if ((kind === "dm" && !senderAllowedForCommands) || (kind !== "dm" && !groupAllowedForCommands)) {
         const storeAllowFrom = normalizeAllowList(
           await core.channel.pairing.readAllowFromStore("zulip").catch(() => []),
         );
