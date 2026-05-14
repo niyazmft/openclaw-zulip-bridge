@@ -85,15 +85,10 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     const oncharPrefixes = resolveOncharPrefixes(account.oncharPrefixes);
     const oncharEnabled = account.chatmode === "onchar";
 
-    let fullCfg: any = {};
-    try {
-      fullCfg = core.config.current() ?? {};
-    } catch(e) {
-    }
-    logger?.info?.("loadConfig result", { zulipSection: fullCfg?.channels?.zulip });
+    logger?.info?.("loadConfig result", { zulipSection: cfg?.channels?.zulip });
     const mediaMaxBytes =
       resolveChannelMediaMaxBytes({
-        cfg: fullCfg,
+        cfg: cfg,
         accountId: account.accountId,
         resolveChannelLimitMb: ({ cfg, accountId }) =>
           (
@@ -122,27 +117,27 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
     // Use full config from runtime instead of passed cfg to get channel settings
     // (fullCfg already loaded above at line ~90)
-    const mentionRegexes = core.channel.mentions.buildMentionRegexes(fullCfg, "main");
-    const zulipSection = fullCfg.channels?.zulip;
+    const mentionRegexes = core.channel.mentions.buildMentionRegexes(cfg, "main");
+    const zulipSection = cfg.channels?.zulip;
     const accountSection = zulipSection?.accounts?.[account.accountId] ?? zulipSection ?? {};
     const dmPolicy = accountSection.dmPolicy ?? account.config.dmPolicy ?? "pairing";
     const configAllowFrom = normalizeAllowList(accountSection.allowFrom ?? account.config.allowFrom ?? []);
     const configGroupAllowFrom = normalizeAllowList(accountSection.groupAllowFrom ?? account.config.groupAllowFrom ?? []);
-    const defaultGroupPolicy = fullCfg.channels?.defaults?.groupPolicy;
+    const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
     const groupPolicy = accountSection.groupPolicy ?? account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
 
     const allowTextCommands = core.channel.commands.shouldHandleTextCommands({
-      cfg: fullCfg,
+      cfg: cfg,
       surface: "zulip",
     });
-    const useAccessGroups = fullCfg.commands?.useAccessGroups !== false;
+    const useAccessGroups = cfg.commands?.useAccessGroups !== false;
     const canDetectMention = Boolean(botUsername) || mentionRegexes.length > 0;
 
-    const textLimit = core.channel.text.resolveTextChunkLimit(fullCfg, "zulip", account.accountId, {
+    const textLimit = core.channel.text.resolveTextChunkLimit(cfg, "zulip", account.accountId, {
       fallbackLimit: account.textChunkLimit ?? 4000,
     });
     const tableMode = core.channel.text.resolveMarkdownTableMode({
-      cfg: fullCfg,
+      cfg: cfg,
       channel: "zulip",
       accountId: account.accountId,
     });
@@ -459,7 +454,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       });
 
       if (kind === "dm") {
-        const sessionCfg = fullCfg.session;
+        const sessionCfg = cfg.session;
         const storePath = core.channel.session.resolveStorePath(sessionCfg?.store, {
           agentId: route.agentId,
         });
