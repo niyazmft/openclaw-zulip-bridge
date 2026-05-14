@@ -1,3 +1,6 @@
 ## 2026-05-11 - Optimization: Hoist botUsernameMention computation outside message handler loop
 **Learning:** We observed that `botUsername.toLowerCase()` was being called repeatedly inside the `handleMessage` loop. Although a small operation, avoiding string allocation and processing on a hot path like checking every message string is a nice micro-optimization, especially for busy channels.
 **Action:** Lift static computations outside the event loop processing path to save memory and CPU on hot paths. E.g., caching `botUsernameMention = '@' + botUsername.toLowerCase()` directly below other config lookups.
+## 2026-05-13 - Optimization: Skip disk read if user is already allowed via config
+**Learning:** Found that `readAllowFromStore("zulip")` reads from disk every time `handleMessage` processes a message, which is a hot path. Since we already check `configAllowFrom` and `configGroupAllowFrom` before, if the user matches in the config allowlists, reading from disk (store) is entirely unnecessary and causes redundant file system access.
+**Action:** By checking `!senderAllowedForCommands || !groupAllowedForCommands` *before* loading `storeAllowFrom`, we can skip the disk read and the extra `Array.from(new Set(...))` operations for users already allowed in the configuration, improving message throughput on the hot path.

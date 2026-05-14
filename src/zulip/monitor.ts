@@ -227,31 +227,27 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         (rawText.toLowerCase().includes(botUsernameMention) ||
           core.channel.mentions.matchesMentionPatterns(rawText, mentionRegexes));
 
-      const storeAllowFrom = normalizeAllowList(
-        await core.channel.pairing.readAllowFromStore("zulip").catch(() => []),
-      );
-      
-      
-      const effectiveAllowFrom = Array.from(new Set([...configAllowFrom, ...storeAllowFrom]));
-      const effectiveGroupAllowFrom = Array.from(
-        new Set([
-          ...(configGroupAllowFrom.length > 0 ? configGroupAllowFrom : configAllowFrom),
-          ...storeAllowFrom,
-        ]),
-      );
-
       const hasControlCommand = core.channel.text.hasControlCommand(rawText, cfg);
       const isControlCommand = allowTextCommands && hasControlCommand;
-      const senderAllowedForCommands = isSenderAllowed({
-        senderId,
-        senderName,
-        allowFrom: effectiveAllowFrom,
-      });
-      const groupAllowedForCommands = isSenderAllowed({
-        senderId,
-        senderName,
-        allowFrom: effectiveGroupAllowFrom,
-      });
+
+      let effectiveAllowFrom = configAllowFrom;
+      let effectiveGroupAllowFrom = configGroupAllowFrom.length > 0 ? configGroupAllowFrom : configAllowFrom;
+      let senderAllowedForCommands = isSenderAllowed({ senderId, senderName, allowFrom: effectiveAllowFrom });
+      let groupAllowedForCommands = isSenderAllowed({ senderId, senderName, allowFrom: effectiveGroupAllowFrom });
+
+      // ⚡ Bolt Optimization: Skip disk read if user is already allowed via config
+      // We only need to check the store allowlist if they aren't authorized yet.
+      // This saves a filesystem access on the hot path for authorized users.
+      if (!senderAllowedForCommands || !groupAllowedForCommands) {
+        const storeAllowFrom = normalizeAllowList(
+          await core.channel.pairing.readAllowFromStore("zulip").catch(() => []),
+        );
+        effectiveAllowFrom = Array.from(new Set([...configAllowFrom, ...storeAllowFrom]));
+        effectiveGroupAllowFrom = Array.from(new Set([...effectiveGroupAllowFrom, ...storeAllowFrom]));
+
+        senderAllowedForCommands = isSenderAllowed({ senderId, senderName, allowFrom: effectiveAllowFrom });
+        groupAllowedForCommands = isSenderAllowed({ senderId, senderName, allowFrom: effectiveGroupAllowFrom });
+      }
       const commandGate = resolveControlCommandGate({
         useAccessGroups,
         authorizers: [
