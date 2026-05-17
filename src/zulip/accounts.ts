@@ -27,6 +27,7 @@ export type ResolvedZulipAccount = {
   blockStreamingCoalesce?: ZulipAccountConfig["blockStreamingCoalesce"];
   streaming?: boolean;
   streams?: string[];
+  autoSendOnMissingTool?: boolean;
 };
 
 function resolveZulipSection(cfg: OpenClawConfig): ZulipConfig | undefined {
@@ -174,6 +175,7 @@ export function resolveZulipAccount(params: {
     blockStreamingCoalesce: merged.blockStreamingCoalesce,
     streaming: merged.streaming,
     streams: merged.streams,
+    autoSendOnMissingTool: merged.autoSendOnMissingTool,
   };
 }
 
