@@ -4,6 +4,7 @@ import { sendZulipTyping } from "./client.js";
 import { sendMessageZulip } from "./send.js";
 import { formatZulipLog, maskPII } from "./monitor-helpers.js";
 import { extractZulipTopicDirective } from "./text-utils.js";
+import { readLatestAssistantTexts } from "./fallback-reader.js";
 import type { ReplyPayload } from "openclaw/plugin-sdk/reply-payload";
 
 /**
@@ -88,12 +89,15 @@ export async function dispatchZulipReply(params: {
     },
   });
 
+  let deliveredAny = false;
+
   const { dispatcher, replyOptions, markDispatchIdle } =
     core.channel.reply.createReplyDispatcherWithTyping({
       ...prefixOptions,
       humanDelay: core.channel.reply.resolveHumanDelayConfig(cfg, route.agentId),
       onReplyStart: typingCallbacks.onReplyStart,
       deliver: async (payload: ReplyPayload) => {
+        deliveredAny = true;
         const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
         const rawText = core.channel.text.convertMarkdownTables(payload.text ?? "", tableMode);
         const { text, topic: topicOverride } = extractZulipTopicDirective(rawText);
@@ -153,6 +157,68 @@ export async function dispatchZulipReply(params: {
       }),
     );
   } finally {
+    if (!deliveredAny && !dispatchError) {
+      // Fallback path: the agent ended its turn with assistant text but
+      // never invoked the messaging tool. This is a common failure mode
+      // for local OSS models without strong structured-tool-call training.
+      // Pull the assistantTexts off the just-flushed trajectory and send
+      // them through the channel so the user gets a reply.
+      const autoSend = account.autoSendOnMissingTool ?? true;
+      if (autoSend) {
+        try {
+          const dataDir = (core as any).paths?.dataDir as string | undefined;
+          const sessionKey: string | undefined = route?.sessionKey ?? route?.mainSessionKey;
+          if (sessionKey && route?.agentId) {
+            const texts = await readLatestAssistantTexts({
+              dataDir,
+              agentId: route.agentId,
+              sessionKey,
+            });
+            if (texts && texts.length > 0) {
+              const text = texts.join("\n\n");
+              core.log?.(
+                formatZulipLog("zulip auto-send fallback engaged", {
+                  accountId: account.accountId,
+                  sessionKey,
+                  textLen: text.length,
+                }),
+              );
+              const { text: cleanText, topic: topicOverride } =
+                extractZulipTopicDirective(text);
+              const resolvedTopic = topicOverride
+                ? topicOverride.slice(0, 60)
+                : topic;
+              const chunkMode = core.channel.text.resolveChunkMode(
+                cfg,
+                "zulip",
+                account.accountId,
+              );
+              const chunks = core.channel.text.chunkMarkdownTextWithMode(
+                cleanText,
+                textLimit,
+                chunkMode,
+              );
+              for (const chunk of chunks.length > 0 ? chunks : [cleanText]) {
+                if (!chunk) continue;
+                await sendMessageZulip(to, chunk, {
+                  accountId: account.accountId,
+                  topic: resolvedTopic,
+                });
+              }
+              deliveredAny = true;
+              statusSink?.({ lastOutboundAt: Date.now() });
+            }
+          }
+        } catch (fbErr) {
+          core.error?.(
+            formatZulipLog("zulip auto-send fallback failed", {
+              accountId: account.accountId,
+              error: String(fbErr),
+            }),
+          );
+        }
+      }
+    }
     markDispatchIdle();
   }
 
