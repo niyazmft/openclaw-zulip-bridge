@@ -66,6 +66,16 @@ export type ZulipAccountConfig = {
   streaming?: boolean;
   /** Outbound response prefix override for this channel/account. */
   responsePrefix?: string;
+  /**
+   * If the agent ends a turn with assistant text but never invokes the
+   * messaging tool (a common failure mode for local OSS models with weaker
+   * structured-tool-call training), the plugin will, after the run, read
+   * the latest assistantTexts from the session trajectory and dispatch
+   * them through the channel anyway.
+   *
+   * Default: true. Set to false to enforce strict tool-call semantics.
+   */
+  autoSendOnMissingTool?: boolean;
 };
 
 export type ZulipConfig = {
