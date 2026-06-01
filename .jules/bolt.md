@@ -26,3 +26,9 @@
 ## 2024-06-01 - Optimize formatZulipLog Hot Path
 **Learning:** `formatZulipLog` is called frequently for lifecycle events, messages, and errors. The previous implementation used `Object.entries(fields).filter(...).map(...).join(" ")`, creating multiple short-lived arrays per call. This causes unnecessary GC pressure in the `handleMessage` event loop.
 **Action:** Replaced array iterations with a single `for...in` string builder loop. Microbenchmarks show this is ~5x faster (from 1.635s to 322ms per 1M iterations), reducing CPU overhead and GC pauses on the hot path.
+
+## 2024-06-01 - Early Return Optimization string search hot paths
+**Learning:** Checking for a literal substring via `.includes()` before running expensive regex operations (`matchAll`) can short-circuit the execution path when there's no match. This was implemented in `extractZulipUploadUrls` (by searching for `'/user_uploads/'`) avoiding slow $O(N)$ regex scanning of arbitrary chat messages.
+**Learning (Failed Optimization):** Attempting to apply the same pattern to `extractZulipTopicDirective` actually DEGRADED performance because the regex (`/^\s*\[\[.../`) is anchored to the start of the string (`^`), making it fail in $O(1)$ time naturally. Adding `.includes('[[')` forced a full $O(N)$ string scan before the $O(1)$ regex could run, causing a regression on long messages.
+**Learning (Failed Optimization):** Replacing `Object.keys(fields)` with an unguarded `for (const k in fields)` loop is unsafe. It iterates over inherited enumerable properties from the prototype chain, changing behavior and potentially leaking unexpected data into logs.
+**Action:** Always consider regex anchors (like `^`) when optimizing matching functions. A naturally $O(1)$ failing regex is faster than a manually introduced $O(N)$ scan. Never use an unguarded `for...in` loop to replace `Object.keys()`.

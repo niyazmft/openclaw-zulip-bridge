@@ -9,7 +9,7 @@ export function normalizeZulipEmojiName(raw?: string | null): string {
 }
 
 export function extractZulipUploadUrls(html: string, baseUrl: string): string[] {
-  if (!html) {
+  if (!html || !html.includes('/user_uploads/')) {
     return [];
   }
   let baseOrigin = "";
