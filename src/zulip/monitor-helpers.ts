@@ -45,7 +45,7 @@ export function formatZulipLog(message: string, fields: Record<string, unknown>)
   // This avoids intermediate array allocations and redundant iterations
   // caused by Object.entries().filter().map().join(), making it ~5x faster.
   let parts = "";
-  for (const k in fields) {
+  for (const k of Object.keys(fields)) {
     const v = fields[k];
     if (v !== undefined && v !== null && v !== "") {
       parts += (parts ? " " : "") + k + "=" + v;
