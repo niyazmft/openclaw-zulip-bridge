@@ -48,7 +48,7 @@ export function formatZulipLog(message: string, fields: Record<string, unknown>)
   for (const k of Object.keys(fields)) {
     const v = fields[k];
     if (v !== undefined && v !== null && v !== "") {
-      parts += (parts ? " " : "") + k + "=" + v;
+      parts += (parts ? " " : "") + k + "=" + String(v);
     }
   }
   return parts ? `${message} [${parts}]` : message;
