@@ -1,0 +1,17 @@
+#!/bin/sh
+# Pre-push hook: run full validation suite before allowing push
+# Mirrors CI checks to catch issues early
+
+echo "🔍 Running pre-push validation (same as CI)..."
+echo ""
+
+if npm run check; then
+    echo ""
+    echo "✅ All checks passed. Proceeding with push."
+    exit 0
+else
+    echo ""
+    echo "❌ Checks failed. Push aborted."
+    echo "   Fix the issues above, then try again."
+    exit 1
+fi

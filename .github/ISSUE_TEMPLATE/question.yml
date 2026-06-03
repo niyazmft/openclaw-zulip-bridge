@@ -1,0 +1,32 @@
+name: Question or Discussion
+description: Ask a question or start a discussion
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question? Feel free to ask! You can also use [GitHub Discussions](https://github.com/niyazmft/openclaw-zulip-bridge/discussions) for longer conversations.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What would you like to know?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Any additional context that might help answer your question.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I have checked the README and documentation
+          required: true
+        - label: I have searched existing issues and discussions
+          required: true
