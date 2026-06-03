@@ -57,9 +57,15 @@
     "openclaw.plugin.json",
     "SKILL.md",
     "README.md",
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CODE_OF_CONDUCT.md",
+    "CHANGELOG.md",
     "package.json"
   ],
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
     "typecheck": "tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json",
     "test": "node --test --experimental-strip-types --loader ./test-loader.js test/*.test.ts",

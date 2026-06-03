@@ -58,10 +58,13 @@ for (const artifact of artifacts) {
 }
 
 // Verify essential metadata files are in files list
-const essentialFiles = ['openclaw.plugin.json', 'README.md', 'package.json'];
+const essentialFiles = ['openclaw.plugin.json', 'README.md', 'package.json', 'LICENSE', 'CONTRIBUTING.md', 'SECURITY.md', 'CHANGELOG.md'];
 for (const file of essentialFiles) {
   if (!(pkg.files || []).some(f => f === file || file.startsWith(f.replace(/\/$/, '')))) {
     errors.push(`Essential file may be missing from package "files": ${file}`);
+  }
+  if (!existsSync(file)) {
+    errors.push(`Essential file does not exist on disk: ${file}`);
   }
 }
 
@@ -69,6 +72,12 @@ if ((pkg.files || []).includes('SKILL.md')) {
   console.log('OK: SKILL.md is included.');
 } else {
   console.log('Note: SKILL.md is missing from package (optional but recommended).');
+}
+
+if ((pkg.files || []).includes('CODE_OF_CONDUCT.md')) {
+  console.log('OK: CODE_OF_CONDUCT.md is included.');
+} else {
+  console.log('Note: CODE_OF_CONDUCT.md is missing from package (optional but recommended).');
 }
 
 if (errors.length > 0) {
