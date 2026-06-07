@@ -5,7 +5,7 @@
 echo "🔍 Running pre-push validation (same as CI)..."
 echo ""
 
-if npm run check; then
+if pnpm run check; then
     echo ""
     echo "✅ All checks passed. Proceeding with push."
     exit 0

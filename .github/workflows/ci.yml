@@ -12,10 +12,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - run: pnpm install --frozen-lockfile
       - name: Verify bootstrap
-        run: npm run check:bootstrap
-      - run: npm run check
+        run: pnpm run check:bootstrap
+      - run: pnpm run check
       - name: Enforce pristine working directory
         run: git diff --exit-code || { echo "Working directory is not clean. Lockfile or generated files might be out of sync."; false; }

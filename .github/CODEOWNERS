@@ -1,0 +1,12 @@
+# Global owners
+* @niyazmft
+
+# Core plugin logic
+/src/channel.ts @niyazmft
+/src/zulip/ @niyazmft
+
+# Documentation
+/docs/ @niyazmft
+
+# CI/CD
+/.github/workflows/ @niyazmft

@@ -3,6 +3,7 @@
   "version": "2026.5.1",
   "description": "OpenClaw Zulip channel plugin",
   "type": "module",
+  "packageManager": "pnpm@10.32.1",
   "openclaw": {
     "compat": {
       "pluginApi": ">=1.0.0",
@@ -72,7 +73,7 @@
     "check:package": "node scripts/check-package.js",
     "check:smoke": "node --loader ./test/smoke-loader.js scripts/smoke-test-dist.js",
     "check:bootstrap": "node scripts/check-bootstrap.js",
-    "check": "npm run check:bootstrap && npm run typecheck && npm run build && npm run check:smoke && npm run test && npm run check:package"
+    "check": "pnpm run check:bootstrap && pnpm run typecheck && pnpm run build && pnpm run check:smoke && pnpm run test && pnpm run check:package"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
