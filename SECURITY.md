@@ -11,6 +11,22 @@ The following versions of OpenClaw Zulip Bridge are currently supported with sec
 
 ---
 
+## Security Policy Version
+
+This is version 1.0 of our security policy, effective 2026-05-01.
+
+## Response Timeline
+
+- **Acknowledgment**: Within 48 hours
+- **Initial Assessment**: Within 7 days
+- **Fix Released**:
+  - Critical: 7 days
+  - High: 14 days
+  - Medium: 30 days
+  - Low: Next scheduled release
+
+---
+
 ## Reporting a Vulnerability
 
 We take security seriously. If you discover a security vulnerability, please **do not** open a public issue or discussion.
@@ -27,10 +43,11 @@ We take security seriously. If you discover a security vulnerability, please **d
 
 ### What to Expect
 
-- **Acknowledgment**: You will receive an acknowledgment within 48 hours
-- **Assessment**: We will assess the vulnerability and determine its severity
-- **Fix timeline**: We aim to fix critical vulnerabilities within 7 days, high severity within 14 days
-- **Disclosure**: Once fixed, we will coordinate with you on public disclosure and credit you (if desired)
+See [Response Timeline](#response-timeline) above for specific SLAs. In summary:
+- Acknowledgment within 48 hours
+- Severity assessment within 7 days
+- Fix timeline based on severity (Critical: 7 days, High: 14 days)
+- Coordinated disclosure with credit (if desired)
 
 ### Security Best Practices for Users
 

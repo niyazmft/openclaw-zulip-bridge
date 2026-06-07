@@ -37,7 +37,7 @@ Thank you for your interest in contributing! This document provides guidelines f
 
    This runs: bootstrap → typecheck → build → smoke test → unit tests → package check
 
-> **Note:** A `pre-push` hook is automatically configured on `pnpm install`. It runs the full `npm run check` suite before any push, mirroring CI. If you want to bypass it in an emergency, use `git push --no-verify` (not recommended).
+> **Note:** A `pre-push` hook is automatically configured on `pnpm install`. It runs the full `pnpm run check` suite before any push, mirroring CI. If you want to bypass it in an emergency, use `git push --no-verify` (not recommended).
 
 ---
 

@@ -3,6 +3,7 @@
 [![Version](https://img.shields.io/badge/version-2026.5.1-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-%3E%3D2026.4.29-green)](https://openclaw.ai)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-brightgreen)](https://nodejs.org)
+[![pnpm](https://img.shields.io/badge/pnpm-10.32.1-orange)](https://pnpm.io)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
