@@ -18,7 +18,8 @@ npm run check:package      # Validates version sync, required fields, and npm pa
 
 - **Entry points**: `index.ts` (plugin) and `setup-entry.ts` (onboarding wizard). Both emit to `dist/`.
 - **Core wiring**: `src/channel.ts` — the single file that glues config, accounts, messaging, security, and monitoring together via `createChatChannelPlugin`.
-- **Host dependency**: `openclaw/plugin-sdk` and `openclaw/plugin-sdk/core` are **not npm packages**. They are provided at runtime by the OpenClaw host. Type shims live in `types/openclaw-plugin-sdk.d.ts`; runtime test shims in `test/openclaw-plugin-sdk-shim.js`.
+- **Host dependency**: `openclaw/plugin-sdk` subpaths are **not npm packages**. They are provided at runtime by the OpenClaw host. Type shims live in `types/openclaw-plugin-sdk.d.ts`; runtime test shims in `test/openclaw-plugin-sdk-shim.js`.
+  - Channel plugins should import from `openclaw/plugin-sdk/channel-core` (not the legacy `openclaw/plugin-sdk/core` umbrella).
 
 ## TypeScript Conventions
 
@@ -52,26 +53,57 @@ CI runs on Node 22, uses `npm ci`, runs `npm run check:bootstrap` followed by `n
 
 Dev dependencies must be installed. `.npmrc` sets `include=dev` to prevent npm from skipping devDeps. If bootstrap fails, check that `NODE_ENV` is not set to `production`.
 
-## Deployment (y6 / Android/Termux)
+## Deployment
 
-- Target device: `y6` (Android/Termux, OpenClaw `2026.5.2`)
-- Deploy via rsync: `rsync -avh --delete dist/ y6:.openclaw/extensions/zulip/`
-- Or use SSH to create directory first and copy:
-  ```
-  ssh y6 "rm -rf ~/.openclaw/extensions/zulip/ && mkdir -p ~/.openclaw/extensions/zulip/"
-  rsync -avh --delete dist/ y6:.openclaw/extensions/zulip/
-  ```
-- Restart: `ssh y6 "pm2 restart openclaw"`
-- Logs: `ssh y6 "tail -f /data/data/com.termux/files/usr/tmp/openclaw-*/openclaw-*.log"`
-- Config lives at `~/.openclaw/openclaw.json`; remove plugin via `plugins.allow` list + `channels` section
+This plugin targets **any OpenClaw host** running `>=2026.6.0`. It is not limited to a specific device or platform.
 
-## SDK Migration Notes (2026.4.29 → 2026.5.x)
+### Install via package manager (recommended)
 
+If published to ClawHub or npm:
+```bash
+openclaw plugins install @openclaw/zulip
+```
+
+### Manual deployment
+
+1. Build: `npm run build`
+2. Copy `dist/` and `openclaw.plugin.json` into the host's extensions directory (default: `~/.openclaw/extensions/zulip/`).
+3. Restart the OpenClaw gateway.
+
+Example — local host:
+```bash
+npm run build
+rsync -avh --delete dist/ ~/.openclaw/extensions/zulip/
+rsync -avh openclaw.plugin.json ~/.openclaw/extensions/zulip/
+# Restart the gateway
+```
+
+Example — remote host:
+```bash
+npm run build
+ssh remote "mkdir -p ~/.openclaw/extensions/zulip/"
+rsync -avh --delete dist/ remote:.openclaw/extensions/zulip/
+rsync -avh openclaw.plugin.json remote:.openclaw/extensions/zulip/
+# Restart the gateway on the remote host
+```
+
+The plugin requires no external runtime dependencies; the host provides the `openclaw/plugin-sdk/*` modules.
+
+## SDK Migration Notes
+
+### 2026.4.29 → 2026.5.x
 Migration complete as of v2026.5.1:
 - `openclaw/plugin-sdk/irc` → `channel-inbound` + `command-auth` subpaths
 - `channel-runtime` → `channel-reply-options-runtime`
 - Manifest uses `channelConfigs` (cold-path config schema) + `channelEnvVars` (env var mapping)
-- Type shims cover: channel-core, account-core, config-types
+
+### 2026.5.x → 2026.6.x / 2026.7.x
+Migration complete as of v2026.7.0:
+- `openclaw/plugin-sdk/core` → `openclaw/plugin-sdk/channel-core` for all channel plugin imports
+- `openclaw/plugin-sdk/zod` → import `z` from `zod` directly (add `zod` to devDependencies)
+- Removed redundant root `configSchema` from manifest; `channelConfigs` is now the sole cold-path schema
+- Manifest `uiHints` synced with runtime schema for full cold-path label coverage
+- `minGatewayVersion` / `minHostVersion` bumped to `>=2026.6.0`
 
 ## Troubleshooting
 

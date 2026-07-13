@@ -9,7 +9,7 @@ import {
   type ChannelAccountSnapshot,
 } from "openclaw/plugin-sdk/channel-core";
 import { setZulipRuntime } from "./runtime.js";
-import type { OpenClawConfig } from "openclaw/plugin-sdk/core";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/channel-core";
 import type { ZulipConfig } from "./types.js";
 import { zulipMessageActions } from "./actions.js";
 

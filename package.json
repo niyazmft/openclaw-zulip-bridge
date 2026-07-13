@@ -1,13 +1,13 @@
 {
   "name": "@openclaw/zulip",
-  "version": "2026.5.1",
+  "version": "2026.7.0",
   "description": "OpenClaw Zulip channel plugin",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
   "openclaw": {
     "compat": {
       "pluginApi": ">=1.0.0",
-      "minGatewayVersion": ">=2026.4.29"
+      "minGatewayVersion": ">=2026.6.0"
     },
     "extensions": [
       "./dist/index.js"
@@ -34,11 +34,11 @@
     "install": {
       "localPath": ".",
       "defaultChoice": "local",
-      "minHostVersion": ">=2026.4.29"
+      "minHostVersion": ">=2026.6.0"
     },
     "build": {
-      "openclawVersion": "2026.4.29",
-      "pluginSdkVersion": "2026.4.29",
+      "openclawVersion": "2026.7.0",
+      "pluginSdkVersion": "2026.7.0",
       "stageRuntimeDependencies": true
     },
     "securityExemptions": {
@@ -78,6 +78,7 @@
   "devDependencies": {
     "@types/node": "^24.5.2",
     "knip": "^6.12.2",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "zod": "^3.25.76"
   }
 }

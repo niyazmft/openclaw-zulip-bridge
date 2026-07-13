@@ -6,7 +6,7 @@ import {
 import {
   DEFAULT_ACCOUNT_ID,
   type OpenClawConfig,
-} from "openclaw/plugin-sdk/core";
+} from "openclaw/plugin-sdk/channel-core";
 import {
   listZulipAccountIds,
   resolveZulipAccount,

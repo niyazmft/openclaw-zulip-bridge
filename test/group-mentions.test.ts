@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { resolveZulipGroupRequireMention } from "../src/group-mentions.ts";
-import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/core";
+import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/channel-core";
 
 describe("resolveZulipGroupRequireMention", () => {
   test("returns requireMention when explicitly true", () => {
