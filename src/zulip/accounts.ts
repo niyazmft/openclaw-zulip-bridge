@@ -1,5 +1,6 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/channel-core";
-import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/channel-core";
+import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/core";
+import { normalizeAccountId } from "openclaw/plugin-sdk/core";
 import type { ZulipAccountConfig, ZulipChatMode, ZulipConfig } from "../types.js";
 import { normalizeZulipBaseUrl } from "./client.js";
 

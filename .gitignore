@@ -8,6 +8,6 @@ coverage/
 .DS_Store
 .obsidian/
 GEMINI.md
-AGENTS.md
+deploy.sh
 ProjectManager/
 docs/

@@ -1,45 +1,39 @@
 import {
   createChatChannelPlugin,
   getChatChannelMeta,
-  DEFAULT_ACCOUNT_ID,
-  normalizeAccountId,
   deleteAccountFromConfigSection,
   setAccountEnabledInConfigSection,
   formatPairingApproveHint,
   type ChannelAccountSnapshot,
 } from "openclaw/plugin-sdk/channel-core";
+import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/core";
 import { setZulipRuntime } from "./runtime.js";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/channel-core";
 import type { ZulipConfig } from "./types.js";
 import { zulipMessageActions } from "./actions.js";
 
-let monitorStarted = false;
-let activeMonitor: { abort: () => void } | null = null;
+let monitorAbortController: AbortController | null = null;
 
 async function startZulipMonitor(cfg: OpenClawConfig, statusSink: any) {
-  if (monitorStarted) return;
-  monitorStarted = true;
-  
-  
+  if (monitorAbortController && !monitorAbortController.signal.aborted) {
+    return;
+  }
+
   const accountIds = listZulipAccountIds(cfg);
   for (const accountId of accountIds) {
     const account = resolveZulipAccount({ cfg, accountId });
     if (account.enabled && account.apiKey && account.email && account.baseUrl) {
-      
-      const abortController = new AbortController();
-      activeMonitor = { abort: () => abortController.abort() };
-      
+      monitorAbortController = new AbortController();
       monitorZulipProvider({
         apiKey: account.apiKey,
         email: account.email,
         baseUrl: account.baseUrl,
         accountId: accountId,
         config: cfg,
-        abortSignal: abortController.signal,
+        abortSignal: monitorAbortController.signal,
         statusSink: statusSink,
       }).catch((err) => {
-        
-        monitorStarted = false;
+        // Monitor exited or crashed; allow restart on next probe
       });
       break;
     }
@@ -202,10 +196,8 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         return { ok: false, error: "apiKey, email, or url missing" };
       }
       
-      if (!monitorStarted && cfg && statusSink) {
-        
+      if ((!monitorAbortController || monitorAbortController.signal.aborted) && cfg && statusSink) {
         startZulipMonitor(cfg as OpenClawConfig, statusSink).catch((err) => {
-          
         });
       }
       

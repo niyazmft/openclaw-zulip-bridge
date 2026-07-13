@@ -1,6 +1,6 @@
 ---
 name: zulip-bridge
-version: 2026.4.13
+version: 2026.7.0
 description: 💬 High-performance Zulip bridge skill. Enables messaging, stream monitoring, and administrative actions on Zulip servers.
 user-invocable: true
 metadata: {
@@ -12,6 +12,14 @@ metadata: {
 }
 ---
 # 💬 Zulip Bridge Skill
+
+> ⚠️ **DEPRECATED**: This skill is superseded by the `@niyazmft/openclaw-zulip` code plugin.
+>
+> Install the plugin directly with:
+> ```
+> openclaw plugins install clawhub:@niyazmft/openclaw-zulip
+> ```
+> This skill remains available for backward compatibility but is no longer actively updated.
 
 This skill provides the intelligence and instructions for interacting with the Zulip communication platform through the OpenClaw Zulip Bridge plugin.
 
