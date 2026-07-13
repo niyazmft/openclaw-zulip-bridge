@@ -64,9 +64,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     lastConnectedAt: Date.now(),
   });
 
-  
   try {
-    
     const {
       cfg,
       account,
@@ -77,7 +75,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       baseUrl,
     } = await initializeZulipMonitor({ opts, core });
 
-    
     const logger = core.logging.getChildLogger({ module: "zulip" });
     const logVerboseMessage = core.logging.shouldLogVerbose()
       ? (message: string) => logger.debug?.(message)
@@ -254,9 +251,33 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       let effectiveGroupAllowFrom = configGroupAllowFromFallback;
 
       if (!senderAllowedForCommands || !groupAllowedForCommands) {
-        const storeAllowFrom = normalizeAllowList(
-          await core.channel.pairing.readAllowFromStore("zulip").catch(() => []),
-        );
+        // Workaround: SDK readAllowFromStore is broken in 2026.7.1, read file directly
+        let storeAllowFrom: string[] = [];
+        try {
+          const fs = await import("node:fs/promises");
+          const path = await import("node:path");
+          const os = await import("node:os");
+          // Try multiple possible data directories
+          const possibleDirs = [
+            core.paths?.dataDir,
+            path.join(os.homedir(), ".openclaw"),
+            "/home/node/.openclaw",
+            "/tmp/openclaw-zulip",
+          ].filter(Boolean);
+          for (const dataDir of possibleDirs) {
+            const allowPath = path.join(dataDir, "credentials", `zulip-${account.accountId}-allowFrom.json`);
+            try {
+              const raw = await fs.readFile(allowPath, "utf8");
+              const parsed = JSON.parse(raw);
+              storeAllowFrom = normalizeAllowList(parsed.allowFrom || []);
+              break;
+            } catch (e) {
+              // Try next path
+            }
+          }
+        } catch (e) {
+          // File may not exist, that's ok
+        }
 
         effectiveAllowFrom = Array.from(new Set([...configAllowFrom, ...storeAllowFrom]));
         effectiveGroupAllowFrom = Array.from(new Set([...configGroupAllowFromFallback, ...storeAllowFrom]));
@@ -324,7 +345,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         canDetectMention,
       });
 
-      
       if (policyResult.shouldDrop) {
         if (policyResult.shouldPair) {
           const { code, created } = await core.channel.pairing.upsertPairingRequest({
@@ -341,13 +361,14 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           );
           if (created) {
             try {
+              const pairingText = core.channel.pairing.buildPairingReply({
+                channel: "zulip",
+                idLine: `Your Zulip email: ${senderId}`,
+                code,
+              });
               await sendMessageZulip(
                 `user:${senderId}`,
-                core.channel.pairing.buildPairingReply({
-                  channel: "zulip",
-                  idLine: `Your Zulip email: ${senderId}`,
-                  code,
-                }),
+                pairingText,
                 {
                   accountId: account.accountId,
                   sessionKey: `zulip:${account.accountId}:pairing`,
@@ -392,7 +413,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         wasMentioned || (isControlCommand && commandAuthorized) || oncharTriggered;
 
       const bodySource = oncharTriggered ? oncharResult.stripped : rawText;
-      // ⚡ Bolt Optimization: Pass pre-compiled regex to avoid per-message RegExp construction
       const bodyText = normalizeMention(bodySource, botUsernameMentionRegex);
       if (!bodyText) {
         return;

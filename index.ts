@@ -6,6 +6,8 @@ import { listZulipAccountIds, resolveZulipAccount } from "./src/zulip/accounts.j
 export { zulipPlugin } from "./src/channel.js";
 export { setZulipRuntime } from "./src/runtime.js";
 
+let registerFullCalled = false;
+
 export default defineChannelPluginEntry({
   id: "zulip",
   name: "Zulip",
@@ -28,6 +30,12 @@ export default defineChannelPluginEntry({
     );
   },
   registerFull(api) {
+    if (registerFullCalled) {
+      api.logger.info("[zulip] registerFull already called, skipping duplicate monitor start");
+      return;
+    }
+    registerFullCalled = true;
+
     const { logger, runtime, config: cfg } = api;
 
     api.registerChannel({ plugin: zulipPlugin });

@@ -52,7 +52,6 @@ export async function pollOnce(params: {
       signal: opts.abortSignal,
     });
 
-    
     if (response.result === "error") {
       const msg = response.msg ?? "";
       const isBadQueue =

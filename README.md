@@ -1,7 +1,7 @@
 # OpenClaw Zulip Bridge
 
-[![Version](https://img.shields.io/badge/version-2026.5.1-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
-[![OpenClaw](https://img.shields.io/badge/OpenClaw-%3E%3D2026.4.29-green)](https://openclaw.ai)
+[![Version](https://img.shields.io/badge/version-2026.7.4-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
+[![OpenClaw](https://img.shields.io/badge/OpenClaw-%3E%3D2026.6.0-green)](https://openclaw.ai)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-brightgreen)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-10.32.1-orange)](https://pnpm.io)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org)
@@ -29,25 +29,28 @@ High-performance OpenClaw channel plugin for Zulip streams and private messages 
 
 ## Quick Start
 
-> ⚠️ **Important:** You must add "zulip" to `plugins.allow` for the plugin to load. Without this, you'll get "plugin not found: zulip" error.
-
-> ℹ️ **Note:** The ClawHub version may be outdated. For the latest version (2026.5.1+), install from source instead (see [Installation](#installation)).
+> 💡 **The simplest way to get started:** Install from ClawHub, restart the gateway, then run the interactive onboarding wizard.
 
 ```bash
-# 1. Install from ClawHub (may be outdated)
-openclaw plugins install clawhub:@openclaw/zulip
+# 1. Install from ClawHub
+openclaw plugins install clawhub:@niyazmft/openclaw-zulip
 
-# 2. Add to plugins.allow (REQUIRED - otherwise plugin won't load)
-openclaw config set plugins.allow '["zulip","telegram","memory-core","exa","ollama"]'
+# 2. Restart the gateway
+openclaw gateway restart
 
-# 3. Configure
-openclaw plugins setup zulip
+# 3. Run the interactive channel setup wizard
+openclaw channels add
+# → Select "Zulip (plugin)" → enter API key, email, URL → route to agent
 
-# 4. Test
-# Send a DM to your Zulip bot or mention it in a stream
+# 4. Approve yourself for DMs (dmPolicy defaults to "pairing")
+#    Send a DM to your bot first, then copy the pairing code and run:
+openclaw pairing approve zulip <PAIRING_CODE>
+
+# 5. Test
+#    Send a DM to your bot or mention it in a stream
 ```
 
-For detailed setup, see the [Installation](#installation) and [Configuration](#configuration) sections below.
+That's it — no manual config editing needed.
 
 ---
 
@@ -66,46 +69,37 @@ For detailed setup, see the [Installation](#installation) and [Configuration](#c
 
 ## Prerequisites
 
-- **OpenClaw**: Version `>=2026.4.29` (recommended)
+- **OpenClaw**: Version `>=2026.6.0`
 - **Node.js**: Latest LTS recommended (Node 22+)
 - **Zulip Bot**: A registered bot on your Zulip realm
-- **plugins.allow**: Your OpenClaw config must include `"zulip"` in `plugins.allow`:
 
 ### Creating a Zulip Bot
 
 1. Log into your Zulip server
 2. Go to **Settings → Your Bots → Add a new bot**
-3. Choose **Bot type:** "Incoming webhooks" or "Generic bot"
+3. Choose **Bot type:** "Generic bot"
 4. Give it a name (e.g., "openclaw-bot")
-5. Copy the **API key** shown - this is your `ZULIP_API_KEY`
+5. Copy the **API key** shown — this is your `ZULIP_API_KEY`
 6. The bot's email is your `ZULIP_EMAIL`
-
-```bash
-# Check current allow list
-openclaw config get plugins.allow --json
-
-# If "zulip" is missing, add it
-openclaw config set plugins.allow '["zulip","telegram","memory-core","exa","ollama"]'
-```
 
 ---
 
 ## Installation
 
-> ℹ️ **Recommendation:** For the latest features and bug fixes, install from source instead of ClawHub. The ClawHub version may be outdated.
+### From ClawHub (Recommended)
 
-### From ClawHub
-
-> ⚠️ **Note:** The ClawHub version may be outdated (last published: 2026.4.13). For the latest features and fixes, install from source instead.
+The simplest path — install from ClawHub, restart, then use the built-in wizard:
 
 ```bash
-openclaw plugins install clawhub:@openclaw/zulip
-```
+# Install
+openclaw plugins install clawhub:@niyazmft/openclaw-zulip
 
-Then configure it:
+# Restart gateway (required for the host to load the new plugin)
+openclaw gateway restart
 
-```bash
-openclaw plugins setup zulip
+# Run the interactive setup wizard
+openclaw channels add
+# → Select "Zulip (plugin)" → follow the prompts
 ```
 
 ### From Source (Development / Offline Machines)
@@ -115,12 +109,8 @@ openclaw plugins setup zulip
 1. **Pre-flight check** (verify your environment):
 
    ```bash
-   # Check Node.js version (>= 22 recommended)
-   node --version
-   # Check OpenClaw version (>= 2026.4.29 recommended)
+   # Check OpenClaw version (>= 2026.6.0 recommended)
    openclaw --version
-   # Check plugins.allow includes "zulip"
-   openclaw config get plugins.allow --json
    # Ensure no stale zulip config exists
    openclaw plugins list --json | grep zulip
    ```
@@ -157,7 +147,8 @@ openclaw plugins list --json | python3 -c "import json,sys; z=[p for p in json.l
 5. **Configure the plugin**:
 
 ```bash
-openclaw plugins setup zulip
+openclaw channels add
+# Select "Zulip (plugin)" and follow the prompts
 ```
 
 #### Offline Installation
@@ -176,7 +167,8 @@ Then on the offline machine, from the copied folder:
 
 ```bash
 openclaw plugins install ./ --link
-openclaw plugins setup zulip
+openclaw channels add
+# Select "Zulip (plugin)" and follow the prompts
 ```
 
 ---
@@ -185,18 +177,24 @@ openclaw plugins setup zulip
 
 ### Interactive Setup (Recommended)
 
-The Zulip plugin supports OpenClaw's **interactive channel onboarding wizard**. After installation, run:
+Run the built-in channel onboarding wizard:
 
 ```bash
-openclaw configure
+openclaw channels add
 ```
 
 Then at the interactive prompts:
 
-1. Select **"Configure chat channels now?"** → Yes
+1. Select **"Set up a chat channel now?"** → Yes
 2. Choose **"Zulip (plugin)"** from the channel list
-3. Follow the guided prompts to enter your credentials
-4. (Optional) Choose which streams the monitor
+3. Follow the guided prompts to enter your **API key**, **bot email**, and **site URL**
+4. Choose to route messages to an agent (e.g., `main`)
+
+After setup, if `dmPolicy` is `"pairing"`, send a DM to your bot and approve yourself:
+
+```bash
+openclaw pairing approve zulip <PAIRING_CODE_FROM_ZULIP_DM>
+```
 
 > **Tip**: If `ZULIP_API_KEY`, `ZULIP_EMAIL`, and `ZULIP_URL` are set as environment variables, the wizard uses them automatically.
 
@@ -319,21 +317,27 @@ openclaw config set plugins.allow '["zulip","telegram","memory-core","exa","olla
 openclaw gateway restart
 ```
 
-### "zulip does not support guided setup yet."
-Install from ClawHub instead of source:
+### "registerFull already called, skipping duplicate monitor start"
 
-```bash
-openclaw plugins uninstall zulip --force
-rm -rf ~/.openclaw/extensions/zulip
-openclaw plugins install clawhub:@openclaw/zulip
-openclaw gateway restart
-```
+**Status:** Harmless — the host calls `registerFull` twice during startup. The plugin deduplicates this.
+
+### "Health-monitor restarting (reason: stopped)"
+
+**Cause:** The monitor's `statusSink({ running: true })` wasn't called at the start of the monitor loop, so the host thinks the channel is dead.
+
+**Fix:** Ensure `statusSink` is called at the **top** of the monitor function, not conditionally inside event handlers.
+
+### "Invalid config: must not have additional properties: streaming"
+
+**Cause:** The manifest JSON Schema in `openclaw.plugin.json` was missing the `streaming` property that the host wizard writes.
+
+**Fix:** Add `"streaming": { "type": "boolean" }` to both `configSchema` and `channelConfigs.schema` in the manifest.
 
 ### openclaw plugins install ./ --link fails
 Install from ClawHub:
 
 ```bash
-openclaw plugins install clawhub:@openclaw/zulip
+openclaw plugins install clawhub:@niyazmft/openclaw-zulip
 ```
 
 Or from source without `--link`:
@@ -344,14 +348,14 @@ openclaw plugins install ./ --force
 ```
 
 ### "plugin not found: zulip" after installing
-1. Verify `plugins.allow` includes `"zulip"`
-2. Run `openclaw plugins doctor` to check for errors
+1. Restart the gateway: `openclaw gateway restart`
+2. Check that the plugin is in the extensions dir: `ls ~/.openclaw/extensions/zulip/`
 
 ### "not a valid hook pack"
 Ensure you cloned to a neutral directory and ran `pnpm install && pnpm run build`.
 
 ### Queue Registration Fails
-Verify credentials with `openclaw plugins setup zulip`.
+Verify credentials with `openclaw channels add` and re-enter them.
 
 ### No Response in Streams
 Ensure the bot is a member of the stream and it's in your `streams` config.
@@ -363,34 +367,25 @@ Default requires @mentions. Check your `chatmode` setting.
 
 ## Known Issues
 
-### ClawHub Version Outdated
+### Performance: First Message After Startup is Slower
 
-**Status:** Publishing Blocked
+**Status:** Expected behavior
 
-**Problem:** The ClawHub version (2026.4.13) lags behind the GitHub release (2026.5.1).
+**Problem:** The first Zulip message after gateway startup takes ~5–8s to get a reply.
 
-**Workaround:** Install from source instead:
+**Root Cause:** Model warmup + cold inference for the first agent run. Subsequent messages reply in ~2–4s.
 
-```bash
-git clone https://github.com/niyazmft/openclaw-zulip-bridge.git /tmp/zulip
-cd /tmp/zulip
-pnpm install && pnpm run build
-openclaw plugins install ./ --link
-```
+**Mitigation:** None needed. This is normal for external model providers.
 
 ---
 
-### Performance: Slower Response Times vs Built-in Channels
+### Legacy Skill Packages
 
-**Status:** OpenClaw Core Issue - Not Fixable in Plugin
+Two old skill packages exist on ClawHub under the same namespace:
+- `@niyazmft/zulip-bridge` (deprecated, redirects to canonical)
+- `@niyazmft/openclaw-zulip-bridge` (deprecated, merged into zulip-bridge)
 
-**Problem:** Zulip responses are ~20-27s slower than built-in channels (e.g., Telegram: ~4s vs Zulip: ~31s total dispatch time).
-
-**Root Cause:** External plugins loaded via `plugins.load.paths` go through a slower initialization path in OpenClaw core. See [OpenClaw #56626](https://github.com/openclaw/openclaw/issues/56626), [#28587](https://github.com/openclaw/openclaw/issues/28587), [#63948](https://github.com/openclaw/openclaw/issues/63948).
-
-**Mitigation:** None available. Waiting for OpenClaw core fixes.
-
----
+These are **skill** (text bundle) packages, not code plugins. The active, maintained package is `@niyazmft/openclaw-zulip` (this repo).
 
 ## Development
 

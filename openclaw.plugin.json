@@ -2,7 +2,7 @@
   "id": "zulip",
   "name": "Zulip",
   "description": "OpenClaw Zulip channel plugin",
-  "version": "2026.7.0",
+  "version": "2026.7.4",
   "activation": {
     "onStartup": true
   },
@@ -35,6 +35,99 @@
     "envAccess": ["ZULIP_API_KEY", "ZULIP_EMAIL", "ZULIP_URL", "ZULIP_SITE", "ZULIP_REALM"],
     "reason": "Zulip credentials from environment variables (documented pattern)"
   },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "zulip": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "capabilities": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "markdown": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "enabled": { "type": "boolean" },
+          "configWrites": { "type": "boolean" },
+          "site": { "type": "string" },
+          "url": { "type": "string" },
+          "realm": { "type": "string" },
+          "email": { "type": "string" },
+          "apiKey": { "type": "string" },
+          "streams": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "streaming": { "type": "boolean" },
+          "chatmode": {
+            "type": "string",
+            "enum": ["oncall", "onmessage", "onchar"]
+          },
+          "oncharPrefixes": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "requireMention": { "type": "boolean" },
+          "dmPolicy": {
+            "type": "string",
+            "enum": ["pairing", "allowlist", "open", "disabled"]
+          },
+          "allowFrom": {
+            "type": "array",
+            "items": { "type": ["string", "number"] }
+          },
+          "groupAllowFrom": {
+            "type": "array",
+            "items": { "type": ["string", "number"] }
+          },
+          "groupPolicy": {
+            "type": "string",
+            "enum": ["allowlist", "open", "disabled"]
+          },
+          "mediaMaxMb": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reactions": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "clearOnFinish": { "type": "boolean" },
+              "onStart": { "type": "string" },
+              "onSuccess": { "type": "string" },
+              "onError": { "type": "string" }
+            }
+          },
+          "textChunkLimit": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "chunkMode": {
+            "type": "string",
+            "enum": ["length", "newline"]
+          },
+          "blockStreaming": { "type": "boolean" },
+          "blockStreamingCoalesce": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "responsePrefix": { "type": "string" },
+          "enableAdminActions": { "type": "boolean" },
+          "autoSendOnMissingTool": { "type": "boolean" },
+          "accounts": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  },
   "channelConfigs": {
     "zulip": {
       "schema": {
@@ -61,6 +154,7 @@
             "type": "array",
             "items": { "type": "string" }
           },
+          "streaming": { "type": "boolean" },
           "chatmode": {
             "type": "string",
             "enum": ["oncall", "onmessage", "onchar"]

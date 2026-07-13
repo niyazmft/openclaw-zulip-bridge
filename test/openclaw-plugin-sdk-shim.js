@@ -68,6 +68,7 @@ const zodMock = new Proxy(
   },
 );
 
+export const z = zodMock;
 export const MarkdownConfigSchema = zodMock;
 export const DmPolicySchema = zodMock;
 export const GroupPolicySchema = zodMock;

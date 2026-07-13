@@ -7,7 +7,7 @@ import {
   MarkdownConfigSchema,
   requireOpenAllowFrom,
 } from "openclaw/plugin-sdk/channel-config-schema";
-import { z } from "zod";
+import { z } from "openclaw/plugin-sdk/zod";
 import { zulipChannelConfigUiHints } from "./config-ui-hints.js";
 
 const ZulipAccountSchema = z.object({
@@ -22,6 +22,7 @@ const ZulipAccountSchema = z.object({
   email: z.string().optional(),
   apiKey: z.string().optional(),
   streams: z.array(z.string()).optional(),
+  streaming: z.boolean().optional(),
   chatmode: z.enum(["oncall", "onmessage", "onchar"]).optional(),
   oncharPrefixes: z.array(z.string()).optional(),
   requireMention: z.boolean().optional(),
@@ -50,7 +51,9 @@ const ZulipAccountSchema = z.object({
 
 export const ZulipConfigSchema = buildCatchallMultiAccountChannelSchema(
   ZulipAccountSchema,
-).superRefine((value, ctx) => {
+).extend({
+  streaming: z.boolean().optional(),
+}).superRefine((value, ctx) => {
   requireOpenAllowFrom({
     policy: value.dmPolicy,
     allowFrom: value.allowFrom,

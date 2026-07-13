@@ -57,12 +57,13 @@ Dev dependencies must be installed. `.npmrc` sets `include=dev` to prevent npm f
 
 This plugin targets **any OpenClaw host** running `>=2026.6.0`. It is not limited to a specific device or platform.
 
-### Install via package manager (recommended)
+### Install via ClawHub (recommended)
 
-If published to ClawHub or npm:
 ```bash
-openclaw plugins install @openclaw/zulip
+openclaw plugins install clawhub:@niyazmft/openclaw-zulip
 ```
+
+Then restart the gateway and run `openclaw channels add` to configure.
 
 ### Manual deployment
 
@@ -99,18 +100,25 @@ Migration complete as of v2026.5.1:
 
 ### 2026.5.x → 2026.6.x / 2026.7.x
 Migration complete as of v2026.7.0:
-- `openclaw/plugin-sdk/core` → `openclaw/plugin-sdk/channel-core` for all channel plugin imports
-- `openclaw/plugin-sdk/zod` → import `z` from `zod` directly (add `zod` to devDependencies)
-- Removed redundant root `configSchema` from manifest; `channelConfigs` is now the sole cold-path schema
+- `openclaw/plugin-sdk/core` → `openclaw/plugin-sdk/channel-core` for all channel plugin imports **except**:
+  - `normalizeAccountId` must remain on `openclaw/plugin-sdk/core` (not exported from `channel-core` in host 2026.6.x)
+- `openclaw/plugin-sdk/zod` → do **not** migrate; host 2026.6.x does not bundle `zod` as an npm dependency. Keep importing from `openclaw/plugin-sdk/zod`
+- Keep both root `configSchema` and `channelConfigs` in the manifest. OpenClaw 2026.6.x still validates the root schema at load time
 - Manifest `uiHints` synced with runtime schema for full cold-path label coverage
 - `minGatewayVersion` / `minHostVersion` bumped to `>=2026.6.0`
 
 ## Troubleshooting
 
 - **Health-monitor restarts every ~5 min** with `reason: stopped**: Call `statusSink({ running: true, connected: true })` at the START of your monitor function, not conditionally inside event handlers. The host checks `snapshot.running` to decide if channel is alive.
+- **Monitor never starts after hot reload / wizard config**: If `startZulipMonitor` creates an `AbortController` before validating credentials, and credentials are missing at startup, the controller blocks all future starts. Only create the controller **after** credential validation, right before launching the actual monitor loop.
+- **Host calls `registerFull` twice**: Add a module-level `registerFullCalled` guard to prevent duplicate monitor starts. This is normal host behavior.
+- **"Invalid config: must not have additional properties: streaming"**: The host's `openclaw channels add` wizard writes `"streaming": true` to the config. If your manifest JSON Schema has `"additionalProperties": false` and `streaming` isn't in `properties`, config validation fails. Add `streaming` to BOTH `configSchema` and `channelConfigs.schema` in `openclaw.plugin.json`.
+- **`readAllowFromStore(channelName)` throws** "invalid pairing channel: expected non-empty string; got undefined": SDK bug in host `2026.7.1`. Workaround: read `credentials/zulip-{accountId}-allowFrom.json` directly from the data directory.
+- **Dedupe store blocks re-processing across restarts**: The dedupe file at `/tmp/openclaw-zulip/zulip_dedupe_default.json` survives container restarts. Clear it when testing fresh message flows.
+- **Env vars override config**: The host resolves credentials from env vars first, then config. If `ZULIP_EMAIL` or `ZULIP_API_KEY` are set in the host environment, they override `openclaw.json` values.
 - **Missing channelConfigs warning**: Ensure openclaw.plugin.json has `channelConfigs` section with `schema` and `uiHints`.
 - **Deprecated providerAuthEnvVars**: Migrate to `channelEnvVars` in manifest and package.json.
 - **No startup logs** for your channel? Verify host calls `startAccount` and `listAccountIds` returns expected account IDs.
-- **Telegram fetch timeouts**: Separate network issue on y6, not related to your plugin.
+- **Telegram fetch timeouts**: Separate network issue on the test device, not related to your plugin.
 
-**Note**: `AGENTS.md` itself is listed in `.gitignore` (line 11); it is maintained locally for agent sessions and should not be committed.
+**Note**: This file is maintained as project documentation and is safe to commit.

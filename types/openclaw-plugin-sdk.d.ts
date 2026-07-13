@@ -16,6 +16,31 @@ declare module "openclaw/plugin-sdk" {
   export const defineOnboardingStepResolver: any;
 }
 
+declare module "openclaw/plugin-sdk/core" {
+  export type OpenClawPluginApi = any;
+  export type OpenClawConfig = any;
+  export type OpenClawChannelPlugin = any;
+  export type ChannelSetupResult = any;
+  export type ChannelAccountSnapshot = any;
+  export type ChannelMessageActionName = any;
+  export const DEFAULT_ACCOUNT_ID: string;
+  export const normalizeAccountId: any;
+  export const getChatChannelMeta: any;
+  export const applyAccountNameToChannelSection: any;
+  export const deleteAccountFromConfigSection: any;
+  export const migrateBaseNameToDefaultAccount: any;
+  export const setAccountEnabledInConfigSection: any;
+  export const emptyPluginConfigSchema: any;
+  export const createChatChannelPlugin: <T = any>(params: any) => any;
+  export const defineChannelPluginEntry: any;
+  export const definePluginEntry: any;
+  export const defineSetupPluginEntry: any;
+  export const formatPairingApproveHint: any;
+  export const jsonResult: any;
+  export const readNumberParam: any;
+  export const readStringParam: any;
+}
+
 declare module "openclaw/plugin-sdk/channel-core" {
   export type OpenClawPluginApi = any;
   export type OpenClawConfig = any;
@@ -114,6 +139,10 @@ declare module "openclaw/plugin-sdk/setup" {
 
 declare module "openclaw/plugin-sdk/setup-runtime" {
   export const createSetupInputPresenceValidator: any;
+}
+
+declare module "openclaw/plugin-sdk/zod" {
+  export const z: any;
 }
 
 declare module "ws" {
