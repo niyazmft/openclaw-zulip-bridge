@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { test, describe, beforeEach, afterEach } from "node:test";
 import { resolveZulipAccount } from "../src/zulip/accounts.ts";
-import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/core";
+import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/channel-core";
 
 describe("resolveZulipAccount Precedence", () => {
   const originalEnv = process.env;

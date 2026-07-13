@@ -6,7 +6,7 @@ import {
   jsonResult,
   readNumberParam,
   readStringParam,
-} from "openclaw/plugin-sdk/core";
+} from "openclaw/plugin-sdk/channel-core";
 import { resolveZulipAccount } from "./zulip/accounts.js";
 import {
   addZulipReaction,
