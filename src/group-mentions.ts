@@ -1,4 +1,4 @@
-import type { ChannelGroupContext } from "openclaw/plugin-sdk";
+import type { ChannelGroupContext } from "openclaw/plugin-sdk/channel-core";
 import { resolveZulipAccount } from "./zulip/accounts.js";
 
 export function resolveZulipGroupRequireMention(params: ChannelGroupContext): boolean | undefined {

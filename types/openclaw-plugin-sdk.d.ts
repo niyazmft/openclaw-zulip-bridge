@@ -42,12 +42,14 @@ declare module "openclaw/plugin-sdk/core" {
 }
 
 declare module "openclaw/plugin-sdk/channel-core" {
+  export type PluginRuntime = any;
   export type OpenClawPluginApi = any;
   export type OpenClawConfig = any;
   export type OpenClawChannelPlugin = any;
   export type ChannelSetupResult = any;
   export type ChannelAccountSnapshot = any;
   export type ChannelMessageActionName = any;
+  export type ChannelGroupContext = any;
   export const DEFAULT_ACCOUNT_ID: string;
   export const normalizeAccountId: any;
   export const getChatChannelMeta: any;
@@ -112,6 +114,9 @@ declare module "openclaw/plugin-sdk/runtime-env" {
 }
 
 declare module "openclaw/plugin-sdk/channel-config-schema" {
+  export type BlockStreamingCoalesceConfig = any;
+  export type DmPolicy = any;
+  export type GroupPolicy = any;
   export const BlockStreamingCoalesceSchema: any;
   export const DmPolicySchema: any;
   export const GroupPolicySchema: any;

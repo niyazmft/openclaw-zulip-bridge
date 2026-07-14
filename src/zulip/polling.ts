@@ -1,4 +1,4 @@
-import type { PluginRuntime } from "openclaw/plugin-sdk";
+import type { PluginRuntime } from "openclaw/plugin-sdk/channel-core";
 import type { ZulipMessage } from "./client.js";
 import { getZulipEventsWithRetry } from "./client.js";
 import { formatZulipLog, delay, maskPII } from "./monitor-helpers.js";

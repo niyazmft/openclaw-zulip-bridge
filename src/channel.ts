@@ -34,6 +34,8 @@ async function startZulipMonitor(cfg: OpenClawConfig, statusSink: any) {
         statusSink: statusSink,
       }).catch((err) => {
         // Monitor exited or crashed; allow restart on next probe
+        monitorAbortController?.abort();
+        monitorAbortController = null;
       });
       break;
     }
