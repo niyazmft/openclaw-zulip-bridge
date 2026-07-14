@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { PluginRuntime } from "openclaw/plugin-sdk";
+import type { PluginRuntime } from "openclaw/plugin-sdk/channel-core";
 import { getZulipRuntime } from "../runtime.js";
 import { downloadZulipUpload } from "./uploads.js";
 import { formatZulipLog, maskPII } from "./monitor-helpers.js";
