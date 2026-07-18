@@ -4,9 +4,9 @@ import { normalizeAccountId } from "openclaw/plugin-sdk/core";
 import type { ZulipAccountConfig, ZulipChatMode, ZulipConfig } from "../types.js";
 import { normalizeZulipBaseUrl } from "./client.js";
 
-export type ZulipTokenSource = "env" | "config" | "none";
-export type ZulipEmailSource = "env" | "config" | "none";
-export type ZulipBaseUrlSource = "env" | "config" | "none";
+type ZulipTokenSource = "env" | "config" | "none";
+type ZulipEmailSource = "env" | "config" | "none";
+type ZulipBaseUrlSource = "env" | "config" | "none";
 
 export type ResolvedZulipAccount = {
   accountId: string;
@@ -87,7 +87,7 @@ export function getZulipEnvSecret(name: string): string | undefined {
   return process.env[name]?.trim();
 }
 
-export function hasZulipEnvSecrets(): boolean {
+function hasZulipEnvSecrets(): boolean {
   return (
     Boolean(getZulipEnvSecret("ZULIP_API_KEY")) &&
     Boolean(getZulipEnvSecret("ZULIP_EMAIL")) &&
@@ -180,7 +180,7 @@ export function resolveZulipAccount(params: {
   };
 }
 
-export function listEnabledZulipAccounts(cfg: OpenClawConfig): ResolvedZulipAccount[] {
+function listEnabledZulipAccounts(cfg: OpenClawConfig): ResolvedZulipAccount[] {
   return listZulipAccountIds(cfg)
     .map((accountId) => resolveZulipAccount({ cfg, accountId }))
     .filter((account) => account.enabled);

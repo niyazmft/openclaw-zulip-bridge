@@ -13,7 +13,7 @@ import type { MonitorZulipOpts } from "./monitor.js";
 /**
  * Resolves the runtime environment for the Zulip monitor.
  */
-export function resolveRuntime(opts: MonitorZulipOpts): RuntimeEnv {
+function resolveRuntime(opts: MonitorZulipOpts): RuntimeEnv {
   return (
     opts.runtime ?? {
       log: console.log,

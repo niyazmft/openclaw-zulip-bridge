@@ -25,7 +25,7 @@ export type ZulipUser = {
   is_admin?: boolean | null;
 };
 
-export type ZulipPresenceEntry = {
+type ZulipPresenceEntry = {
   status?: "active" | "idle" | string;
   timestamp?: number;
   client?: string | null;
@@ -202,7 +202,7 @@ function assertSuccess(payload: ZulipApiResponse, context: string): void {
   throw new Error(`${context}: ${payload.msg || "unknown error"}`);
 }
 
-export async function zulipRequestWithRetry<T>(
+async function zulipRequestWithRetry<T>(
   client: ZulipClient,
   path: string,
   init?: RequestInit,
@@ -358,7 +358,7 @@ export async function registerZulipQueue(
   };
 }
 
-export async function getZulipEvents(
+async function getZulipEvents(
   client: ZulipClient,
   params: {
     queueId: string;

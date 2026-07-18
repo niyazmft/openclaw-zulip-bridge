@@ -49,7 +49,7 @@ const ZulipAccountSchema = z.object({
   autoSendOnMissingTool: z.boolean().optional(),
 });
 
-export const ZulipConfigSchema = buildCatchallMultiAccountChannelSchema(
+const ZulipConfigSchema = buildCatchallMultiAccountChannelSchema(
   ZulipAccountSchema,
 ).extend({
   streaming: z.boolean().optional(),
