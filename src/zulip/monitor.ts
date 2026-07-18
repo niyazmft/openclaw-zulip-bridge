@@ -7,6 +7,7 @@ import { getZulipRuntime } from "../runtime.js";
 import {
   deleteZulipQueue,
   registerZulipQueue,
+  sendZulipTyping,
   type ZulipMessage,
 } from "./client.js";
 import {
@@ -132,6 +133,46 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     // This avoids disk I/O for messages where sender is already authorized by static config.
     const configGroupAllowFromFallback = configGroupAllowFrom.length > 0 ? configGroupAllowFrom : configAllowFrom;
 
+    // ⚡ Performance: Cache disk-based allowlist with 30s TTL
+    let cachedStoreAllowFrom: string[] = [];
+    let storeLastRead = 0;
+    const STORE_CACHE_TTL_MS = 30_000;
+
+    async function refreshStoreAllowFrom(): Promise<string[]> {
+      const now = Date.now();
+      if (now - storeLastRead < STORE_CACHE_TTL_MS) return cachedStoreAllowFrom;
+
+      let storeAllowFrom: string[] = [];
+      try {
+        const fs = await import("node:fs/promises");
+        const path = await import("node:path");
+        const os = await import("node:os");
+        const possibleDirs = [
+          core.paths?.dataDir,
+          path.join(os.homedir(), ".openclaw"),
+          "/home/node/.openclaw",
+          "/tmp/openclaw-zulip",
+        ].filter(Boolean);
+        for (const dataDir of possibleDirs) {
+          const allowPath = path.join(dataDir, "credentials", `zulip-${account.accountId}-allowFrom.json`);
+          try {
+            const raw = await fs.readFile(allowPath, "utf8");
+            const parsed = JSON.parse(raw);
+            storeAllowFrom = normalizeAllowList(parsed.allowFrom || []);
+            break;
+          } catch (e) {
+            // Try next path
+          }
+        }
+      } catch (e) {
+        // File may not exist, that's ok
+      }
+
+      cachedStoreAllowFrom = storeAllowFrom;
+      storeLastRead = now;
+      return storeAllowFrom;
+    }
+
     const allowTextCommands = core.channel.commands.shouldHandleTextCommands({
       cfg: cfg,
       surface: "zulip",
@@ -216,15 +257,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       const oncharResult = stripOncharPrefix(rawText, oncharPrefixes);
 
       const uploadUrls = extractZulipUploadUrls(message.content ?? "", baseUrl);
-      const { mediaPaths, mediaTypes, mediaUrls } = await downloadAttachments({
-        core,
-        uploadUrls,
-        baseUrl,
-        authHeader: client.authHeader,
-        mediaMaxBytes,
-        accountId: account.accountId,
-        messageId,
-      });
 
       const oncharTriggered = oncharEnabled && oncharResult.triggered;
 
@@ -233,8 +265,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         (rawText.toLowerCase().includes(botUsernameMention) ||
           core.channel.mentions.matchesMentionPatterns(rawText, mentionRegexes));
 
-      // ⚡ Bolt Optimization: Lazily evaluate readAllowFromStore
-      // Check static config first to avoid unnecessary disk I/O for already-authorized senders
+      // ⚡ Performance: Use cached disk-based allowlist (30s TTL)
       let senderAllowedForCommands = isSenderAllowed({
         senderId,
         senderName,
@@ -251,34 +282,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       let effectiveGroupAllowFrom = configGroupAllowFromFallback;
 
       if (!senderAllowedForCommands || !groupAllowedForCommands) {
-        // Workaround: SDK readAllowFromStore is broken in 2026.7.1, read file directly
-        let storeAllowFrom: string[] = [];
-        try {
-          const fs = await import("node:fs/promises");
-          const path = await import("node:path");
-          const os = await import("node:os");
-          // Try multiple possible data directories
-          const possibleDirs = [
-            core.paths?.dataDir,
-            path.join(os.homedir(), ".openclaw"),
-            "/home/node/.openclaw",
-            "/tmp/openclaw-zulip",
-          ].filter(Boolean);
-          for (const dataDir of possibleDirs) {
-            const allowPath = path.join(dataDir, "credentials", `zulip-${account.accountId}-allowFrom.json`);
-            try {
-              const raw = await fs.readFile(allowPath, "utf8");
-              const parsed = JSON.parse(raw);
-              storeAllowFrom = normalizeAllowList(parsed.allowFrom || []);
-              break;
-            } catch (e) {
-              // Try next path
-            }
-          }
-        } catch (e) {
-          // File may not exist, that's ok
-        }
-
+        const storeAllowFrom = await refreshStoreAllowFrom();
         effectiveAllowFrom = Array.from(new Set([...configAllowFrom, ...storeAllowFrom]));
         effectiveGroupAllowFrom = Array.from(new Set([...configGroupAllowFromFallback, ...storeAllowFrom]));
 
@@ -407,6 +411,31 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
       if (oncharEnabled && !oncharTriggered && !wasMentioned && !isControlCommand) {
         return;
+      }
+
+      // Download attachments only for messages that passed policy checks
+      const { mediaPaths, mediaTypes, mediaUrls } = await downloadAttachments({
+        core,
+        uploadUrls,
+        baseUrl,
+        authHeader: client.authHeader,
+        mediaMaxBytes,
+        accountId: account.accountId,
+        messageId,
+      });
+
+      // UX: Start typing indicators immediately so users see activity during long generations
+      if (!isDM && streamId) {
+        try {
+          await sendZulipTyping(client, {
+            op: "start",
+            type: "stream",
+            streamId: Number(streamId),
+            topic: topic || DEFAULT_TOPIC,
+          });
+        } catch {
+          // best-effort typing indicator
+        }
       }
 
       const effectiveWasMentioned =
@@ -593,6 +622,21 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             reactionsEnabled,
             logVerbose: logVerboseMessage,
           });
+          // UX: Best-effort send an explanatory reply when dispatch fails in channels
+          if (!isDM) {
+            try {
+              await sendMessageZulip(
+                to,
+                "⚠️ I encountered an error processing this message. Please try again.",
+                {
+                  accountId: account.accountId,
+                  topic,
+                },
+              );
+            } catch {
+              // best-effort
+            }
+          }
         } else {
           await addReactionSafe({
             client,
