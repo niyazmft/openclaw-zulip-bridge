@@ -74,7 +74,7 @@ export type ZulipMessage = {
 export function isInternalHost(url: string): boolean {
   try {
     const { hostname } = new URL(url);
-    const h = hostname.toLowerCase();
+    const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
     if (["localhost", "127.0.0.1", "::1", "0.0.0.0"].includes(h)) return true;
     if (h === "169.254.169.254") return true; // AWS metadata
     if (/^10\./.test(h) || /^192\.168\./.test(h)) return true;
