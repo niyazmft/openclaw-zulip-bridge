@@ -2,6 +2,7 @@ import { createTypingCallbacks } from "openclaw/plugin-sdk/channel-reply-options
 import { logTypingFailure } from "openclaw/plugin-sdk/channel-feedback";
 import { sendZulipTyping } from "./client.js";
 import { sendMessageZulip } from "./send.js";
+import { addReactionSafe } from "./reactions.js";
 import { formatZulipLog, maskPII } from "./monitor-helpers.js";
 import { extractZulipTopicDirective } from "./text-utils.js";
 import { readLatestAssistantTexts } from "./fallback-reader.js";
@@ -207,6 +208,14 @@ export async function dispatchZulipReply(params: {
               }
               deliveredAny = true;
               statusSink?.({ lastOutboundAt: Date.now() });
+              // UX: Signal that the reply was auto-sent via fallback
+              await addReactionSafe({
+                client,
+                messageId,
+                emojiName: "robot",
+                reactionsEnabled: account.config.reactions?.enabled !== false,
+                logVerbose: logVerboseMessage,
+              });
             }
           }
         } catch (fbErr) {
