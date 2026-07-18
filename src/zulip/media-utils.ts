@@ -11,7 +11,7 @@ const checkedMediaDirs = new Set<string>();
 /**
  * Saves a Zulip media buffer to a temporary file or using the core media service.
  */
-export async function saveZulipMediaBuffer(params: {
+async function saveZulipMediaBuffer(params: {
   core: ReturnType<typeof getZulipRuntime>;
   buffer: Buffer;
   contentType: string;

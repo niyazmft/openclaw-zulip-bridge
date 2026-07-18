@@ -1,4 +1,4 @@
-export const DEFAULT_ONCHAR_PREFIXES = [">", "!"];
+const DEFAULT_ONCHAR_PREFIXES = [">", "!"];
 
 const HTML_TAG_REGEX = /<[^>]+>/g;
 const MENTION_REGEX = /@\*\*([^*]+)\*\*/g;
