@@ -7,6 +7,7 @@ import { getZulipRuntime } from "../runtime.js";
 import { resolveZulipAccount } from "./accounts.js";
 import {
   createZulipClient,
+  isInternalHost,
   normalizeZulipBaseUrl,
   sendZulipPrivateMessage,
   sendZulipStreamMessage,
@@ -243,35 +244,46 @@ export async function sendMessageZulip(
     const isRemote = isHttpUrl(mediaUrl);
 
     if (isRemote && !isZulipHosted) {
-      const maxBytes = (cfg.agents?.defaults?.mediaMaxMb ?? 5) * 1024 * 1024;
-      const fetched = await core.channel.media.fetchRemoteMedia({
-        url: mediaUrl,
-        maxBytes,
-      });
-      const filename = (() => {
-        try {
-          return path.basename(new URL(mediaUrl).pathname) || "upload.bin";
-        } catch {
-          return "upload.bin";
-        }
-      })();
-      if (core.channel.media?.saveMediaBuffer) {
-        const saved = await core.channel.media.saveMediaBuffer(
-          fetched.buffer,
-          fetched.contentType ?? "application/octet-stream",
-          "outbound",
-          maxBytes,
-          filename,
+      // Security: reject internal/private IPs to prevent SSRF via mediaUrl
+      if (isInternalHost(mediaUrl)) {
+        core.log?.(
+          formatZulipLog("zulip outbound security warning: rejected internal mediaUrl", {
+            accountId: account.accountId,
+            mediaUrl: maskPII(mediaUrl),
+          }),
         );
-        tempFilePath = saved.path;
+        mediaUrl = undefined;
       } else {
-        tempFilePath = await writeTempFile(fetched.buffer, filename);
-        tempFileCleanup = true;
-      }
-      const upload = await uploadZulipFile(client, tempFilePath);
-      mediaUrl = upload.url;
-      if (tempFileCleanup && tempFilePath) {
-        await fsPromises.unlink(tempFilePath).catch(() => undefined);
+        const maxBytes = (cfg.agents?.defaults?.mediaMaxMb ?? 5) * 1024 * 1024;
+        const fetched = await core.channel.media.fetchRemoteMedia({
+          url: mediaUrl,
+          maxBytes,
+        });
+        const filename = (() => {
+          try {
+            return path.basename(new URL(mediaUrl).pathname) || "upload.bin";
+          } catch {
+            return "upload.bin";
+          }
+        })();
+        if (core.channel.media?.saveMediaBuffer) {
+          const saved = await core.channel.media.saveMediaBuffer(
+            fetched.buffer,
+            fetched.contentType ?? "application/octet-stream",
+            "outbound",
+            maxBytes,
+            filename,
+          );
+          tempFilePath = saved.path;
+        } else {
+          tempFilePath = await writeTempFile(fetched.buffer, filename);
+          tempFileCleanup = true;
+        }
+        const upload = await uploadZulipFile(client, tempFilePath);
+        mediaUrl = upload.url;
+        if (tempFileCleanup && tempFilePath) {
+          await fsPromises.unlink(tempFilePath).catch(() => undefined);
+        }
       }
     } else if (!isRemote) {
       core.log?.(

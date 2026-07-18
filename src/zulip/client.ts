@@ -68,8 +68,27 @@ export type ZulipMessage = {
 };
 
 /**
+ * Checks whether a URL hostname resolves to an internal/private IP or
+ * well-known metadata endpoint. Used to prevent SSRF.
+ */
+export function isInternalHost(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    if (["localhost", "127.0.0.1", "::1", "0.0.0.0"].includes(h)) return true;
+    if (h === "169.254.169.254") return true; // AWS metadata
+    if (/^10\./.test(h) || /^192\.168\./.test(h)) return true;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Normalizes a Zulip base URL by trimming whitespace and removing trailing slashes.
  * Security: Only http:// and https:// protocols are allowed to prevent SSRF and protocol smuggling.
+ * Also rejects internal/private IP addresses to prevent SSRF to localhost or cloud metadata endpoints.
  */
 export function normalizeZulipBaseUrl(raw?: string | null): string | undefined {
   const trimmed = raw?.trim();
@@ -78,6 +97,10 @@ export function normalizeZulipBaseUrl(raw?: string | null): string | undefined {
   }
   // Security check: only allow http or https protocols.
   if (!/^https?:\/\//i.test(trimmed)) {
+    return undefined;
+  }
+  // Security check: reject internal/private IPs and metadata endpoints.
+  if (isInternalHost(trimmed)) {
     return undefined;
   }
   return trimmed.replace(/\/+$/, "");
@@ -484,12 +507,19 @@ export async function uploadZulipFile(
 ): Promise<{ url: string }> {
   const resolvedPath = path.resolve(filePath);
   const tmpDir = path.resolve(os.tmpdir());
-  const dataDir = path.resolve(getZulipRuntime().paths.dataDir);
+  const rawDataDir = getZulipRuntime().paths?.dataDir;
+  const dataDir = rawDataDir ? path.resolve(rawDataDir) : null;
 
-  if (!resolvedPath.startsWith(tmpDir + path.sep) && !resolvedPath.startsWith(dataDir + path.sep)) {
+  const allowedPaths: string[] = [tmpDir + path.sep];
+  if (dataDir) {
+    allowedPaths.push(dataDir + path.sep);
+  }
+
+  const isAllowed = allowedPaths.some((allowed) => resolvedPath.startsWith(allowed));
+  if (!isAllowed) {
       throw new Error(
           `Refusing to upload file from unauthorized path: ${filePath}. ` +
-          `Allowed paths are under ${tmpDir} or ${dataDir}.`
+          `Allowed paths are under ${tmpDir}${dataDir ? ` or ${dataDir}` : ""}.`
       );
   }
 
