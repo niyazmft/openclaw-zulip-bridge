@@ -172,16 +172,24 @@ export function createZulipClient(params: {
     if (init?.body && !headers.has("Content-Type") && typeof init.body === "string") {
       headers.set("Content-Type", "application/x-www-form-urlencoded");
     }
-    const res = await fetchImpl(url, { ...init, headers });
-    if (!res.ok) {
-      const detail = await readZulipError(res);
-      const error = new Error(
-        `Zulip API ${res.status} ${res.statusText}: ${detail || "unknown error"}`,
-      ) as Error & { status?: number };
-      error.status = res.status;
-      throw error;
+    // Security/Reliability: default 30s timeout prevents indefinite hangs
+    const controller = new AbortController();
+    const timeoutMs = 30000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetchImpl(url, { ...init, headers, signal: controller.signal });
+      if (!res.ok) {
+        const detail = await readZulipError(res);
+        const error = new Error(
+          `Zulip API ${res.status} ${res.statusText}: ${detail || "unknown error"}`,
+        ) as Error & { status?: number };
+        error.status = res.status;
+        throw error;
+      }
+      return (await res.json()) as T;
+    } finally {
+      clearTimeout(timeout);
     }
-    return (await res.json()) as T;
   };
 
   return { baseUrl, authHeader, fetchImpl, request };

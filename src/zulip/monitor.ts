@@ -666,6 +666,17 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           break;
         }
       } catch (err: any) {
+        core.error?.(
+          formatZulipLog("zulip monitor loop error", {
+            accountId: opts.accountId,
+            error: String(err),
+          }),
+        );
+        opts.statusSink?.({
+          connected: false,
+          lastError: String(err),
+        });
+        await delay(5000);
       }
     }
     core.log?.(

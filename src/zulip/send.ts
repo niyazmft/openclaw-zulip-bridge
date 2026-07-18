@@ -283,6 +283,7 @@ export async function sendMessageZulip(
         mediaUrl = upload.url;
         if (tempFileCleanup && tempFilePath) {
           await fsPromises.unlink(tempFilePath).catch(() => undefined);
+          await fsPromises.rm(path.dirname(tempFilePath), { recursive: true, force: true }).catch(() => undefined);
         }
       }
     } else if (!isRemote) {
