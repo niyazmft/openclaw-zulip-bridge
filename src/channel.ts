@@ -24,6 +24,7 @@ import {
   type ResolvedZulipAccount,
 } from "./zulip/accounts.js";
 import { normalizeZulipBaseUrl } from "./zulip/client.js";
+import { monitorZulipProvider } from "./zulip/monitor.js";
 import { maskPII, formatZulipLog } from "./zulip/monitor-helpers.js";
 import { probeZulip } from "./zulip/probe.js";
 import { sendMessageZulip } from "./zulip/send.js";
@@ -125,6 +126,30 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
       targetResolver: {
         looksLikeId: looksLikeZulipTargetId,
         hint: "<stream:NAME[:topic]|user:email|#stream[:topic]|@email>",
+      },
+    },
+    gateway: {
+      startAccount: async (ctx: any) => {
+        const account = ctx.account;
+        if (!account?.apiKey || !account?.email || !account?.baseUrl) {
+          throw new Error(
+            `Zulip not configured for account "${ctx.accountId}" (missing apiKey, email, or baseUrl)`
+          );
+        }
+        ctx.log?.info?.(`[zulip] [${ctx.accountId}] starting monitor via gateway`);
+        const statusSink = (patch: Partial<ChannelAccountSnapshot>) => {
+          ctx.setStatus?.({ accountId: ctx.accountId, ...patch });
+        };
+        await monitorZulipProvider({
+          apiKey: account.apiKey,
+          email: account.email,
+          baseUrl: account.baseUrl,
+          accountId: ctx.accountId,
+          config: ctx.cfg,
+          runtime: ctx.runtime,
+          abortSignal: ctx.abortSignal,
+          statusSink,
+        });
       },
     },
   },
