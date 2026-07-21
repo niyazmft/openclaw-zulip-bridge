@@ -1,6 +1,6 @@
 # OpenClaw Zulip Bridge
 
-[![Version](https://img.shields.io/badge/version-2026.8.1-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
+[![Version](https://img.shields.io/badge/version-2026.8.2-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-%3E%3D2026.6.0-green)](https://openclaw.ai)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-brightgreen)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-10.32.1-orange)](https://pnpm.io)
@@ -354,13 +354,13 @@ openclaw plugins install ./ --force
 
 ### Health-monitor restarting every ~10 min with `reason: stopped`
 
-**Fixed in v2026.8.1+.** The monitor now starts via `gateway.startAccount` inside the plugin's `base` parameter, so the host properly wires `statusSink` and `abortSignal`.
+**Fixed in v2026.8.2+.** The monitor now starts via `gateway.startAccount` inside the plugin's `base` parameter, so the host properly wires `statusSink` and `abortSignal`.
 
 If you still see this on an older version, upgrade to the latest release.
 
 ### "registerFull already called, skipping duplicate monitor start"
 
-**Status:** Harmless in v2026.8.1+. The plugin now has a module-level `registerFullCalled` guard.
+**Status:** Harmless in v2026.8.2+. The plugin now has a module-level `registerFullCalled` guard.
 
 ### Queue Registration Fails
 Verify credentials with `openclaw channels add` and re-enter them.
