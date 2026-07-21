@@ -857,7 +857,7 @@ export async function updateZulipMessageFlag(
   client: ZulipClient,
   params: {
     messageId: string | number;
-    flag: "starred";
+    flag: "starred" | "read";
     op: "add" | "remove";
   },
 ): Promise<void> {
