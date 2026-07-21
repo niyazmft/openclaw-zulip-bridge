@@ -5,6 +5,7 @@ import { resolveZulipAccount } from "./accounts.js";
 import {
   createZulipClient,
   fetchZulipMe,
+  fetchZulipSubscriptions,
   normalizeZulipBaseUrl,
 } from "./client.js";
 import { formatZulipLog, maskPII } from "./monitor-helpers.js";
@@ -77,6 +78,35 @@ export async function initializeZulipMonitor(params: {
     core.log?.(
       formatZulipLog("zulip admin actions enabled", {
         accountId: account.accountId,
+      }),
+    );
+  }
+
+  // Log subscriptions so admins can verify stream visibility
+  try {
+    const subscriptions = await fetchZulipSubscriptions(client);
+    const streamNames = subscriptions.map((s) => s.name).filter(Boolean);
+    if (streamNames.length > 0) {
+      core.log?.(
+        formatZulipLog("zulip subscriptions", {
+          accountId: account.accountId,
+          count: streamNames.length,
+          streams: streamNames.join(", "),
+        }),
+      );
+    } else {
+      core.log?.(
+        formatZulipLog("zulip no subscriptions", {
+          accountId: account.accountId,
+          note: "bot not subscribed to any streams — stream messages will be invisible",
+        }),
+      );
+    }
+  } catch (err) {
+    core.log?.(
+      formatZulipLog("zulip subscription check failed", {
+        accountId: account.accountId,
+        error: String(err),
       }),
     );
   }

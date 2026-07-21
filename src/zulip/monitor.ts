@@ -8,6 +8,7 @@ import {
   deleteZulipQueue,
   registerZulipQueue,
   sendZulipTyping,
+  updateZulipMessageFlag,
   type ZulipMessage,
 } from "./client.js";
 import {
@@ -503,6 +504,27 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       });
 
       const to = kind === "dm" ? `user:${senderId}` : `stream:${streamName || streamId}:${topic}`;
+
+      // UX: Send a "Thinking..." placeholder message immediately so users see activity.
+      // We will edit this message in-place with the actual response when ready.
+      let placeholderMessageId: string | undefined;
+      try {
+        const phResult = await sendMessageZulip(to, "🤔 Thinking...", {
+          accountId: account.accountId,
+          topic,
+        });
+        if (phResult?.messageId) {
+          placeholderMessageId = phResult.messageId;
+        }
+      } catch (err) {
+        core.log?.(
+          formatZulipLog("zulip placeholder send failed", {
+            accountId: account.accountId,
+            error: String(err),
+          }),
+        );
+      }
+
       const ctxPayload = core.channel.reply.finalizeInboundContext({
         Body: body,
         RawBody: bodyText,
@@ -602,6 +624,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         to,
         statusSink: opts.statusSink,
         logVerboseMessage,
+        placeholderMessageId,
       });
 
       if (reactionsEnabled) {
@@ -646,6 +669,17 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             logVerbose: logVerboseMessage,
           });
         }
+      }
+
+      // Mark processed message as read (best-effort)
+      try {
+        await updateZulipMessageFlag(client, {
+          messageId,
+          flag: "read",
+          op: "add",
+        });
+      } catch (err) {
+        logVerboseMessage(`zulip mark-read failed: ${String(err)}`);
       }
 
       opts.statusSink?.({ lastInboundAt: Date.now() });
@@ -693,6 +727,19 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     }
 
     core.log?.(formatZulipLog("zulip monitor loop entering", { accountId: account.accountId }));
+
+    // Presence heartbeat: keep bot showing as 🟢 online
+    const presenceInterval = setInterval(async () => {
+      try {
+        await client.request("/users/me/presence", {
+          method: "POST",
+          body: "status=active",
+        });
+      } catch (err) {
+        logVerboseMessage(`zulip presence heartbeat failed: ${String(err)}`);
+      }
+    }, 60_000);
+
     while (!opts.abortSignal?.aborted) {
       try {
         const result = await pollOnce({
@@ -729,6 +776,8 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         aborted: opts.abortSignal?.aborted,
       }),
     );
+
+    clearInterval(presenceInterval);
 
     if (queueManager) {
       const queue = queueManager.getQueue();

@@ -1,6 +1,6 @@
 import { createTypingCallbacks } from "openclaw/plugin-sdk/channel-reply-options-runtime";
 import { logTypingFailure } from "openclaw/plugin-sdk/channel-feedback";
-import { sendZulipTyping } from "./client.js";
+import { sendZulipTyping, editZulipMessage } from "./client.js";
 import { sendMessageZulip } from "./send.js";
 import { addReactionSafe } from "./reactions.js";
 import { formatZulipLog, maskPII } from "./monitor-helpers.js";
@@ -32,6 +32,7 @@ export async function dispatchZulipReply(params: {
   to: string;
   statusSink?: (patch: any) => void;
   logVerboseMessage: (msg: string) => void;
+  placeholderMessageId?: string;
 }): Promise<unknown> {
   const {
     core,
@@ -53,6 +54,7 @@ export async function dispatchZulipReply(params: {
     to,
     statusSink,
     logVerboseMessage,
+    placeholderMessageId,
   } = params;
 
   const typingParams = isDM
@@ -91,6 +93,7 @@ export async function dispatchZulipReply(params: {
   });
 
   let deliveredAny = false;
+  let placeholderConsumed = false;
 
   const { dispatcher, replyOptions, markDispatchIdle } =
     core.channel.reply.createReplyDispatcherWithTyping({
@@ -106,25 +109,62 @@ export async function dispatchZulipReply(params: {
         if (mediaUrls.length === 0) {
           const chunkMode = core.channel.text.resolveChunkMode(cfg, "zulip", account.accountId);
           const chunks = core.channel.text.chunkMarkdownTextWithMode(text, textLimit, chunkMode);
-          for (const chunk of chunks.length > 0 ? chunks : [text]) {
-            if (!chunk) {
-              continue;
+          const nonEmptyChunks = (chunks.length > 0 ? chunks : [text]).filter(Boolean);
+          for (let idx = 0; idx < nonEmptyChunks.length; idx++) {
+            const chunk = nonEmptyChunks[idx];
+            // UX: Edit the placeholder message for the first chunk, then send new messages for the rest.
+            if (!placeholderConsumed && placeholderMessageId) {
+              placeholderConsumed = true;
+              try {
+                await editZulipMessage(client, {
+                  messageId: placeholderMessageId,
+                  content: chunk,
+                });
+              } catch (err) {
+                logVerboseMessage(
+                  `zulip placeholder edit failed: ${String(err)}; falling back to new message`,
+                );
+                await sendMessageZulip(to, chunk, {
+                  accountId: account.accountId,
+                  topic: resolvedTopic,
+                });
+              }
+            } else {
+              await sendMessageZulip(to, chunk, {
+                accountId: account.accountId,
+                topic: resolvedTopic,
+              });
             }
-            await sendMessageZulip(to, chunk, {
-              accountId: account.accountId,
-              topic: resolvedTopic,
-            });
           }
         } else {
           let first = true;
           for (const mediaUrl of mediaUrls) {
             const caption = first ? text : "";
             first = false;
-            await sendMessageZulip(to, caption, {
-              accountId: account.accountId,
-              mediaUrl,
-              topic: resolvedTopic,
-            });
+            if (!placeholderConsumed && placeholderMessageId) {
+              placeholderConsumed = true;
+              try {
+                await editZulipMessage(client, {
+                  messageId: placeholderMessageId,
+                  content: caption,
+                });
+              } catch (err) {
+                logVerboseMessage(
+                  `zulip placeholder edit failed: ${String(err)}; falling back to new message`,
+                );
+                await sendMessageZulip(to, caption, {
+                  accountId: account.accountId,
+                  mediaUrl,
+                  topic: resolvedTopic,
+                });
+              }
+            } else {
+              await sendMessageZulip(to, caption, {
+                accountId: account.accountId,
+                mediaUrl,
+                topic: resolvedTopic,
+              });
+            }
           }
         }
         statusSink?.({ lastOutboundAt: Date.now() });
