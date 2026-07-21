@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) in the format `YYYY.M.PATCH`.
 
-## [2026.8.0] - 2026-07-21
+## [2026.8.1] - 2026-07-21
 
 ### Added
 - **Placeholder editing** (#199): Bot shows "🤔 Thinking..." placeholder immediately, replaces it with actual response when ready
