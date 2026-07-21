@@ -112,9 +112,9 @@ Migration complete as of v2026.7.0:
 
 ## Troubleshooting
 
-- **Health-monitor restarts every ~5 min** with `reason: stopped`: Fixed in v2026.8.1+. `gateway.startAccount` must be placed inside the `base` parameter of `createChatChannelPlugin`, not at the top level. The host checks `snapshot.running` to decide if channel is alive.
+- **Health-monitor restarts every ~5 min** with `reason: stopped`: Fixed in v2026.8.2+. `gateway.startAccount` must be placed inside the `base` parameter of `createChatChannelPlugin`, not at the top level. The host checks `snapshot.running` to decide if channel is alive.
 - **Monitor never starts after hot reload / wizard config**: If `startZulipMonitor` creates an `AbortController` before validating credentials, and credentials are missing at startup, the controller blocks all future starts. Only create the controller **after** credential validation, right before launching the actual monitor loop.
-- **Host calls `registerFull` twice**: Fixed in v2026.8.1+ with a module-level `registerFullCalled` guard. This is normal host behavior.
+- **Host calls `registerFull` twice**: Fixed in v2026.8.2+ with a module-level `registerFullCalled` guard. This is normal host behavior.
 - **"Invalid config: must not have additional properties: streaming"**: The host's `openclaw channels add` wizard writes `"streaming": true` to the config. If your manifest JSON Schema has `"additionalProperties": false` and `streaming` isn't in `properties`, config validation fails. Add `streaming` to BOTH `configSchema` and `channelConfigs.schema` in `openclaw.plugin.json`.
 - **`readAllowFromStore(channelName)` throws** "invalid pairing channel: expected non-empty string; got undefined": SDK bug in host `2026.7.1`. Workaround: read `credentials/zulip-{accountId}-allowFrom.json` directly from the data directory.
 - **Dedupe store blocks re-processing across restarts**: The dedupe file at `/tmp/openclaw-zulip/zulip_dedupe_default.json` survives container restarts. Clear it when testing fresh message flows.
