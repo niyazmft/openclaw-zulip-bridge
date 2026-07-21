@@ -20,6 +20,9 @@ npm run check:package      # Validates version sync, required fields, and npm pa
 - **Core wiring**: `src/channel.ts` — the single file that glues config, accounts, messaging, security, and monitoring together via `createChatChannelPlugin`.
 - **Host dependency**: `openclaw/plugin-sdk` subpaths are **not npm packages**. They are provided at runtime by the OpenClaw host. Type shims live in `types/openclaw-plugin-sdk.d.ts`; runtime test shims in `test/openclaw-plugin-sdk-shim.js`.
   - Channel plugins should import from `openclaw/plugin-sdk/channel-core` (not the legacy `openclaw/plugin-sdk/core` umbrella).
+- **Monitor lifecycle**: The monitor must be started via `gateway.startAccount` inside the `base` parameter of `createChatChannelPlugin`. Putting `gateway` at the top level of the returned object causes `createChatChannelPlugin` to strip it during destructuring, resulting in the host throwing "Channel zulip does not support runtime start".
+  - `gateway.startAccount(ctx)` receives `ctx.setStatus`, `ctx.abortSignal`, `ctx.account`, `ctx.accountId`, `ctx.cfg`, `ctx.runtime`, `ctx.log`.
+- **Bot workspace**: `src/zulip/workspace.ts` provides sandboxed file storage under `data/zulip-workspace/{accountId}/` with path-traversal rejection, automatic cleanup, and optional Zulip upload integration.
 
 ## TypeScript Conventions
 
@@ -109,9 +112,9 @@ Migration complete as of v2026.7.0:
 
 ## Troubleshooting
 
-- **Health-monitor restarts every ~5 min** with `reason: stopped**: Call `statusSink({ running: true, connected: true })` at the START of your monitor function, not conditionally inside event handlers. The host checks `snapshot.running` to decide if channel is alive.
+- **Health-monitor restarts every ~5 min** with `reason: stopped`: Fixed in v2026.8.0+. `gateway.startAccount` must be placed inside the `base` parameter of `createChatChannelPlugin`, not at the top level. The host checks `snapshot.running` to decide if channel is alive.
 - **Monitor never starts after hot reload / wizard config**: If `startZulipMonitor` creates an `AbortController` before validating credentials, and credentials are missing at startup, the controller blocks all future starts. Only create the controller **after** credential validation, right before launching the actual monitor loop.
-- **Host calls `registerFull` twice**: Add a module-level `registerFullCalled` guard to prevent duplicate monitor starts. This is normal host behavior.
+- **Host calls `registerFull` twice**: Fixed in v2026.8.0+ with a module-level `registerFullCalled` guard. This is normal host behavior.
 - **"Invalid config: must not have additional properties: streaming"**: The host's `openclaw channels add` wizard writes `"streaming": true` to the config. If your manifest JSON Schema has `"additionalProperties": false` and `streaming` isn't in `properties`, config validation fails. Add `streaming` to BOTH `configSchema` and `channelConfigs.schema` in `openclaw.plugin.json`.
 - **`readAllowFromStore(channelName)` throws** "invalid pairing channel: expected non-empty string; got undefined": SDK bug in host `2026.7.1`. Workaround: read `credentials/zulip-{accountId}-allowFrom.json` directly from the data directory.
 - **Dedupe store blocks re-processing across restarts**: The dedupe file at `/tmp/openclaw-zulip/zulip_dedupe_default.json` survives container restarts. Clear it when testing fresh message flows.
@@ -120,5 +123,6 @@ Migration complete as of v2026.7.0:
 - **Deprecated providerAuthEnvVars**: Migrate to `channelEnvVars` in manifest and package.json.
 - **No startup logs** for your channel? Verify host calls `startAccount` and `listAccountIds` returns expected account IDs.
 - **Telegram fetch timeouts**: Separate network issue on the test device, not related to your plugin.
+- **Bot presence not showing online**: Zulip API rejects `POST /users/me/presence` for bot accounts. This is a platform limitation, not a bug.
 
 **Note**: This file is maintained as project documentation and is safe to commit.
