@@ -1,6 +1,6 @@
 # OpenClaw Zulip Bridge
 
-[![Version](https://img.shields.io/badge/version-2026.7.4-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
+[![Version](https://img.shields.io/badge/version-2026.8.0-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-%3E%3D2026.6.0-green)](https://openclaw.ai)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-brightgreen)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-10.32.1-orange)](https://pnpm.io)
@@ -63,6 +63,12 @@ That's it — no manual config editing needed.
 - **Durable Deduplication**: Built-in persistent deduplication store to prevent duplicate message processing.
 - **Media Support**: Automatically processes Zulip uploads and inline images.
 - **Rich Feedback**: Optional reaction-based status indicators for request start, success, and errors.
+- **Placeholder Editing**: Shows "🤔 Thinking..." placeholder while AI generates a response, then edits it in-place.
+- **Mark as Read**: Automatically marks user messages as read after processing.
+- **Typing Indicators**: Best-effort typing indicators during AI generation.
+- **Bot Workspace**: Sandboxed file storage for generated/downloaded files under `data/zulip-workspace/`.
+- **SSRF Protection**: Rejects internal IPs, localhost, and AWS metadata endpoints for base URLs.
+- **Security Hardening**: URL encoding for all path parameters, path traversal sanitization, symlink rejection.
 - **Standardized Observability**: Machine-parseable logs for easy monitoring and troubleshooting.
 
 ---
@@ -297,11 +303,22 @@ After setup, verify the bridge works:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-- **monitor.ts**: Event loop that polls Zulip API, maintains event queue with persistence
-- **client.ts**: HTTP client wrapping Zulip REST API
-- **reply-handler.ts**: Converts agent responses to Zulip format, handles chunking
-- **send.ts**: Message delivery with security validation
+- **monitor.ts**: Event loop that polls Zulip API, maintains event queue with persistence, handles placeholder editing and mark-read
+- **client.ts**: HTTP client wrapping Zulip REST API with SSRF protection and URL encoding
+- **reply-handler.ts**: Converts agent responses to Zulip format, handles chunking and placeholder editing
+- **send.ts**: Message delivery with security validation and typing indicators
 - **accounts.ts**: Multi-account configuration resolution
+- **workspace.ts**: Sandboxed bot file storage for generated/downloaded files
+- **policy.ts**: DM/group traffic policy enforcement
+- **polling.ts**: Event polling with retry and backoff
+- **queue-manager.ts**: Queue persistence and expiry handling
+- **dedupe-store.ts**: Message deduplication with TTL
+- **bootstrap.ts**: Monitor initialization with subscription logging
+- **fs-utils.ts**: Safe file operations with path traversal and symlink protection
+- **text-utils.ts**: Text processing utilities
+- **reactions.ts**: Reaction handling for status indicators
+- **uploads.ts**: Upload URL extraction and download security
+- **media-utils.ts**: Media processing and sanitization
 
 ---
 
@@ -316,22 +333,6 @@ After setup, verify the bridge works:
 openclaw config set plugins.allow '["zulip","telegram","memory-core","exa","ollama"]'
 openclaw gateway restart
 ```
-
-### "registerFull already called, skipping duplicate monitor start"
-
-**Status:** Harmless — the host calls `registerFull` twice during startup. The plugin deduplicates this.
-
-### "Health-monitor restarting (reason: stopped)"
-
-**Cause:** The monitor's `statusSink({ running: true })` wasn't called at the start of the monitor loop, so the host thinks the channel is dead.
-
-**Fix:** Ensure `statusSink` is called at the **top** of the monitor function, not conditionally inside event handlers.
-
-### "Invalid config: must not have additional properties: streaming"
-
-**Cause:** The manifest JSON Schema in `openclaw.plugin.json` was missing the `streaming` property that the host wizard writes.
-
-**Fix:** Add `"streaming": { "type": "boolean" }` to both `configSchema` and `channelConfigs.schema` in the manifest.
 
 ### openclaw plugins install ./ --link fails
 Install from ClawHub:
@@ -351,8 +352,15 @@ openclaw plugins install ./ --force
 1. Restart the gateway: `openclaw gateway restart`
 2. Check that the plugin is in the extensions dir: `ls ~/.openclaw/extensions/zulip/`
 
-### "not a valid hook pack"
-Ensure you cloned to a neutral directory and ran `pnpm install && pnpm run build`.
+### Health-monitor restarting every ~10 min with `reason: stopped`
+
+**Fixed in v2026.8.0+.** The monitor now starts via `gateway.startAccount` inside the plugin's `base` parameter, so the host properly wires `statusSink` and `abortSignal`.
+
+If you still see this on an older version, upgrade to the latest release.
+
+### "registerFull already called, skipping duplicate monitor start"
+
+**Status:** Harmless in v2026.8.0+. The plugin now has a module-level `registerFullCalled` guard.
 
 ### Queue Registration Fails
 Verify credentials with `openclaw channels add` and re-enter them.
@@ -363,9 +371,27 @@ Ensure the bot is a member of the stream and it's in your `streams` config.
 ### Logs show "mention required"
 Default requires @mentions. Check your `chatmode` setting.
 
+### Typing indicator TTL exceeded
+The typing indicator auto-stops after 60 seconds if the response takes longer. This is expected behavior.
+
 ---
 
 ## Known Issues
+
+### Bot Presence (Online Status)
+
+**Status:** Platform limitation (Zulip API restriction)
+
+**Problem:** The bot does not show as 🟢 online in Zulip's user list.
+
+**Root Cause:** Zulip's `POST /users/me/presence` endpoint explicitly rejects bot requests with:
+```json
+{"result":"error","msg":"This endpoint does not accept bot requests.","code":"BAD_REQUEST"}
+```
+
+**Workaround:** None available. Bot accounts cannot update presence status in Zulip.
+
+---
 
 ### Performance: First Message After Startup is Slower
 
