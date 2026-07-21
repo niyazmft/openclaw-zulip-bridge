@@ -727,19 +727,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     }
 
     core.log?.(formatZulipLog("zulip monitor loop entering", { accountId: account.accountId }));
-
-    // Presence heartbeat: keep bot showing as 🟢 online
-    const presenceInterval = setInterval(async () => {
-      try {
-        await client.request("/users/me/presence", {
-          method: "POST",
-          body: "status=active",
-        });
-      } catch (err) {
-        logVerboseMessage(`zulip presence heartbeat failed: ${String(err)}`);
-      }
-    }, 60_000);
-
     while (!opts.abortSignal?.aborted) {
       try {
         const result = await pollOnce({
@@ -776,8 +763,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         aborted: opts.abortSignal?.aborted,
       }),
     );
-
-    clearInterval(presenceInterval);
 
     if (queueManager) {
       const queue = queueManager.getQueue();
