@@ -246,6 +246,7 @@ For advanced users, add to your `openclaw.json`:
 | `reactions` | boolean | `true` | Enable reaction-based status indicators |
 | `streaming` | boolean | `true` | Enable receiving streaming messages |
 | `responsePrefix` | string | - | Custom response prefix override |
+| `showThinkingPlaceholder` | boolean | `false` | Post a "🤔 Thinking..." placeholder while generating. Disabled by default because it adds a Zulip API round-trip; typing indicators are shown either way. |
 
 #### Environment Variables
 

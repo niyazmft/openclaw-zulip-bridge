@@ -65,4 +65,8 @@ export const zulipChannelConfigUiHints = {
     label: "Zulip Response Prefix",
     help: "Optional prefix added before outbound Zulip responses.",
   },
+  showThinkingPlaceholder: {
+    label: "Show thinking placeholder",
+    help: "Post a \"Thinking...\" placeholder message while generating a response. Disabled by default because it adds one Zulip API round-trip; typing indicators are shown either way.",
+  },
 } satisfies Record<string, ZulipChannelConfigUiHint>;

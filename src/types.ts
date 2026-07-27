@@ -76,6 +76,16 @@ export type ZulipAccountConfig = {
    * Default: true. Set to false to enforce strict tool-call semantics.
    */
   autoSendOnMissingTool?: boolean;
+  /**
+   * Show a "Thinking..." placeholder message while the model is generating
+   * a response. When true the bot posts a message that is edited in-place
+   * once the response is ready; when false it only shows a typing indicator.
+   * Disabling the placeholder reduces Zulip API overhead and improves
+   * response latency.
+   *
+   * Default: false.
+   */
+  showThinkingPlaceholder?: boolean;
 };
 
 export type ZulipConfig = {

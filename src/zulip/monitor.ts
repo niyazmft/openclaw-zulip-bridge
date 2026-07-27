@@ -509,30 +509,33 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
       const to = kind === "dm" ? `user:${senderId}` : `stream:${streamName || streamId}:${topic}`;
 
-      // UX: Send a "Thinking..." placeholder message immediately so users see activity.
-      // We will edit this message in-place with the actual response when ready.
-      // Best-effort: don't block the dispatch on this network call.
+      // UX: Optionally send a "Thinking..." placeholder message immediately so users see activity.
+      // If disabled (default), we rely on typing indicators only, which avoids one Zulip API round-trip.
+      // When enabled, the placeholder is edited in-place once the actual response is ready.
       let placeholderMessageId: string | undefined;
-      const placeholderPromise = (async (): Promise<string | undefined> => {
-        try {
-          const phResult = await sendMessageZulip(to, "🤔 Thinking...", {
-            accountId: account.accountId,
-            topic,
-          });
-          if (phResult?.messageId) {
-            placeholderMessageId = phResult.messageId;
-          }
-          return placeholderMessageId;
-        } catch (err) {
-          core.log?.(
-            formatZulipLog("zulip placeholder send failed", {
-              accountId: account.accountId,
-              error: String(err),
-            }),
-          );
-          return undefined;
-        }
-      })();
+      const usePlaceholder = account.showThinkingPlaceholder === true;
+      const placeholderPromise = usePlaceholder
+        ? (async (): Promise<string | undefined> => {
+            try {
+              const phResult = await sendMessageZulip(to, "🤔 Thinking...", {
+                accountId: account.accountId,
+                topic,
+              });
+              if (phResult?.messageId) {
+                placeholderMessageId = phResult.messageId;
+              }
+              return placeholderMessageId;
+            } catch (err) {
+              core.log?.(
+                formatZulipLog("zulip placeholder send failed", {
+                  accountId: account.accountId,
+                  error: String(err),
+                }),
+              );
+              return undefined;
+            }
+          })()
+        : Promise.resolve(undefined);
 
       const ctxPayload = core.channel.reply.finalizeInboundContext({
         Body: body,
