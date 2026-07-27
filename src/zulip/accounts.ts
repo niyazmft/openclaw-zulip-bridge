@@ -29,6 +29,7 @@ export type ResolvedZulipAccount = {
   streaming?: boolean;
   streams?: string[];
   autoSendOnMissingTool?: boolean;
+  showThinkingPlaceholder?: boolean;
 };
 
 function resolveZulipSection(cfg: OpenClawConfig): ZulipConfig | undefined {
@@ -177,6 +178,7 @@ export function resolveZulipAccount(params: {
     streaming: merged.streaming,
     streams: merged.streams,
     autoSendOnMissingTool: merged.autoSendOnMissingTool,
+    showThinkingPlaceholder: merged.showThinkingPlaceholder,
   };
 }
 

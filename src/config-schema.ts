@@ -47,6 +47,7 @@ const ZulipAccountSchema = z.object({
   responsePrefix: z.string().optional(),
   enableAdminActions: z.boolean().default(false),
   autoSendOnMissingTool: z.boolean().optional(),
+  showThinkingPlaceholder: z.boolean().optional(),
 });
 
 const ZulipConfigSchema = buildCatchallMultiAccountChannelSchema(

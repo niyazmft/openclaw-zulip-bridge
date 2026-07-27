@@ -187,3 +187,9 @@ test("monitor source: error placeholder cleanup is present", async () => {
   assert.equal(source.includes("editZulipMessage"), true);
   assert.equal(source.includes("❌ Error — could not generate response"), true);
 });
+
+test("monitor source: showThinkingPlaceholder is configurable and defaults off", async () => {
+  const source = await fs.readFile(monitorPath, "utf8");
+  assert.equal(source.includes("showThinkingPlaceholder"), true);
+  assert.equal(source.includes("Promise.resolve(undefined)"), true);
+});

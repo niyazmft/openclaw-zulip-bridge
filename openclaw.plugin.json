@@ -111,6 +111,7 @@
           "responsePrefix": { "type": "string" },
           "enableAdminActions": { "type": "boolean" },
           "autoSendOnMissingTool": { "type": "boolean" },
+          "showThinkingPlaceholder": { "type": "boolean" },
           "accounts": {
             "type": "object",
             "additionalProperties": true
@@ -202,6 +203,7 @@
           "responsePrefix": { "type": "string" },
           "enableAdminActions": { "type": "boolean" },
           "autoSendOnMissingTool": { "type": "boolean" },
+          "showThinkingPlaceholder": { "type": "boolean" },
           "accounts": {
             "type": "object",
             "additionalProperties": true
@@ -285,6 +287,10 @@
         "autoSendOnMissingTool": {
           "label": "Auto-send on missing tool call",
           "description": "If the agent ends a run with assistant text but never invoked the messaging tool, deliver the text to the channel anyway. Default: true."
+        },
+        "showThinkingPlaceholder": {
+          "label": "Show thinking placeholder",
+          "description": "Post a \"Thinking...\" placeholder message while generating a response. Disabled by default because it adds one Zulip API round-trip; typing indicators are shown either way."
         }
       }
     }
