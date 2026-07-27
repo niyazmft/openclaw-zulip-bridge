@@ -1,6 +1,6 @@
 # OpenClaw Zulip Bridge
 
-[![Version](https://img.shields.io/badge/version-2026.8.2-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
+[![Version](https://img.shields.io/badge/version-2026.8.3-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-%3E%3D2026.6.0-green)](https://openclaw.ai)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-brightgreen)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-10.32.1-orange)](https://pnpm.io)
@@ -354,13 +354,13 @@ openclaw plugins install ./ --force
 
 ### Health-monitor restarting every ~10 min with `reason: stopped`
 
-**Fixed in v2026.8.2+.** The monitor now starts via `gateway.startAccount` inside the plugin's `base` parameter, so the host properly wires `statusSink` and `abortSignal`.
+**Fixed in v2026.8.3+.** The monitor now starts via `gateway.startAccount` inside the plugin's `base` parameter, so the host properly wires `statusSink` and `abortSignal`.
 
 If you still see this on an older version, upgrade to the latest release.
 
 ### "registerFull already called, skipping duplicate monitor start"
 
-**Status:** Harmless in v2026.8.2+. The plugin now has a module-level `registerFullCalled` guard.
+**Status:** Harmless in v2026.8.3+. The plugin now has a module-level `registerFullCalled` guard.
 
 ### Queue Registration Fails
 Verify credentials with `openclaw channels add` and re-enter them.
@@ -373,6 +373,38 @@ Default requires @mentions. Check your `chatmode` setting.
 
 ### Typing indicator TTL exceeded
 The typing indicator auto-stops after 60 seconds if the response takes longer. This is expected behavior.
+
+---
+
+## Security & Permissions
+
+### Destructive Actions
+
+The following actions require **explicit confirmation** (`confirm: true`) to prevent accidental execution by AI agents:
+
+| Action | Confirmation Required | Admin Privilege Required | Description |
+|--------|----------------------|-------------------------|-------------|
+| `delete` | ✅ `confirm: true` | ❌ No | Permanently deletes a Zulip message |
+| `channel-delete` | ✅ `confirm: true` | ✅ Yes | Deletes a Zulip stream/channel |
+| `user-deactivate` | ✅ `confirm: true` | ✅ Yes | Deactivates a Zulip user account |
+| `user-reactivate` | ✅ `confirm: true` | ✅ Yes | Reactivates a Zulip user account |
+| `org-settings-edit` | ✅ `confirm: true` | ✅ Yes | Updates organization settings |
+
+### Admin Actions Gate
+
+Actions marked "Admin Privilege Required" are additionally protected by:
+
+1. **`enableAdminActions: true`** in your Zulip channel config
+2. **The bot account must have Zulip admin privileges** on the server
+
+Without both safeguards, admin actions will throw an error. This prevents accidental delegation of destructive operations to agents that should not have them.
+
+### Best Practices
+
+- Use a **least-privilege bot account** (Generic Bot, not Admin Bot)
+- Keep `enableAdminActions: false` unless you explicitly need stream management or user lifecycle operations
+- Restrict `streams` and `allowFrom` to minimize exposure
+- Avoid delegating this plugin to agents that should not delete messages/channels or alter users and organization settings
 
 ---
 

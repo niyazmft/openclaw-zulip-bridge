@@ -1,6 +1,6 @@
 {
   "name": "@niyazmft/openclaw-zulip",
-  "version": "2026.8.2",
+  "version": "2026.8.3",
   "description": "OpenClaw Zulip channel plugin",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
