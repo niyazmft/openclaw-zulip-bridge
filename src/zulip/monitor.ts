@@ -8,7 +8,6 @@ import {
   deleteZulipQueue,
   editZulipMessage,
   registerZulipQueue,
-  sendZulipTyping,
   updateZulipMessageFlag,
   type ZulipMessage,
 } from "./client.js";
@@ -432,20 +431,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         messageId,
       });
 
-      // UX: Start typing indicators immediately so users see activity during long generations
-      if (!isDM && streamId) {
-        try {
-          await sendZulipTyping(client, {
-            op: "start",
-            type: "stream",
-            streamId: Number(streamId),
-            topic: topic || DEFAULT_TOPIC,
-          });
-        } catch {
-          // best-effort typing indicator
-        }
-      }
-
       const effectiveWasMentioned =
         wasMentioned || (isControlCommand && commandAuthorized) || oncharTriggered;
 
@@ -526,23 +511,28 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
       // UX: Send a "Thinking..." placeholder message immediately so users see activity.
       // We will edit this message in-place with the actual response when ready.
+      // Best-effort: don't block the dispatch on this network call.
       let placeholderMessageId: string | undefined;
-      try {
-        const phResult = await sendMessageZulip(to, "🤔 Thinking...", {
-          accountId: account.accountId,
-          topic,
-        });
-        if (phResult?.messageId) {
-          placeholderMessageId = phResult.messageId;
-        }
-      } catch (err) {
-        core.log?.(
-          formatZulipLog("zulip placeholder send failed", {
+      const placeholderPromise = (async (): Promise<string | undefined> => {
+        try {
+          const phResult = await sendMessageZulip(to, "🤔 Thinking...", {
             accountId: account.accountId,
-            error: String(err),
-          }),
-        );
-      }
+            topic,
+          });
+          if (phResult?.messageId) {
+            placeholderMessageId = phResult.messageId;
+          }
+          return placeholderMessageId;
+        } catch (err) {
+          core.log?.(
+            formatZulipLog("zulip placeholder send failed", {
+              accountId: account.accountId,
+              error: String(err),
+            }),
+          );
+          return undefined;
+        }
+      })();
 
       const ctxPayload = core.channel.reply.finalizeInboundContext({
         Body: body,
@@ -647,12 +637,12 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         to,
         statusSink: opts.statusSink,
         logVerboseMessage,
-        placeholderMessageId,
+        placeholderMessageIdPromise: placeholderPromise,
       });
 
       if (reactionsEnabled) {
         if (reactionClearOnFinish) {
-          await removeReactionSafe({
+          void removeReactionSafe({
             client,
             messageId,
             emojiName: reactionStart,
@@ -661,7 +651,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           });
         }
         if (dispatchError) {
-          await addReactionSafe({
+          void addReactionSafe({
             client,
             messageId,
             emojiName: reactionError,
@@ -669,33 +659,34 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             logVerbose: logVerboseMessage,
           });
           // Issue #212: Best-effort cleanup orphaned placeholder on dispatch error
-          if (placeholderMessageId) {
-            try {
-              await editZulipMessage(client, {
-                messageId: placeholderMessageId,
-                content: "❌ Error — could not generate response",
-              });
-            } catch (editErr) {
-              logVerboseMessage(`zulip placeholder error cleanup failed: ${String(editErr)}`);
-            }
+          if (placeholderPromise) {
+            void (async () => {
+              const phId = placeholderMessageId ?? (await placeholderPromise.catch(() => undefined));
+              if (phId) {
+                try {
+                  await editZulipMessage(client, {
+                    messageId: phId,
+                    content: "❌ Error — could not generate response",
+                  });
+                } catch (editErr) {
+                  logVerboseMessage(`zulip placeholder error cleanup failed: ${String(editErr)}`);
+                }
+              }
+            })();
           }
           // UX: Best-effort send an explanatory reply when dispatch fails in channels
           if (!isDM) {
-            try {
-              await sendMessageZulip(
-                to,
-                "⚠️ I encountered an error processing this message. Please try again.",
-                {
-                  accountId: account.accountId,
-                  topic,
-                },
-              );
-            } catch {
-              // best-effort
-            }
+            void sendMessageZulip(
+              to,
+              "⚠️ I encountered an error processing this message. Please try again.",
+              {
+                accountId: account.accountId,
+                topic,
+              },
+            ).catch(() => undefined);
           }
         } else {
-          await addReactionSafe({
+          void addReactionSafe({
             client,
             messageId,
             emojiName: reactionSuccess,
@@ -705,16 +696,14 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         }
       }
 
-      // Mark processed message as read (best-effort)
-      try {
-        await updateZulipMessageFlag(client, {
-          messageId,
-          flag: "read",
-          op: "add",
-        });
-      } catch (err) {
+      // Mark processed message as read (best-effort, don't block inbound completion)
+      void updateZulipMessageFlag(client, {
+        messageId,
+        flag: "read",
+        op: "add",
+      }).catch((err) => {
         logVerboseMessage(`zulip mark-read failed: ${String(err)}`);
-      }
+      });
 
       opts.statusSink?.({ lastInboundAt: Date.now() });
     };
