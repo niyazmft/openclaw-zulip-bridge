@@ -122,3 +122,46 @@ export function maskPII(value: string | number | undefined | null): string {
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/**
+ * Compute and track conversation metadata for inbound messages.
+ * Issue #211: conversation_turn, session_gap_seconds, topic_changed
+ */
+export function trackConversationMetadata(params: {
+  sessionKey: string;
+  channelId: string;
+  topic: string | undefined;
+  isDM: boolean;
+  now: number;
+  messageCounts: Map<string, number>;
+  lastMessageTimes: Map<string, number>;
+  lastTopicCache: Map<string, string>;
+}): {
+  conversationTurn: number;
+  sessionGapSeconds: number;
+  topicChanged: boolean;
+} {
+  const { sessionKey, channelId, topic, isDM, now, messageCounts, lastMessageTimes, lastTopicCache } = params;
+
+  const msgCount = (messageCounts.get(sessionKey) ?? 0) + 1;
+  messageCounts.set(sessionKey, msgCount);
+
+  const lastMsgTime = lastMessageTimes.get(sessionKey);
+  const sessionGap = lastMsgTime ? now - lastMsgTime : 0;
+  lastMessageTimes.set(sessionKey, now);
+
+  let topicChanged = false;
+  if (!isDM && topic) {
+    const prevTopic = lastTopicCache.get(channelId);
+    if (prevTopic !== undefined && prevTopic !== topic) {
+      topicChanged = true;
+    }
+    lastTopicCache.set(channelId, topic);
+  }
+
+  return {
+    conversationTurn: msgCount,
+    sessionGapSeconds: Math.round(sessionGap / 1000),
+    topicChanged,
+  };
+}

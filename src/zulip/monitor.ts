@@ -6,6 +6,7 @@ import { resolveChannelMediaMaxBytes } from "openclaw/plugin-sdk/media-runtime";
 import { getZulipRuntime } from "../runtime.js";
 import {
   deleteZulipQueue,
+  editZulipMessage,
   registerZulipQueue,
   sendZulipTyping,
   updateZulipMessageFlag,
@@ -17,6 +18,7 @@ import {
   formatZulipLog,
   maskPII,
   delay,
+  trackConversationMetadata,
 } from "./monitor-helpers.js";
 import { ZulipDedupeStore } from "./dedupe-store.js";
 import { sendMessageZulip } from "./send.js";
@@ -117,6 +119,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       maxSize: RECENT_MESSAGE_MAX,
     });
     await dedupeStore.load();
+
+    // Issue #211: Conversation metadata tracking (conversation_turn, session_gap_seconds, topic_changed)
+    const messageCounts = new Map<string, number>();
+    const lastMessageTimes = new Map<string, number>();
+    const lastTopicCache = new Map<string, string>();
 
     // Use full config from runtime instead of passed cfg to get channel settings
     // (fullCfg already loaded above at line ~90)
@@ -482,6 +489,18 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       });
       const sessionKey = threadKeys.sessionKey;
 
+      // Issue #211: Compute conversation metadata (conversation_turn, session_gap_seconds, topic_changed)
+      const { conversationTurn, sessionGapSeconds, topicChanged } = trackConversationMetadata({
+        sessionKey,
+        channelId,
+        topic,
+        isDM,
+        now: Date.now(),
+        messageCounts,
+        lastMessageTimes,
+        lastTopicCache,
+      });
+
       const preview = bodyText.replace(/\s+/g, " ").slice(0, 160);
       const inboundLabel =
         kind === "dm"
@@ -556,6 +575,10 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         MediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
         MediaType: mediaTypes[0],
         MediaTypes: mediaTypes.length > 0 ? mediaTypes : undefined,
+        // Issue #211: Context metadata for agent
+        ConversationTurn: conversationTurn,
+        SessionGapSeconds: sessionGapSeconds,
+        TopicChanged: topicChanged,
       });
 
       if (kind === "dm") {
@@ -645,6 +668,17 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             reactionsEnabled,
             logVerbose: logVerboseMessage,
           });
+          // Issue #212: Best-effort cleanup orphaned placeholder on dispatch error
+          if (placeholderMessageId) {
+            try {
+              await editZulipMessage(client, {
+                messageId: placeholderMessageId,
+                content: "❌ Error — could not generate response",
+              });
+            } catch (editErr) {
+              logVerboseMessage(`zulip placeholder error cleanup failed: ${String(editErr)}`);
+            }
+          }
           // UX: Best-effort send an explanatory reply when dispatch fails in channels
           if (!isDM) {
             try {
