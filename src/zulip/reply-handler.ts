@@ -32,7 +32,7 @@ export async function dispatchZulipReply(params: {
   to: string;
   statusSink?: (patch: any) => void;
   logVerboseMessage: (msg: string) => void;
-  placeholderMessageId?: string;
+  placeholderMessageIdPromise?: Promise<string | undefined>;
 }): Promise<unknown> {
   const {
     core,
@@ -54,7 +54,7 @@ export async function dispatchZulipReply(params: {
     to,
     statusSink,
     logVerboseMessage,
-    placeholderMessageId,
+    placeholderMessageIdPromise,
   } = params;
 
   const typingParams = isDM
@@ -93,6 +93,7 @@ export async function dispatchZulipReply(params: {
   });
 
   let deliveredAny = false;
+  let placeholderMessageId: string | undefined;
   let placeholderConsumed = false;
 
   const { dispatcher, replyOptions, markDispatchIdle } =
@@ -102,6 +103,18 @@ export async function dispatchZulipReply(params: {
       onReplyStart: typingCallbacks.onReplyStart,
       deliver: async (payload: ReplyPayload) => {
         deliveredAny = true;
+        if (!placeholderConsumed) {
+          placeholderConsumed = true;
+          if (placeholderMessageIdPromise) {
+            try {
+              placeholderMessageId = await placeholderMessageIdPromise;
+            } catch (err) {
+              logVerboseMessage(
+                `zulip placeholder promise rejected: ${String(err)}; falling back to new message`,
+              );
+            }
+          }
+        }
         const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
         const rawText = core.channel.text.convertMarkdownTables(payload.text ?? "", tableMode);
         const { text, topic: topicOverride } = extractZulipTopicDirective(rawText);
@@ -113,8 +126,7 @@ export async function dispatchZulipReply(params: {
           for (let idx = 0; idx < nonEmptyChunks.length; idx++) {
             const chunk = nonEmptyChunks[idx];
             // UX: Edit the placeholder message for the first chunk, then send new messages for the rest.
-            if (!placeholderConsumed && placeholderMessageId) {
-              placeholderConsumed = true;
+            if (placeholderMessageId) {
               try {
                 await editZulipMessage(client, {
                   messageId: placeholderMessageId,
@@ -141,8 +153,7 @@ export async function dispatchZulipReply(params: {
           for (const mediaUrl of mediaUrls) {
             const caption = first ? text : "";
             first = false;
-            if (!placeholderConsumed && placeholderMessageId) {
-              placeholderConsumed = true;
+            if (placeholderMessageId) {
               try {
                 await editZulipMessage(client, {
                   messageId: placeholderMessageId,
