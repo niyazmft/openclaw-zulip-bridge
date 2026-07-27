@@ -599,6 +599,13 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
 
     if (action === "channel-delete") {
       requireAdminActionsEnabled(account);
+      const confirm = readBooleanParam(params, "confirm", "confirmed", "acknowledge");
+      if (confirm !== true) {
+        throw new Error(
+          "Channel deletion requires confirm: true. " +
+          "This action permanently removes the stream and its message history from Zulip.",
+        );
+      }
       const streamIdOrName = readStreamId(params);
       // Resolve stream name to ID if necessary
       const streamId = await resolveZulipStreamId(client, streamIdOrName);
@@ -625,6 +632,13 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
     if ((action as string) === "user-deactivate") {
       requireAdminActionsEnabled(account);
       await requireZulipAdmin(client);
+      const confirm = readBooleanParam(params, "confirm", "confirmed", "acknowledge");
+      if (confirm !== true) {
+        throw new Error(
+          "User deactivation requires confirm: true. " +
+          "This action disables the user's Zulip account and removes their login access.",
+        );
+      }
       const userId = readUserIdParam(params);
       await deactivateZulipUser(client, userId);
       return jsonResult({ ok: true, userId, deactivated: true });
@@ -633,6 +647,13 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
     if ((action as string) === "user-reactivate") {
       requireAdminActionsEnabled(account);
       await requireZulipAdmin(client);
+      const confirm = readBooleanParam(params, "confirm", "confirmed", "acknowledge");
+      if (confirm !== true) {
+        throw new Error(
+          "User reactivation requires confirm: true. " +
+          "This action restores a previously deactivated Zulip user account.",
+        );
+      }
       const userId = readUserIdParam(params);
       await reactivateZulipUser(client, userId);
       return jsonResult({ ok: true, userId, reactivated: true });
@@ -646,6 +667,13 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
     if ((action as string) === "org-settings-edit") {
       requireAdminActionsEnabled(account);
       await requireZulipAdmin(client);
+      const confirm = readBooleanParam(params, "confirm", "confirmed", "acknowledge");
+      if (confirm !== true) {
+        throw new Error(
+          "Organization settings update requires confirm: true. " +
+          "This action modifies global Zulip realm configuration.",
+        );
+      }
       const updates = readRealmUpdateParams(params);
       await updateZulipRealm(client, updates);
       return jsonResult({ ok: true, updated: Object.keys(updates) });
@@ -748,6 +776,13 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
     }
 
     if (action === "delete") {
+      const confirm = readBooleanParam(params, "confirm", "confirmed", "acknowledge");
+      if (confirm !== true) {
+        throw new Error(
+          "Message deletion requires confirm: true. " +
+          "This action permanently removes the message from Zulip.",
+        );
+      }
       const messageId = readMessageId(params);
       await deleteZulipMessage(client, { messageId });
       return jsonResult({ ok: true, deleted: messageId });
