@@ -91,16 +91,31 @@ export async function pollOnce(params: {
     let maxEventId = -1;
 
     try {
+      const processing: Promise<void>[] = [];
       for (const event of events) {
         if (event.type === "message" && event.message) {
-          
-          await processMessage(event.message);
+          // Process messages asynchronously so a slow model call does not block
+          // the poll loop. The host's session locks still serialize messages
+          // for the same session, while unrelated sessions can run in parallel.
+          processing.push(
+            processMessage(event.message).catch((err) => {
+              core.error?.(
+                formatZulipLog("zulip message processing error", {
+                  accountId,
+                  error: String(err),
+                }),
+              );
+            }),
+          );
         }
         const nextEventId = Number((event as { id?: unknown })?.id);
         if (!Number.isNaN(nextEventId) && nextEventId > maxEventId) {
           maxEventId = nextEventId;
         }
       }
+      // Intentionally do NOT await processing here. The poll loop must keep
+      // fetching events; processMessage handles its own errors and retries.
+      void Promise.all(processing);
     } finally {
       if (maxEventId > 0) {
         // ⚡ Bolt Optimization: Batch disk I/O updates for event ID
