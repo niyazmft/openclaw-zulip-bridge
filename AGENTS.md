@@ -112,7 +112,7 @@ Migration complete as of v2026.7.0:
 
 ## Troubleshooting
 
-- **Health-monitor restarts every ~5 min** with `reason: stopped`: Fixed in v2026.8.3+. `gateway.startAccount` must be placed inside the `base` parameter of `createChatChannelPlugin`, not at the top level. The host checks `snapshot.running` to decide if channel is alive.
+- **Health-monitor restarts every ~5 min** with `reason: stopped`: Fixed in v2026.8.4+. `gateway.startAccount` must be placed inside the `base` parameter of `createChatChannelPlugin`, not at the top level. The host checks `snapshot.running` to decide if channel is alive.
 - **Monitor never starts after hot reload / wizard config**: If `startZulipMonitor` creates an `AbortController` before validating credentials, and credentials are missing at startup, the controller blocks all future starts. Only create the controller **after** credential validation, right before launching the actual monitor loop.
 - **Host calls `registerFull` twice**: Fixed in v2026.8.3+ with a module-level `registerFullCalled` guard. This is normal host behavior.
 - **"Invalid config: must not have additional properties: streaming"**: The host's `openclaw channels add` wizard writes `"streaming": true` to the config. If your manifest JSON Schema has `"additionalProperties": false` and `streaming` isn't in `properties`, config validation fails. Add `streaming` to BOTH `configSchema` and `channelConfigs.schema` in `openclaw.plugin.json`.

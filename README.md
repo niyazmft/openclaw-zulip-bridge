@@ -1,6 +1,6 @@
 # OpenClaw Zulip Bridge
 
-[![Version](https://img.shields.io/badge/version-2026.8.3-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
+[![Version](https://img.shields.io/badge/version-2026.8.4-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-%3E%3D2026.6.0-green)](https://openclaw.ai)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-brightgreen)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-10.32.1-orange)](https://pnpm.io)
@@ -56,6 +56,8 @@ That's it — no manual config editing needed.
 
 ## Features
 
+- **Context Metadata**: Every inbound message carries `conversationTurn`, `sessionGapSeconds`, and `topicChanged` metadata to help the AI agent understand conversation continuity.
+- **Error Placeholder Cleanup**: When message dispatch fails, the orphaned "🤔 Thinking..." placeholder is edited to "❌ Error — could not generate response".
 - **Persistent Event Polling**: Automatically resumes from where it left off using locally-persisted queue metadata.
 - **Traffic Policies**: Granular control over who can interact with the bot in DMs and Streams.
 - **Multiple Accounts**: Support for multiple Zulip accounts and realms in a single instance.
