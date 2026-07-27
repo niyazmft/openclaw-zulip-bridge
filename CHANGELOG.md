@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) in the format `YYYY.M.PATCH`.
 
+## [2026.8.4] - 2026-07-27
+
+### Added
+- **Context metadata** (#211): Inbound messages now carry `conversationTurn`, `sessionGapSeconds`, and `topicChanged` metadata to help the AI agent understand conversation continuity
+- **Error placeholder cleanup** (#212): When message dispatch fails, the orphaned "🤔 Thinking..." placeholder is edited to "❌ Error — could not generate response"
+
+### Fixed
+- None
+
+### Changed
+- **Test suite**: Grew from 115 to 125 tests (9 new monitor-metadata tests)
+
 ## [2026.8.1] - 2026-07-21
 
 ### Added
