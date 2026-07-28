@@ -69,4 +69,8 @@ export const zulipChannelConfigUiHints = {
     label: "Show thinking placeholder",
     help: "Post a \"Thinking...\" placeholder message while generating a response. Disabled by default because it adds one Zulip API round-trip; typing indicators are shown either way.",
   },
+  dmSessionTurnLimit: {
+    label: "DM session turn limit",
+    help: "Maximum inbound conversation turns in a single Zulip DM session before starting a fresh session. Prevents one long/broken conversation from bloating context for all future replies. 0 disables rotation.",
+  },
 } satisfies Record<string, ZulipChannelConfigUiHint>;

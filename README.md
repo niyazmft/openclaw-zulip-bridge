@@ -247,6 +247,7 @@ For advanced users, add to your `openclaw.json`:
 | `streaming` | boolean | `true` | Enable receiving streaming messages |
 | `responsePrefix` | string | - | Custom response prefix override |
 | `showThinkingPlaceholder` | boolean | `false` | Post a "🤔 Thinking..." placeholder while generating. Disabled by default because it adds a Zulip API round-trip; typing indicators are shown either way. |
+| `dmSessionTurnLimit` | number | `20` | Maximum inbound DM conversation turns before starting a fresh session. Prevents one long/broken conversation from bloating context for all future replies in the same DM. Set to `0` to disable rotation. |
 
 #### Environment Variables
 
@@ -376,6 +377,12 @@ Default requires @mentions. Check your `chatmode` setting.
 
 ### Typing indicator TTL exceeded
 The typing indicator auto-stops after 60 seconds if the response takes longer. This is expected behavior.
+
+### Replies are sent via fallback instead of the `message` tool
+The host's `tools.profile: "coding"` removes the `message` tool from the agent. The plugin still delivers replies through its `autoSendOnMissingTool` fallback, but for the cleanest chat UX use a profile that keeps `message` (e.g., `"chat"`) or add `message` to the profile allowlist. This affects all chat channels, not just Zulip.
+
+### Zulip responses are slower than Telegram
+Zulip API round-trips from the container take ~600ms each. To reduce latency, keep `showThinkingPlaceholder: false` (default) and avoid enabling the placeholder unless users need the extra visual feedback.
 
 ---
 
