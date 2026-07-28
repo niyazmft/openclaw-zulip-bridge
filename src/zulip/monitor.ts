@@ -123,6 +123,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     const messageCounts = new Map<string, number>();
     const lastMessageTimes = new Map<string, number>();
     const lastTopicCache = new Map<string, string>();
+    // Issue #222: Track inbound DM message counts against the unrotated base
+    // session key so we can rotate DM sessions before context bloat accumulates.
+    const dmBaseMessageCounts = new Map<string, number>();
 
     // Use full config from runtime instead of passed cfg to get channel settings
     // (fullCfg already loaded above at line ~90)
@@ -467,7 +470,22 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         },
       });
 
-      const baseSessionKey = route.sessionKey ?? `zulip:${account.accountId}:${channelId}`;
+      // Issue #222: Rotate Zulip DM session keys after a configured number of
+      // inbound turns so one long/broken conversation cannot bloat context for
+      // every future message in the same DM. Streams and topics keep stable keys.
+      let baseSessionKey = route.sessionKey ?? `zulip:${account.accountId}:${channelId}`;
+      if (isDM) {
+        const turnLimit = account.dmSessionTurnLimit ?? 20;
+        if (turnLimit > 0) {
+          const dmTurnCount = (dmBaseMessageCounts.get(baseSessionKey) ?? 0) + 1;
+          dmBaseMessageCounts.set(baseSessionKey, dmTurnCount);
+          const epoch = Math.floor((dmTurnCount - 1) / turnLimit);
+          if (epoch > 0) {
+            baseSessionKey = `${baseSessionKey}:session:${epoch}`;
+          }
+        }
+      }
+
       const threadKeys = resolveThreadSessionKeys({
         baseSessionKey,
         threadId: topic !== DEFAULT_TOPIC ? topic : undefined,
@@ -604,7 +622,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         }),
       );
 
-      await addReactionSafe({
+      // Issue #224: Start reaction is best-effort; don't block model inference
+      // on the Zulip API round-trip.
+      void addReactionSafe({
         client,
         messageId,
         emojiName: reactionStart,

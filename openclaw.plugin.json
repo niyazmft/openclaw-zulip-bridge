@@ -112,6 +112,10 @@
           "enableAdminActions": { "type": "boolean" },
           "autoSendOnMissingTool": { "type": "boolean" },
           "showThinkingPlaceholder": { "type": "boolean" },
+          "dmSessionTurnLimit": {
+            "type": "integer",
+            "minimum": 0
+          },
           "accounts": {
             "type": "object",
             "additionalProperties": true
@@ -291,6 +295,10 @@
         "showThinkingPlaceholder": {
           "label": "Show thinking placeholder",
           "description": "Post a \"Thinking...\" placeholder message while generating a response. Disabled by default because it adds one Zulip API round-trip; typing indicators are shown either way."
+        },
+        "dmSessionTurnLimit": {
+          "label": "DM session turn limit",
+          "description": "Maximum inbound conversation turns in a single Zulip DM session before starting a fresh session. Prevents one long/broken conversation from bloating context for all future replies. 0 disables rotation."
         }
       }
     }

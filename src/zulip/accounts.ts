@@ -30,6 +30,7 @@ export type ResolvedZulipAccount = {
   streams?: string[];
   autoSendOnMissingTool?: boolean;
   showThinkingPlaceholder?: boolean;
+  dmSessionTurnLimit?: number;
 };
 
 function resolveZulipSection(cfg: OpenClawConfig): ZulipConfig | undefined {
@@ -179,6 +180,7 @@ export function resolveZulipAccount(params: {
     streams: merged.streams,
     autoSendOnMissingTool: merged.autoSendOnMissingTool,
     showThinkingPlaceholder: merged.showThinkingPlaceholder,
+    dmSessionTurnLimit: merged.dmSessionTurnLimit,
   };
 }
 

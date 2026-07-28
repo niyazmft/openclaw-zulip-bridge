@@ -95,6 +95,7 @@ export async function dispatchZulipReply(params: {
   let deliveredAny = false;
   let placeholderMessageId: string | undefined;
   let placeholderConsumed = false;
+  let typingStopped = false;
 
   const { dispatcher, replyOptions, markDispatchIdle } =
     core.channel.reply.createReplyDispatcherWithTyping({
@@ -103,6 +104,13 @@ export async function dispatchZulipReply(params: {
       onReplyStart: typingCallbacks.onReplyStart,
       deliver: async (payload: ReplyPayload) => {
         deliveredAny = true;
+        // Issue #224: Stop the typing indicator as soon as the first chunk is
+        // delivered so the user does not see "bot is typing" after the reply
+        // is already visible. This is best-effort and idempotent.
+        if (!typingStopped) {
+          typingStopped = true;
+          void typingCallbacks.onIdle().catch(() => undefined);
+        }
         if (!placeholderConsumed) {
           placeholderConsumed = true;
           if (placeholderMessageIdPromise) {
@@ -182,6 +190,11 @@ export async function dispatchZulipReply(params: {
       },
       onError: (err: unknown) => {
         core.error?.(`zulip reply failed: ${String(err)}`);
+        // Issue #224: Ensure typing indicator stops promptly on dispatch error.
+        if (!typingStopped) {
+          typingStopped = true;
+          void typingCallbacks.onIdle().catch(() => undefined);
+        }
       },
     });
 

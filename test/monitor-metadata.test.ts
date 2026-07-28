@@ -193,3 +193,26 @@ test("monitor source: showThinkingPlaceholder is configurable and defaults off",
   assert.equal(source.includes("showThinkingPlaceholder"), true);
   assert.equal(source.includes("Promise.resolve(undefined)"), true);
 });
+
+test("monitor source: DM session rotation is present", async () => {
+  const source = await fs.readFile(monitorPath, "utf8");
+  assert.equal(source.includes("dmSessionTurnLimit"), true);
+  assert.equal(source.includes("dmBaseMessageCounts"), true);
+  assert.equal(source.includes(":session:"), true);
+});
+
+test("reply-handler source: typing indicator stops on first chunk delivery", async () => {
+  const source = await fs.readFile(
+    path.resolve(process.cwd(), "src/zulip/reply-handler.ts"),
+    "utf8",
+  );
+  assert.equal(source.includes("typingStopped"), true);
+  assert.equal(source.includes("typingCallbacks.onIdle"), true);
+  assert.equal(source.includes("onError: (err: unknown)"), true);
+});
+
+test("monitor source: start reaction is fire-and-forget", async () => {
+  const source = await fs.readFile(monitorPath, "utf8");
+  assert.equal(source.includes("Issue #224"), true);
+  assert.equal(source.includes("void addReactionSafe({"), true);
+});

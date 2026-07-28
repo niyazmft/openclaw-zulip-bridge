@@ -86,6 +86,17 @@ export type ZulipAccountConfig = {
    * Default: false.
    */
   showThinkingPlaceholder?: boolean;
+  /**
+   * Maximum number of inbound conversation turns in a single Zulip DM session
+   * before starting a fresh session key. Rotating DM sessions prevents a single
+   * long-running or broken conversation from accumulating unbounded context
+   * that slows every future reply. Stream/topic sessions are not rotated.
+   *
+   * Use `0` or `undefined` to disable rotation.
+   *
+   * Default: 20.
+   */
+  dmSessionTurnLimit?: number;
 };
 
 export type ZulipConfig = {
