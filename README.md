@@ -79,6 +79,7 @@ That's it — no manual config editing needed.
 
 - **OpenClaw**: Version `>=2026.6.0`
 - **Node.js**: Latest LTS recommended (Node 22+)
+  - **Node 24 / Termux**: The plugin ships a pre-built CommonJS entry point (`dist-cjs/index.cjs`) to work around a Node.js ESM/CJS loader race condition (`ERR_REQUIRE_ESM_RACE_CONDITION`) that affects Termux and some Node 24 environments. The host loads the CJS entry first and falls back to the ESM build if needed.
 - **Zulip Bot**: A registered bot on your Zulip realm
 
 ### Creating a Zulip Bot
@@ -374,6 +375,10 @@ Ensure the bot is a member of the stream and it's in your `streams` config.
 
 ### Logs show "mention required"
 Default requires @mentions. Check your `chatmode` setting.
+
+### Zulip plugin fails to load on Node 24 / Termux with `ERR_REQUIRE_ESM_RACE_CONDITION`
+
+The plugin now ships a CommonJS build (`dist-cjs/index.cjs`) that is listed first in `openclaw.extensions`. CJS hosts (Node 24 / Termux) load this entry instead of the ESM build, bypassing the Node.js ESM/CJS loader race. If you still see the error after upgrading to the latest release, make sure the installed package contains the `dist-cjs/` directory and that `package.json` `openclaw.extensions` lists `./dist-cjs/index.cjs` first.
 
 ### Typing indicator TTL exceeded
 The typing indicator auto-stops after 60 seconds if the response takes longer. This is expected behavior.

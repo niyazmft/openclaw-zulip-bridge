@@ -10,9 +10,10 @@
       "minGatewayVersion": ">=2026.6.0"
     },
     "extensions": [
+      "./dist-cjs/index.cjs",
       "./dist/index.js"
     ],
-    "setupEntry": "./dist/setup-entry.js",
+    "setupEntry": "./dist-cjs/setup-entry.cjs",
     "channel": {
       "id": "zulip",
       "label": "Zulip",
@@ -46,6 +47,7 @@
   },
   "files": [
     "dist/",
+    "dist-cjs/",
     "openclaw.plugin.json",
     "SKILL.md",
     "README.md",
@@ -59,7 +61,9 @@
   "scripts": {
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
     "typecheck": "tsc -p tsconfig.json",
-    "build": "tsc -p tsconfig.build.json",
+    "build:esm": "tsc -p tsconfig.build.json",
+    "build:cjs": "node scripts/build-cjs.js",
+    "build": "pnpm run build:esm && pnpm run build:cjs",
     "test": "node --test --experimental-strip-types --loader ./test-loader.js test/*.test.ts",
     "check:package": "node scripts/check-package.js",
     "check:smoke": "node --loader ./test/smoke-loader.js scripts/smoke-test-dist.js",
@@ -68,6 +72,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
+    "esbuild": "^0.25.12",
     "knip": "^6.12.2",
     "typescript": "^5.9.2",
     "zod": "^3.25.76"

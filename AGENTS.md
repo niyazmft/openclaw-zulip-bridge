@@ -126,5 +126,6 @@ Migration complete as of v2026.7.0:
 - **Bot presence not showing online**: Zulip API rejects `POST /users/me/presence` for bot accounts. This is a platform limitation, not a bug.
 - **Zulip responses are slower than Telegram**: Zulip API round-trips from the container take ~600ms each. To reduce latency, keep `showThinkingPlaceholder: false` (default) so the bot only shows a typing indicator instead of posting and editing a "Thinking..." placeholder message. Enable the placeholder only when users need the extra visual feedback.
 - **`message` tool removed by host `coding` profile**: The host's `tools.profile: "coding"` strips the `message` tool from the agent, so replies fall back to reading the session trajectory after the run ends. For the cleanest chat UX, use a profile that keeps `message` (e.g., `"chat"`) or add `message` to the profile's allowlist. This affects all chat channels, not just Zulip.
+- **Node 24 / Termux `ERR_REQUIRE_ESM_RACE_CONDITION`**: The plugin ships a CommonJS build (`dist-cjs/index.cjs`) listed first in `openclaw.extensions`. CJS hosts bypass the Node.js ESM/CJS loader race; ESM hosts fall through to the standard `dist/index.js` build.
 
 **Note**: This file is maintained as project documentation and is safe to commit.
