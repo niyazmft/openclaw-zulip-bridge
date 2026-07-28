@@ -79,7 +79,7 @@ That's it — no manual config editing needed.
 
 - **OpenClaw**: Version `>=2026.6.0`
 - **Node.js**: Latest LTS recommended (Node 22+)
-  - **Node 24 / Termux**: The plugin ships a pre-built CommonJS entry point (`dist-cjs/index.cjs`) to work around a Node.js ESM/CJS loader race condition (`ERR_REQUIRE_ESM_RACE_CONDITION`) that affects Termux and some Node 24 environments. The host loads the CJS entry first and falls back to the ESM build if needed.
+  - **Node 24 / CJS Gateway hosts**: A pre-built CommonJS entry point (`dist-cjs/index.cjs`) is shipped via `openclaw.runtimeExtensions` so hosts that `require()` plugin entries can load the channel without invoking a runtime TypeScript/ESM translator. This helps Node 24 CJS Gateway environments that would otherwise hit a jiti fallback crash. It does **not** resolve the Node.js ESM/CJS loader race condition on Termux, because the host-provided OpenClaw SDK modules remain ESM. See the troubleshooting section below for details.
 - **Zulip Bot**: A registered bot on your Zulip realm
 
 ### Creating a Zulip Bot
@@ -378,7 +378,11 @@ Default requires @mentions. Check your `chatmode` setting.
 
 ### Zulip plugin fails to load on Node 24 / Termux with `ERR_REQUIRE_ESM_RACE_CONDITION`
 
-The plugin now ships a CommonJS build (`dist-cjs/index.cjs`) that is listed first in `openclaw.extensions`. CJS hosts (Node 24 / Termux) load this entry instead of the ESM build, bypassing the Node.js ESM/CJS loader race. If you still see the error after upgrading to the latest release, make sure the installed package contains the `dist-cjs/` directory and that `package.json` `openclaw.extensions` lists `./dist-cjs/index.cjs` first.
+The plugin ships a CommonJS build (`dist-cjs/index.cjs`) through `openclaw.runtimeExtensions`, which lets CJS Gateway hosts load the plugin entry via `require()` without hitting a runtime ESM translator. However, this does **not** bypass the Node.js ESM/CJS loader race on Termux, because the OpenClaw host-provided SDK modules (`openclaw/plugin-sdk/*`) are still ESM and are synchronously `require()`d from the CJS bundle. The race happens inside Node's module loader when a synchronous `require()` and an asynchronous `import()` resolve the same ESM module concurrently.
+
+**Recommended mitigation:** Use Node.js 22 if your platform supports it. Node 22.17.1 and earlier are known-good for this race. Termux currently only provides Node 24 LTS, so Termux users are blocked until OpenClaw resolves the upstream SDK loading race ([openclaw/openclaw#83035](https://github.com/openclaw/openclaw/issues/83035)).
+
+If you still see the error on a non-Termux Node 24 host, verify that the installed package contains `dist-cjs/` and that `package.json` `openclaw.runtimeExtensions` lists `./dist-cjs/index.cjs` before `./dist/index.js`.
 
 ### Typing indicator TTL exceeded
 The typing indicator auto-stops after 60 seconds if the response takes longer. This is expected behavior.

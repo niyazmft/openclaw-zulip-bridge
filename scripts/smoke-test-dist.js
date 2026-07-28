@@ -17,21 +17,33 @@ async function runSmokeTest() {
   console.log('Running host-side smoke validation on built artifacts...');
 
   const extensions = pkg.openclaw?.extensions || [];
+  const runtimeExtensions = pkg.openclaw?.runtimeExtensions || [];
   const setupEntry = pkg.openclaw?.setupEntry;
+  const runtimeSetupEntry = pkg.openclaw?.runtimeSetupEntry;
 
-  // 1. Validate Plugin Entries
+  // 1. Validate source extension entries exist (used by host for install-time validation)
   for (const extension of extensions) {
     const indexPath = pathResolve(rootDir, extension);
     if (!existsSync(indexPath)) {
-      throw new Error(`Plugin entry point not found: ${extension}`);
+      throw new Error(`Plugin source entry point not found: ${extension}`);
+    }
+    console.log(`OK: Plugin source entry point exists: ${extension}`);
+  }
+
+  // 2. Validate runtime extension entries (what the host actually loads)
+  const runtimeEntries = runtimeExtensions.length > 0 ? runtimeExtensions : extensions;
+  for (const extension of runtimeEntries) {
+    const indexPath = pathResolve(rootDir, extension);
+    if (!existsSync(indexPath)) {
+      throw new Error(`Plugin runtime entry point not found: ${extension}`);
     }
 
-    console.log(`Checking entry point: ${extension}`);
+    console.log(`Checking runtime entry point: ${extension}`);
     if (isCjsPath(extension)) {
       // CJS entries cannot be fully loaded without the OpenClaw host runtime,
       // but we can syntax-check them and verify they resolve to a CommonJS file.
       execSync(`node --check ${JSON.stringify(indexPath)}`, { stdio: 'inherit' });
-      console.log(`OK: CJS entry point parses: ${extension}`);
+      console.log(`OK: CJS runtime entry point parses: ${extension}`);
     } else {
       const mod = await import(pathToFileURL(indexPath).href);
       assert.ok(mod.default, `Entry point ${extension} must have a default export`);
@@ -40,21 +52,31 @@ async function runSmokeTest() {
     }
   }
 
-  // 2. Validate Setup Entry
+  // 3. Validate setup source entry exists
   if (setupEntry) {
     const setupPath = pathResolve(rootDir, setupEntry);
     if (!existsSync(setupPath)) {
-      throw new Error(`Setup entry point not found: ${setupEntry}`);
+      throw new Error(`Setup source entry point not found: ${setupEntry}`);
+    }
+    console.log(`OK: Setup source entry point exists: ${setupEntry}`);
+  }
+
+  // 4. Validate setup runtime entry
+  const setupRuntime = runtimeSetupEntry || setupEntry;
+  if (setupRuntime) {
+    const setupPath = pathResolve(rootDir, setupRuntime);
+    if (!existsSync(setupPath)) {
+      throw new Error(`Setup runtime entry point not found: ${setupRuntime}`);
     }
 
-    console.log(`Checking setup entry point: ${setupEntry}`);
-    if (isCjsPath(setupEntry)) {
+    console.log(`Checking setup runtime entry point: ${setupRuntime}`);
+    if (isCjsPath(setupRuntime)) {
       execSync(`node --check ${JSON.stringify(setupPath)}`, { stdio: 'inherit' });
-      console.log(`OK: CJS setup entry point parses: ${setupEntry}`);
+      console.log(`OK: CJS setup runtime entry point parses: ${setupRuntime}`);
     } else {
       const mod = await import(pathToFileURL(setupPath).href);
-      assert.ok(mod.default, `Setup entry point ${setupEntry} must have a default export`);
-      console.log(`OK: Loaded setup entry from ${setupEntry}`);
+      assert.ok(mod.default, `Setup entry point ${setupRuntime} must have a default export`);
+      console.log(`OK: Loaded setup entry from ${setupRuntime}`);
     }
   }
 
