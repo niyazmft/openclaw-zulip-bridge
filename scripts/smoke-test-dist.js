@@ -44,6 +44,22 @@ async function runSmokeTest() {
       // but we can syntax-check them and verify they resolve to a CommonJS file.
       execSync(`node --check ${JSON.stringify(indexPath)}`, { stdio: 'inherit' });
       console.log(`OK: CJS runtime entry point parses: ${extension}`);
+
+      // Verify the ERR_REQUIRE_ESM_RACE_CONDITION retry wrapper is present
+      const cjsSource = readFileSync(indexPath, 'utf-8');
+      assert.ok(
+        cjsSource.includes('function __requireWithRetry(id)'),
+        `CJS entry ${extension} must contain __requireWithRetry helper (see issue #231)`
+      );
+      assert.ok(
+        cjsSource.includes('ERR_REQUIRE_ESM_RACE_CONDITION'),
+        `CJS entry ${extension} must handle ERR_REQUIRE_ESM_RACE_CONDITION (see issue #231)`
+      );
+      assert.ok(
+        cjsSource.includes('__requireWithRetry("openclaw/'),
+        `CJS entry ${extension} must wrap openclaw/* requires with retry`
+      );
+      console.log(`OK: CJS retry wrapper present in: ${extension}`);
     } else {
       const mod = await import(pathToFileURL(indexPath).href);
       assert.ok(mod.default, `Entry point ${extension} must have a default export`);
