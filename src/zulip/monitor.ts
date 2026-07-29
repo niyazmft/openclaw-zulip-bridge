@@ -78,8 +78,10 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       baseUrl,
     } = await initializeZulipMonitor({ opts, core });
 
-    const logger = core.logging.getChildLogger({ module: "zulip" });
-    const logVerboseMessage = core.logging.shouldLogVerbose()
+    const logger = core.logging?.getChildLogger
+      ? core.logging.getChildLogger({ module: "zulip" })
+      : null;
+    const logVerboseMessage = logger && core.logging?.shouldLogVerbose && core.logging.shouldLogVerbose()
       ? (message: string) => logger.debug?.(message)
       : () => {};
 
@@ -129,7 +131,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
     // Use full config from runtime instead of passed cfg to get channel settings
     // (fullCfg already loaded above at line ~90)
-    const mentionRegexes = core.channel.mentions.buildMentionRegexes(cfg, "main");
+    const mentionRegexes = core.channel.mentions?.buildMentionRegexes
+      ? core.channel.mentions.buildMentionRegexes(cfg, "main")
+      : [];
     const zulipSection = cfg.channels?.zulip;
     const accountSection = zulipSection?.accounts?.[account.accountId] ?? zulipSection ?? {};
     const dmPolicy = accountSection.dmPolicy ?? account.config.dmPolicy ?? "pairing";
@@ -273,7 +277,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       const wasMentioned =
         !isDM &&
         (rawText.toLowerCase().includes(botUsernameMention) ||
-          core.channel.mentions.matchesMentionPatterns(rawText, mentionRegexes));
+          (core.channel.mentions?.matchesMentionPatterns
+            ? core.channel.mentions.matchesMentionPatterns(rawText, mentionRegexes)
+            : false));
 
       // ⚡ Performance: Use cached disk-based allowlist (30s TTL)
       let senderAllowedForCommands = isSenderAllowed({
