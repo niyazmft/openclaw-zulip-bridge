@@ -31,15 +31,31 @@ if (pkg.files) {
 
 // 4. Existence of built artifacts (local filesystem check)
 const extensions = pkg.openclaw?.extensions || [];
+const runtimeExtensions = pkg.openclaw?.runtimeExtensions || [];
+const setupEntry = pkg.openclaw?.setupEntry;
+const runtimeSetupEntry = pkg.openclaw?.runtimeSetupEntry;
+
 const artifacts = [
   ...extensions,
-  pkg.openclaw?.setupEntry
+  ...runtimeExtensions,
+  setupEntry,
+  runtimeSetupEntry
 ].filter(Boolean);
 
 for (const artifact of artifacts) {
   if (!existsSync(artifact)) {
-    errors.push(`Built artifact does not exist on disk: ${artifact}`);
+    errors.push(`Artifact does not exist on disk: ${artifact}`);
   }
+}
+
+// 4a. If runtimeExtensions are provided, they must match extensions length
+if (runtimeExtensions.length > 0 && runtimeExtensions.length !== extensions.length) {
+  errors.push(`openclaw.runtimeExtensions length (${runtimeExtensions.length}) must match openclaw.extensions length (${extensions.length})`);
+}
+
+// 4b. runtimeSetupEntry requires setupEntry
+if (runtimeSetupEntry && !setupEntry) {
+  errors.push('openclaw.runtimeSetupEntry requires openclaw.setupEntry');
 }
 
 // 5. Verify entry points are in the files list
@@ -51,6 +67,11 @@ for (const artifact of artifacts) {
       found = true;
       break;
     }
+  }
+  // Source TypeScript entries are not shipped in the package; they are only
+  // used for install-time validation. Skip the files-list check for them.
+  if (!found && artifact.endsWith('.ts')) {
+    continue;
   }
   if (!found) {
     errors.push(`Critical artifact ${normalizedArtifact} may not be included in package "files"`);

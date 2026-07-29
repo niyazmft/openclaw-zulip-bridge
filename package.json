@@ -10,10 +10,13 @@
       "minGatewayVersion": ">=2026.6.0"
     },
     "extensions": [
-      "./dist-cjs/index.cjs",
-      "./dist/index.js"
+      "./index.ts"
     ],
-    "setupEntry": "./dist-cjs/setup-entry.cjs",
+    "runtimeExtensions": [
+      "./dist-cjs/index.cjs"
+    ],
+    "setupEntry": "./setup-entry.ts",
+    "runtimeSetupEntry": "./dist-cjs/setup-entry.cjs",
     "channel": {
       "id": "zulip",
       "label": "Zulip",
