@@ -118,22 +118,23 @@ describe("readLatestAssistantTexts", () => {
     assert.deepStrictEqual(result, ["Hello world", "Second message"]);
   });
 
-  test("ignores trajectory files older than maxAgeMs", async () => {
+  test("ignores trajectory files older than maxAgeMs is DEPRECATED — scans all files", async () => {
     const filePath = path.join(sessionsDir, "old.trajectory.jsonl");
     await fs.writeFile(
       filePath,
       artifactsEvent({ sessionKey: SESSION_KEY, assistantTexts: ["stale"] }),
     );
     // Backdate the file.
-    const oldTime = new Date(Date.now() - 5 * 60_000);
+    const oldTime = new Date(Date.now() - 10 * 60_000);
     await fs.utimes(filePath, oldTime, oldTime);
+    // Without startTime we now scan all files, so the text is found.
     const result = await readLatestAssistantTexts({
       dataDir: tmpDir,
       agentId: AGENT_ID,
       sessionKey: SESSION_KEY,
       maxAgeMs: 30_000,
     });
-    assert.strictEqual(result, null);
+    assert.deepStrictEqual(result, ["stale"]);
   });
 
   test("prefers the most recently modified matching file", async () => {
@@ -155,6 +156,86 @@ describe("readLatestAssistantTexts", () => {
       sessionKey: SESSION_KEY,
     });
     assert.deepStrictEqual(result, ["new"]);
+  });
+
+  test("skips stale events when startTime is provided", async () => {
+    const now = Date.now();
+    const staleEvent = artifactsEvent({
+      sessionKey: SESSION_KEY,
+      assistantTexts: ["stale reply"],
+      ts: new Date(now - 60_000).toISOString(),
+    });
+    const freshEvent = artifactsEvent({
+      sessionKey: SESSION_KEY,
+      assistantTexts: ["fresh reply"],
+      ts: new Date(now).toISOString(),
+    });
+    await fs.writeFile(
+      path.join(sessionsDir, "abc.trajectory.jsonl"),
+      [staleEvent, freshEvent].join("\n"),
+    );
+    const result = await readLatestAssistantTexts({
+      dataDir: tmpDir,
+      agentId: AGENT_ID,
+      sessionKey: SESSION_KEY,
+      startTime: new Date(now - 30_000).toISOString(),
+    });
+    assert.deepStrictEqual(result, ["fresh reply"]);
+  });
+
+  test("returns null when all matching events are before startTime", async () => {
+    const now = Date.now();
+    const staleEvent = artifactsEvent({
+      sessionKey: SESSION_KEY,
+      assistantTexts: ["stale reply"],
+      ts: new Date(now - 60_000).toISOString(),
+    });
+    await fs.writeFile(
+      path.join(sessionsDir, "abc.trajectory.jsonl"),
+      staleEvent,
+    );
+    const result = await readLatestAssistantTexts({
+      dataDir: tmpDir,
+      agentId: AGENT_ID,
+      sessionKey: SESSION_KEY,
+      startTime: new Date(now - 30_000).toISOString(),
+    });
+    assert.strictEqual(result, null);
+  });
+
+  test("startTime allows matching events in older files", async () => {
+    // File modified 10 minutes ago — but we now scan all files regardless of mtime.
+    const now = Date.now();
+    const filePath = path.join(sessionsDir, "old.trajectory.jsonl");
+    await fs.writeFile(
+      filePath,
+      artifactsEvent({
+        sessionKey: SESSION_KEY,
+        assistantTexts: ["found via startTime"],
+        ts: new Date(now - 30_000).toISOString(),
+      }),
+    );
+    const oldTime = new Date(now - 10 * 60_000);
+    await fs.utimes(filePath, oldTime, oldTime);
+
+    // Without startTime we scan all files and find the match.
+    const resultNoStart = await readLatestAssistantTexts({
+      dataDir: tmpDir,
+      agentId: AGENT_ID,
+      sessionKey: SESSION_KEY,
+      maxAgeMs: 60_000,
+    });
+    assert.deepStrictEqual(resultNoStart, ["found via startTime"]);
+
+    // With startTime the event still matches.
+    const resultWithStart = await readLatestAssistantTexts({
+      dataDir: tmpDir,
+      agentId: AGENT_ID,
+      sessionKey: SESSION_KEY,
+      maxAgeMs: 60_000,
+      startTime: new Date(now - 60_000).toISOString(),
+    });
+    assert.deepStrictEqual(resultWithStart, ["found via startTime"]);
   });
 
   test("filters out non-string and empty entries", async () => {

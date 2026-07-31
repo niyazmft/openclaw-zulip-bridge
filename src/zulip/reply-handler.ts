@@ -66,11 +66,21 @@ export async function dispatchZulipReply(params: {
   const typingCallbacks = createTypingCallbacks({
     start: async () => {
       if (typingParams) {
+        core.logging?.getChildLogger?.({ module: "zulip" })?.info?.("zulip typing start", {
+          accountId: account.accountId,
+          messageId,
+          target: maskPII(isDM ? String(senderNumericId) : `stream:${streamId}:${topic}`),
+        });
         await sendZulipTyping(client, typingParams);
       }
     },
     stop: async () => {
       if (typingParams) {
+        core.logging?.getChildLogger?.({ module: "zulip" })?.info?.("zulip typing stop", {
+          accountId: account.accountId,
+          messageId,
+          target: maskPII(isDM ? String(senderNumericId) : `stream:${streamId}:${topic}`),
+        });
         await sendZulipTyping(client, { ...typingParams, op: "stop" });
       }
     },
@@ -104,63 +114,113 @@ export async function dispatchZulipReply(params: {
       onReplyStart: typingCallbacks.onReplyStart,
       deliver: async (payload: ReplyPayload) => {
         deliveredAny = true;
-        // Issue #224: Stop the typing indicator as soon as the first chunk is
-        // delivered so the user does not see "bot is typing" after the reply
-        // is already visible. This is best-effort and idempotent.
-        if (!typingStopped) {
-          typingStopped = true;
-          void typingCallbacks.onIdle().catch(() => undefined);
-        }
-        if (!placeholderConsumed) {
-          placeholderConsumed = true;
-          if (placeholderMessageIdPromise) {
-            try {
-              placeholderMessageId = await placeholderMessageIdPromise;
-            } catch (err) {
-              logVerboseMessage(
-                `zulip placeholder promise rejected: ${String(err)}; falling back to new message`,
-              );
+        const zLogger = core.logging?.getChildLogger?.({ module: "zulip" });
+        zLogger?.info?.("zulip deliver callback fired", {
+          accountId: account.accountId,
+          messageId,
+          textLen: (payload.text ?? "").length,
+          hasMedia: Boolean(payload.mediaUrl || payload.mediaUrls?.length),
+        });
+        try {
+          // Issue #224: Stop the typing indicator as soon as the first chunk is
+          // delivered so the user does not see "bot is typing" after the reply
+          // is already visible. This is best-effort and idempotent.
+          if (!typingStopped) {
+            typingStopped = true;
+            // Guard: onIdle() may return undefined in some SDK versions
+            const idleResult = typingCallbacks.onIdle();
+            if (idleResult && typeof (idleResult as Promise<void>).catch === "function") {
+              void (idleResult as Promise<void>).catch(() => undefined);
             }
           }
-        }
-        const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
-        const rawText = core.channel.text.convertMarkdownTables(payload.text ?? "", tableMode);
-        const { text, topic: topicOverride } = extractZulipTopicDirective(rawText);
-        const resolvedTopic = topicOverride ? topicOverride.slice(0, 60) : topic;
-        if (mediaUrls.length === 0) {
-          const chunkMode = core.channel.text.resolveChunkMode(cfg, "zulip", account.accountId);
-          const chunks = core.channel.text.chunkMarkdownTextWithMode(text, textLimit, chunkMode);
-          const nonEmptyChunks = (chunks.length > 0 ? chunks : [text]).filter(Boolean);
-          for (let idx = 0; idx < nonEmptyChunks.length; idx++) {
-            const chunk = nonEmptyChunks[idx];
-            // UX: Edit the placeholder message for the first chunk, then send new messages for the rest.
-            if (placeholderMessageId) {
+          if (!placeholderConsumed) {
+            placeholderConsumed = true;
+            if (placeholderMessageIdPromise) {
               try {
-                await editZulipMessage(client, {
-                  messageId: placeholderMessageId,
-                  content: chunk,
-                });
+                placeholderMessageId = await placeholderMessageIdPromise;
               } catch (err) {
                 logVerboseMessage(
-                  `zulip placeholder edit failed: ${String(err)}; falling back to new message`,
+                  `zulip placeholder promise rejected: ${String(err)}; falling back to new message`,
                 );
+              }
+            }
+          }
+          const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
+          const rawText = core.channel.text.convertMarkdownTables(payload.text ?? "", tableMode);
+          const { text, topic: topicOverride } = extractZulipTopicDirective(rawText);
+          const resolvedTopic = topicOverride ? topicOverride.slice(0, 60) : topic;
+          zLogger?.info?.("zulip deliver before send", {
+            accountId: account.accountId,
+            messageId,
+            textLen: text?.length ?? 0,
+            rawTextLen: rawText?.length ?? 0,
+            mediaUrlsCount: mediaUrls.length,
+          });
+          if (mediaUrls.length === 0) {
+            const chunkMode = core.channel.text.resolveChunkMode(cfg, "zulip", account.accountId);
+            const chunks = core.channel.text.chunkMarkdownTextWithMode(text, textLimit, chunkMode);
+            const nonEmptyChunks = (chunks.length > 0 ? chunks : [text]).filter(Boolean);
+            zLogger?.info?.("zulip deliver chunks ready", {
+              accountId: account.accountId,
+              messageId,
+              chunksCount: chunks.length,
+              nonEmptyCount: nonEmptyChunks.length,
+              textLen: text?.length ?? 0,
+            });
+            for (let idx = 0; idx < nonEmptyChunks.length; idx++) {
+              const chunk = nonEmptyChunks[idx];
+              zLogger?.info?.("zulip deliver sending chunk", {
+                accountId: account.accountId,
+                messageId,
+                chunkIdx: idx,
+                chunkLen: chunk?.length ?? 0,
+                totalChunks: nonEmptyChunks.length,
+                usePlaceholder: Boolean(placeholderMessageId),
+                target: maskPII(to),
+              });
+              // UX: Edit the placeholder message for the first chunk, then send new messages for the rest.
+              if (placeholderMessageId) {
+                try {
+                  await editZulipMessage(client, {
+                    messageId: placeholderMessageId,
+                    content: chunk,
+                  });
+                  zLogger?.info?.("zulip deliver placeholder edit ok", {
+                    accountId: account.accountId,
+                    messageId,
+                    chunkIdx: idx,
+                  });
+                } catch (err) {
+                  logVerboseMessage(
+                    `zulip placeholder edit failed: ${String(err)}; falling back to new message`,
+                  );
+                  await sendMessageZulip(to, chunk, {
+                    accountId: account.accountId,
+                    topic: resolvedTopic,
+                  });
+                  zLogger?.info?.("zulip deliver fallback send ok", {
+                    accountId: account.accountId,
+                    messageId,
+                    chunkIdx: idx,
+                  });
+                }
+              } else {
                 await sendMessageZulip(to, chunk, {
                   accountId: account.accountId,
                   topic: resolvedTopic,
                 });
+                zLogger?.info?.("zulip deliver send ok", {
+                  accountId: account.accountId,
+                  messageId,
+                  chunkIdx: idx,
+                });
               }
-            } else {
-              await sendMessageZulip(to, chunk, {
-                accountId: account.accountId,
-                topic: resolvedTopic,
-              });
             }
-          }
-        } else {
-          let first = true;
-          for (const mediaUrl of mediaUrls) {
-            const caption = first ? text : "";
-            first = false;
+          } else {
+            let first = true;
+            for (const mediaUrl of mediaUrls) {
+              const caption = first ? text : "";
+              first = false;
             if (placeholderMessageId) {
               try {
                 await editZulipMessage(client, {
@@ -187,18 +247,34 @@ export async function dispatchZulipReply(params: {
           }
         }
         statusSink?.({ lastOutboundAt: Date.now() });
-      },
+      } catch (deliverErr) {
+        zLogger?.error?.("zulip deliver error", {
+          accountId: account.accountId,
+          messageId,
+          error: String(deliverErr),
+        });
+      }
+    },
       onError: (err: unknown) => {
         core.error?.(`zulip reply failed: ${String(err)}`);
         // Issue #224: Ensure typing indicator stops promptly on dispatch error.
         if (!typingStopped) {
           typingStopped = true;
-          void typingCallbacks.onIdle().catch(() => undefined);
+          const idleResult = typingCallbacks.onIdle();
+          if (idleResult && typeof (idleResult as Promise<void>).catch === "function") {
+            void (idleResult as Promise<void>).catch(() => undefined);
+          }
         }
       },
     });
 
   let dispatchError: unknown;
+  const dispatchStartTime = new Date().toISOString();
+  core.logging?.getChildLogger?.({ module: "zulip" })?.info?.("zulip dispatch start", {
+    accountId: account.accountId,
+    messageId,
+    sessionKey: route?.sessionKey ?? route?.mainSessionKey,
+  });
   try {
     await core.channel.reply.dispatchReplyFromConfig({
       ctx: ctxPayload,
@@ -234,10 +310,15 @@ export async function dispatchZulipReply(params: {
           const dataDir = (core as any).paths?.dataDir as string | undefined;
           const sessionKey: string | undefined = route?.sessionKey ?? route?.mainSessionKey;
           if (sessionKey && route?.agentId) {
+            logVerboseMessage(
+              `[zulip-fallback] triggering fallback reader startTime=${dispatchStartTime} sessionKey=${sessionKey}`,
+            );
             const texts = await readLatestAssistantTexts({
               dataDir,
               agentId: route.agentId,
               sessionKey,
+              startTime: dispatchStartTime,
+              log: logVerboseMessage,
             });
             if (texts && texts.length > 0) {
               const text = texts.join("\n\n");
