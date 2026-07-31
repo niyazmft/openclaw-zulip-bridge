@@ -630,6 +630,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
       // Issue #224: Start reaction is best-effort; don't block model inference
       // on the Zulip API round-trip.
+      logger?.info?.("zulip reaction add start", {
+        accountId: account.accountId,
+        messageId,
+        emoji: reactionStart,
+      });
       void addReactionSafe({
         client,
         messageId,
@@ -671,6 +676,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
       if (reactionsEnabled) {
         if (reactionClearOnFinish) {
+          logger?.info?.("zulip reaction remove start", {
+            accountId: account.accountId,
+            messageId,
+            emoji: reactionStart,
+          });
           void removeReactionSafe({
             client,
             messageId,
@@ -680,6 +690,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           });
         }
         if (dispatchError) {
+          logger?.info?.("zulip reaction add error", {
+            accountId: account.accountId,
+            messageId,
+            emoji: reactionError,
+          });
           void addReactionSafe({
             client,
             messageId,
@@ -715,6 +730,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             ).catch(() => undefined);
           }
         } else {
+          logger?.info?.("zulip reaction add success", {
+            accountId: account.accountId,
+            messageId,
+            emoji: reactionSuccess,
+          });
           void addReactionSafe({
             client,
             messageId,

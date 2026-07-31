@@ -312,20 +312,56 @@ export async function sendMessageZulip(
   }
 
   let messageId = "unknown";
+  const zulipLogger = core.logging?.getChildLogger?.({ module: "zulip" });
   if (target.kind === "user") {
-    const response = await sendZulipPrivateMessage(client, {
-      to: target.email,
-      content: message,
+    zulipLogger?.info?.("zulip api send private", {
+      accountId: account.accountId,
+      to: maskPII(target.email),
+      contentLen: message.length,
     });
-    messageId = response.id ? String(response.id) : "unknown";
+    try {
+      const response = await sendZulipPrivateMessage(client, {
+        to: target.email,
+        content: message,
+      });
+      messageId = response.id ? String(response.id) : "unknown";
+      zulipLogger?.info?.("zulip api send private ok", {
+        accountId: account.accountId,
+        messageId,
+      });
+    } catch (err) {
+      zulipLogger?.error?.("zulip api send private failed", {
+        accountId: account.accountId,
+        error: String(err),
+      });
+      throw err;
+    }
   } else {
     const resolvedTopic = target.topic || opts.topic || DEFAULT_TOPIC;
-    const response = await sendZulipStreamMessage(client, {
-      stream: target.stream,
+    zulipLogger?.info?.("zulip api send stream", {
+      accountId: account.accountId,
+      stream: maskPII(target.stream),
       topic: resolvedTopic,
-      content: message,
+      contentLen: message.length,
     });
-    messageId = response.id ? String(response.id) : "unknown";
+    try {
+      const response = await sendZulipStreamMessage(client, {
+        stream: target.stream,
+        topic: resolvedTopic,
+        content: message,
+      });
+      messageId = response.id ? String(response.id) : "unknown";
+      zulipLogger?.info?.("zulip api send stream ok", {
+        accountId: account.accountId,
+        messageId,
+      });
+    } catch (err) {
+      zulipLogger?.error?.("zulip api send stream failed", {
+        accountId: account.accountId,
+        error: String(err),
+      });
+      throw err;
+    }
   }
 
   core.log?.(

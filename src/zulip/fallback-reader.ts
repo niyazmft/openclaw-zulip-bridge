@@ -34,14 +34,26 @@ export type FallbackReaderOptions = {
   sessionKey: string;
   /**
    * Only consider trajectory files modified within this many ms.
-   * Prevents historical sessions with the same key from being matched.
-   * Default: 30_000 (30 seconds).
+   * This is a coarse performance guard; the primary filter is
+   * `startTime` which matches events by their actual timestamp.
+   * Default: 300_000 (5 minutes).
    */
   maxAgeMs?: number;
+  /**
+   * ISO 8601 timestamp (e.g. `new Date().toISOString()`). Only
+   * `trace.artifacts` events with `ts >= startTime` are considered.
+   * This is the robust primary filter that prevents matching stale
+   * events from reused sessions or prior messages.
+   */
+  startTime?: string;
   /**
    * Optional file-system override for tests.
    */
   fsImpl?: Pick<typeof fs, "readdir" | "stat" | "readFile">;
+  /**
+   * Optional logger for debug output.
+   */
+  log?: (msg: string) => void;
 };
 
 function sessionKeyMatches(artifactKey: unknown, target: string): boolean {
@@ -50,7 +62,7 @@ function sessionKeyMatches(artifactKey: unknown, target: string): boolean {
   return artifactKey.startsWith(target + ":");
 }
 
-const DEFAULT_MAX_AGE_MS = 30_000;
+const DEFAULT_MAX_AGE_MS = 300_000; // kept for API compat; no longer used internally
 
 function resolveSessionsDir(opts: FallbackReaderOptions): string {
   const dataDir = opts.dataDir ?? path.join(os.homedir(), ".openclaw");
@@ -62,37 +74,40 @@ export async function readLatestAssistantTexts(
 ): Promise<string[] | null> {
   const fsi = opts.fsImpl ?? fs;
   const sessionsDir = resolveSessionsDir(opts);
-  const maxAgeMs = opts.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
+  const startTime = opts.startTime;
+  const log = opts.log;
+
+  log?.(
+    `[fallback-reader] start sessionsDir=${sessionsDir} sessionKey=${opts.sessionKey} startTime=${startTime ?? "(none)"}`,
+  );
 
   let entries: string[];
   try {
     entries = await fsi.readdir(sessionsDir);
-  } catch {
+  } catch (err) {
+    log?.(`[fallback-reader] readdir failed: ${String(err)}`);
     return null;
   }
 
   const trajectoryFiles = entries.filter((n) => n.endsWith(".trajectory.jsonl"));
   if (trajectoryFiles.length === 0) {
+    log?.(`[fallback-reader] no trajectory files in ${sessionsDir}`);
     return null;
   }
 
-  const cutoff = Date.now() - maxAgeMs;
+  // Scan ALL trajectory files — do NOT filter by mtime.
+  // The `startTime` parameter (passed from reply-handler.ts) already
+  // filters out stale events by their actual timestamp, making mtime
+  // filtering unnecessary and potentially harmful due to filesystem
+  // race conditions: the host appends trace.artifacts but the file's
+  // mtime may not have been flushed when our finally block runs.
+  const filesToScan = trajectoryFiles.map((name) => ({ name }));
 
-  // Stat each, keep only the recently-modified ones, sort newest first.
-  const recent: Array<{ name: string; mtimeMs: number }> = [];
-  for (const name of trajectoryFiles) {
-    try {
-      const st = await fsi.stat(path.join(sessionsDir, name));
-      if (st.mtimeMs >= cutoff) {
-        recent.push({ name, mtimeMs: st.mtimeMs });
-      }
-    } catch {
-      // Ignore unreadable entries.
-    }
-  }
-  recent.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  log?.(
+    `[fallback-reader] scanning ${filesToScan.length} trajectory files (mtime filter removed)`,
+  );
 
-  for (const { name } of recent) {
+  for (const { name } of filesToScan) {
     const fullPath = path.join(sessionsDir, name);
     let content: string;
     try {
@@ -103,6 +118,7 @@ export async function readLatestAssistantTexts(
 
     // Scan lines from the end backwards for our latest trace.artifacts.
     const lines = content.split("\n");
+    let foundInFile = 0;
     for (let i = lines.length - 1; i >= 0; i--) {
       const line = lines[i];
       if (!line) continue;
@@ -115,13 +131,43 @@ export async function readLatestAssistantTexts(
         continue;
       }
       if (event?.type !== "trace.artifacts") continue;
+      foundInFile++;
+
       if (!sessionKeyMatches(event.sessionKey, opts.sessionKey)) continue;
+
+      // If startTime is provided, reject events that occurred before it.
+      // This prevents matching stale events from reused sessions.
+      if (startTime && event.ts) {
+        const eventTime = new Date(event.ts).getTime();
+        const startTimeMs = new Date(startTime).getTime();
+        if (!Number.isNaN(eventTime) && !Number.isNaN(startTimeMs)) {
+          if (eventTime < startTimeMs) {
+            log?.(
+              `[fallback-reader] skipping stale event in ${name}: eventTime=${event.ts} < startTime=${startTime}`,
+            );
+            continue;
+          }
+        }
+      }
+
       const texts = event.data?.assistantTexts;
       if (Array.isArray(texts) && texts.length > 0) {
-        return texts.filter((t: unknown) => typeof t === "string" && t.length > 0);
+        const result = texts.filter(
+          (t: unknown) => typeof t === "string" && t.length > 0,
+        );
+        log?.(
+          `[fallback-reader] MATCH in ${name} eventTime=${event.ts} texts=${result.length}`,
+        );
+        return result;
       }
+    }
+    if (foundInFile > 0) {
+      log?.(
+        `[fallback-reader] ${foundInFile} trace.artifacts in ${name} but none matched sessionKey/startTime`,
+      );
     }
   }
 
+  log?.(`[fallback-reader] no match after scanning ${filesToScan.length} files`);
   return null;
 }
