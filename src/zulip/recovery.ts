@@ -1,6 +1,5 @@
 import type { ZulipClient, ZulipMessage } from "./client.js";
-import { addReactionSafe, removeReactionSafe } from "./reactions.js";
-import { formatZulipLog, maskPII } from "./monitor-helpers.js";
+import { maskPII } from "./monitor-helpers.js";
 
 /**
  * Reaction info from the Zulip API. The ZulipMessage type doesn't include
@@ -35,7 +34,6 @@ export async function recoverInterruptedMessages(params: {
   reactionStart: string;
   reactionSuccess: string;
   reactionError: string;
-  reactionsEnabled: boolean;
   logVerboseMessage: (msg: string) => void;
   logger?: { info?: (msg: string, data?: any) => void; error?: (msg: string, data?: any) => void };
   handleMessage: (message: ZulipMessage) => Promise<void>;
@@ -48,7 +46,6 @@ export async function recoverInterruptedMessages(params: {
     reactionStart,
     reactionSuccess,
     reactionError,
-    reactionsEnabled,
     logVerboseMessage,
     logger,
     handleMessage,
@@ -141,17 +138,6 @@ export async function recoverInterruptedMessages(params: {
         messageId,
         senderEmail: maskPII(senderEmail),
       });
-
-      // Remove the stale 👀 reaction.
-      if (reactionsEnabled) {
-        await removeReactionSafe({
-          client,
-          messageId,
-          emojiName: reactionStart,
-          reactionsEnabled,
-          logVerbose: logVerboseMessage,
-        }).catch(() => {});
-      }
 
       // Issue #246: Set a fresh session key so the re-dispatched message
       // creates a new session instead of reusing the dead one from the

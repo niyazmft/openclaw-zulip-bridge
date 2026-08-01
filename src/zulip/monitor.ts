@@ -796,7 +796,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         reactionStart,
         reactionSuccess,
         reactionError,
-        reactionsEnabled,
         logVerboseMessage,
         logger,
         handleMessage,
