@@ -110,7 +110,7 @@ export async function dispatchZulipReply(params: {
   const { dispatcher, replyOptions, markDispatchIdle } =
     core.channel.reply.createReplyDispatcherWithTyping({
       ...prefixOptions,
-      humanDelay: core.channel.reply.resolveHumanDelayConfig(cfg, route.agentId),
+      humanDelay: 0,
       onReplyStart: typingCallbacks.onReplyStart,
       deliver: async (payload: ReplyPayload) => {
         deliveredAny = true;
@@ -270,10 +270,14 @@ export async function dispatchZulipReply(params: {
 
   let dispatchError: unknown;
   const dispatchStartTime = new Date().toISOString();
-  core.logging?.getChildLogger?.({ module: "zulip" })?.info?.("zulip dispatch start", {
+  const dispatchStartMs = Date.now();
+  const zLogger = core.logging?.getChildLogger?.({ module: "zulip" });
+  zLogger?.info?.("zulip dispatch start", {
     accountId: account.accountId,
     messageId,
     sessionKey: route?.sessionKey ?? route?.mainSessionKey,
+    bodyLen: ctxPayload?.Body?.length ?? 0,
+    rawBodyLen: ctxPayload?.RawBody?.length ?? 0,
   });
   try {
     await core.channel.reply.dispatchReplyFromConfig({
@@ -286,6 +290,13 @@ export async function dispatchZulipReply(params: {
           typeof account.blockStreaming === "boolean" ? !account.blockStreaming : undefined,
         onModelSelected,
       },
+    });
+    const elapsedMs = Date.now() - dispatchStartMs;
+    zLogger?.info?.("zulip dispatch completed", {
+      accountId: account.accountId,
+      messageId,
+      elapsedMs,
+      deliveredAny,
     });
   } catch (err) {
     dispatchError = err;
