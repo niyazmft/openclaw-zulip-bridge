@@ -333,13 +333,11 @@ export async function dispatchZulipReply(params: {
             });
             if (texts && texts.length > 0) {
               const text = texts.join("\n\n");
-              core.log?.(
-                formatZulipLog("zulip auto-send fallback engaged", {
-                  accountId: account.accountId,
-                  sessionKey,
-                  textLen: text.length,
-                }),
-              );
+              zLogger?.info?.("zulip auto-send fallback engaged", {
+                accountId: account.accountId,
+                sessionKey,
+                textLen: text.length,
+              });
               const { text: cleanText, topic: topicOverride } =
                 extractZulipTopicDirective(text);
               const resolvedTopic = topicOverride
