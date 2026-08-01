@@ -73,6 +73,12 @@ export type ZulipMessage = {
     user?: { email: string; id: number; full_name?: string };
     user_id?: number;
   }>;
+  /**
+   * Internal: Override the session key for recovery dispatch.
+   * Set by recoverInterruptedMessages() to create a fresh session
+   * when the original session was lost due to gateway restart.
+   */
+  _recoverySessionKey?: string;
 };
 
 /**

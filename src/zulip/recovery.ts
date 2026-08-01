@@ -153,7 +153,20 @@ export async function recoverInterruptedMessages(params: {
         }).catch(() => {});
       }
 
-      // Re-dispatch the message.
+      // Issue #246: Set a fresh session key so the re-dispatched message
+      // creates a new session instead of reusing the dead one from the
+      // previous gateway instance. The pattern matches what the host uses
+      // for Zulip DM sessions: agent:{agentId}:zulip:direct:{email}
+      const recoveryKey = `agent:main:zulip:direct:${senderEmail}:recovery:${Date.now()}`;
+      (msg as any)._recoverySessionKey = recoveryKey;
+
+      logger?.info?.("zulip recovery: using fresh session key", {
+        accountId,
+        messageId,
+        recoveryKey,
+      });
+
+      // Re-dispatch the message with a fresh session.
       await handleMessage(msg);
       recovered++;
     }
