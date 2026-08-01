@@ -828,6 +828,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         await deleteZulipQueue(client, queue.queueId);
       }
     }
+    // Issue #237: Flush dedupe store on graceful shutdown to prevent
+    // duplicate message processing after restart.
+    await dedupeStore.flush();
   } catch (err) {
     logger?.error?.("zulip monitor fatal error", {
       accountId: opts.accountId,

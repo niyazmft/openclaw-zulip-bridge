@@ -1,8 +1,6 @@
 import type { ChannelMessageActionAdapter } from "openclaw/plugin-sdk/channel-contract";
 import {
   type ChannelMessageActionName,
-  readStringParam,
-  jsonResult,
 } from "openclaw/plugin-sdk/channel-core";
 import { resolveZulipAccount } from "./zulip/accounts.js";
 import { zulipChannelMeta } from "./channel.js";
