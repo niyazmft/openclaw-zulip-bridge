@@ -60,6 +60,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
   const core = getZulipRuntime();
   core.log?.(formatZulipLog("zulip monitor starting", { accountId: opts.accountId }));
 
+  // Initialize logger early so it's available in catch/finally blocks
+  const logger = core.logging?.getChildLogger
+    ? core.logging.getChildLogger({ module: "zulip" })
+    : null;
+
   // Assert health immediately so the host health-monitor doesn't kill us during initialization
   opts.statusSink?.({
     running: true,
@@ -78,9 +83,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       baseUrl,
     } = await initializeZulipMonitor({ opts, core });
 
-    const logger = core.logging?.getChildLogger
-      ? core.logging.getChildLogger({ module: "zulip" })
-      : null;
     const logVerboseMessage = logger && core.logging?.shouldLogVerbose && core.logging.shouldLogVerbose()
       ? (message: string) => logger.debug?.(message)
       : () => {};
@@ -240,25 +242,21 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         }
       }
 
-      core.log?.(
-        formatZulipLog("zulip inbound arrival", {
-          accountId: account.accountId,
-          messageId,
-          senderId: maskPII(senderId),
-          kind,
-          stream: maskPII(streamName || streamId),
-          topic: topic ? maskPII(topic) : undefined,
-        }),
-      );
+      logger?.info?.("zulip inbound arrival", {
+        accountId: account.accountId,
+        messageId,
+        senderId: maskPII(senderId),
+        kind,
+        stream: maskPII(streamName || streamId),
+        topic: topic ? maskPII(topic) : undefined,
+      });
 
       const dedupeKey = `${account.accountId}:${messageId}`;
       if (await dedupeStore.check(dedupeKey)) {
-        core.log?.(
-          formatZulipLog("zulip inbound dedupe hit", {
-            accountId: account.accountId,
-            messageId,
-          }),
-        );
+        logger?.info?.("zulip inbound dedupe hit", {
+          accountId: account.accountId,
+          messageId,
+        });
         return;
       }
 
@@ -372,13 +370,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             id: senderId,
             meta: { name: senderName },
           });
-          core.log?.(
-            formatZulipLog("zulip pairing request", {
-              accountId: account.accountId,
-              senderId: maskPII(senderId),
-              created,
-            }),
-          );
+          logger?.info?.("zulip pairing request", {
+            accountId: account.accountId,
+            senderId: maskPII(senderId),
+            created,
+          });
           if (created) {
             try {
               const pairingText = core.channel.pairing.buildPairingReply({
@@ -397,13 +393,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
               );
               opts.statusSink?.({ lastOutboundAt: Date.now() });
             } catch (err) {
-              core.error?.(
-                formatZulipLog("zulip pairing reply failed", {
-                  accountId: account.accountId,
-                  senderId: maskPII(senderId),
-                  error: String(err),
-                }),
-              );
+              logger?.error?.("zulip pairing reply failed", {
+                accountId: account.accountId,
+                senderId: maskPII(senderId),
+                error: String(err),
+              });
             }
           }
         } else {
@@ -550,12 +544,10 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
               }
               return placeholderMessageId;
             } catch (err) {
-              core.log?.(
-                formatZulipLog("zulip placeholder send failed", {
-                  accountId: account.accountId,
-                  error: String(err),
-                }),
-              );
+              logger?.info?.("zulip placeholder send failed", {
+                accountId: account.accountId,
+                error: String(err),
+              });
               return undefined;
             }
           })()
@@ -615,18 +607,16 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       }
 
       const previewLine = bodyText.slice(0, 200).replace(/\n/g, "\\n");
-      core.log?.(
-        formatZulipLog("zulip inbound dispatch", {
-          accountId: account.accountId,
-          messageId,
-          senderId: maskPII(senderId),
-          from: maskPII(ctxPayload.From),
-          to: maskPII(ctxPayload.To),
-          sessionKey: maskPII(sessionKey),
-          len: bodyText.length,
-          preview: maskPII(previewLine),
-        }),
-      );
+      logger?.info?.("zulip inbound dispatch", {
+        accountId: account.accountId,
+        messageId,
+        senderId: maskPII(senderId),
+        from: maskPII(ctxPayload.From),
+        to: maskPII(ctxPayload.To),
+        sessionKey: maskPII(sessionKey),
+        len: bodyText.length,
+        preview: maskPII(previewLine),
+      });
 
       // Issue #224: Start reaction is best-effort; don't block model inference
       // on the Zulip API round-trip.
@@ -779,26 +769,22 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       try {
         await handleMessage(message);
       } catch (err) {
-        core.error?.(
-          formatZulipLog("zulip message handler failed", {
-            accountId: account.accountId,
-            messageId: message.id,
-            error: String(err),
-          }),
-        );
+      logger?.error?.("zulip message handler failed", {
+        accountId: account.accountId,
+        messageId: message.id,
+        error: String(err),
+      });
       }
     };
 
     if (account.streaming === false) {
-      core.log?.(
-        formatZulipLog("zulip monitoring disabled by configuration", {
-          accountId: account.accountId,
-        }),
-      );
+      logger?.info?.("zulip monitoring disabled by configuration", {
+        accountId: account.accountId,
+      });
       return;
     }
 
-    core.log?.(formatZulipLog("zulip monitor loop entering", { accountId: account.accountId }));
+    logger?.info?.("zulip monitor loop entering", { accountId: account.accountId });
     while (!opts.abortSignal?.aborted) {
       try {
         const result = await pollOnce({
@@ -816,12 +802,10 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           break;
         }
       } catch (err: any) {
-        core.error?.(
-          formatZulipLog("zulip monitor loop error", {
-            accountId: opts.accountId,
-            error: String(err),
-          }),
-        );
+        logger?.error?.("zulip monitor loop error", {
+          accountId: opts.accountId,
+          error: String(err),
+        });
         opts.statusSink?.({
           connected: false,
           lastError: String(err),
@@ -829,40 +813,32 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         await delay(5000);
       }
     }
-    core.log?.(
-      formatZulipLog("zulip monitor loop exited", {
-        accountId: account.accountId,
-        aborted: opts.abortSignal?.aborted,
-      }),
-    );
+    logger?.info?.("zulip monitor loop exited", {
+      accountId: account.accountId,
+      aborted: opts.abortSignal?.aborted,
+    });
 
     if (queueManager) {
       const queue = queueManager.getQueue();
       if (queue) {
-        core.log?.(
-          formatZulipLog("zulip monitor cleaning up queue", {
-            accountId: account.accountId,
-            queueId: maskPII(queue.queueId),
-          }),
-        );
+        logger?.info?.("zulip monitor cleaning up queue", {
+          accountId: account.accountId,
+          queueId: maskPII(queue.queueId),
+        });
         await deleteZulipQueue(client, queue.queueId);
       }
     }
   } catch (err) {
-    core.error?.(
-      formatZulipLog("zulip monitor fatal error", {
-        accountId: opts.accountId,
-        error: String(err),
-        stack: (err as Error)?.stack,
-      }),
-    );
+    logger?.error?.("zulip monitor fatal error", {
+      accountId: opts.accountId,
+      error: String(err),
+      stack: (err as Error)?.stack,
+    });
     throw err;
   } finally {
-    core.log?.(
-      formatZulipLog("zulip monitor stopped", {
-        accountId: opts.accountId,
-        reason: opts.abortSignal?.aborted ? "aborted" : "finished",
-      }),
-    );
+    logger?.info?.("zulip monitor stopped", {
+      accountId: opts.accountId,
+      reason: opts.abortSignal?.aborted ? "aborted" : "finished",
+    });
   }
 }

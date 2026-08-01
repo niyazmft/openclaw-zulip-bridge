@@ -216,3 +216,76 @@ test("monitor source: start reaction is fire-and-forget", async () => {
   assert.equal(source.includes("Issue #224"), true);
   assert.equal(source.includes("void addReactionSafe({"), true);
 });
+
+// ── Regression tests for fixed bugs ─────────────────────────────────────────
+
+test("actions source: describeMessageTool returns zulipChannelMeta", async () => {
+  const source = await fs.readFile(
+    path.resolve(process.cwd(), "src/actions.ts"),
+    "utf8",
+  );
+  assert.equal(source.includes("zulipChannelMeta"), true);
+  assert.equal(source.includes("getChatChannelMeta"), false);
+});
+
+test("reply-handler source: humanDelay is set to 0", async () => {
+  const source = await fs.readFile(
+    path.resolve(process.cwd(), "src/zulip/reply-handler.ts"),
+    "utf8",
+  );
+  assert.equal(source.includes("humanDelay: 0"), true);
+});
+
+test("reply-handler source: onIdle() guard with type check", async () => {
+  const source = await fs.readFile(
+    path.resolve(process.cwd(), "src/zulip/reply-handler.ts"),
+    "utf8",
+  );
+  assert.equal(source.includes("typeof (idleResult as Promise<void>).catch === \"function\""), true);
+  assert.equal(source.includes("deliverErr"), true);
+  assert.equal(source.includes("zulip deliver error"), true);
+});
+
+test("monitor source: uses logger?.info instead of core.log", async () => {
+  const source = await fs.readFile(monitorPath, "utf8");
+  // Should have many logger?.info calls
+  const loggerInfoCount = (source.match(/logger\?\..*info/g) || []).length;
+  assert.ok(loggerInfoCount >= 10, `expected >=10 logger?.info calls, got ${loggerInfoCount}`);
+  // Should have NO core.log calls except the startup one
+  const coreLogLines = source.split("\n").filter((l) => l.includes("core.log") && !l.includes("core.logging"));
+  assert.ok(coreLogLines.length <= 2, `expected <=2 core.log lines, got ${coreLogLines.length}`);
+});
+
+test("send source: uses zulipLogger instead of core.log", async () => {
+  const source = await fs.readFile(
+    path.resolve(process.cwd(), "src/zulip/send.ts"),
+    "utf8",
+  );
+  assert.equal(source.includes("zulipLogger"), true);
+  // Should have NO core.log calls (only core.logging)
+  const coreLogLines = source.split("\n").filter((l) => l.includes("core.log") && !l.includes("core.logging"));
+  assert.equal(coreLogLines.length, 0, `expected 0 core.log lines, got ${coreLogLines.length}`);
+});
+
+test("actions source: imports from split files", async () => {
+  const source = await fs.readFile(
+    path.resolve(process.cwd(), "src/actions.ts"),
+    "utf8",
+  );
+  assert.equal(source.includes("./actions-utils.js"), true);
+  assert.equal(source.includes("./actions-send.js"), true);
+  assert.equal(source.includes("./actions-messages.js"), true);
+  assert.equal(source.includes("./actions-admin.js"), true);
+});
+
+test("actions-utils source: exports helper functions", async () => {
+  const source = await fs.readFile(
+    path.resolve(process.cwd(), "src/actions-utils.ts"),
+    "utf8",
+  );
+  assert.equal(source.includes("export function splitStreamTarget"), true);
+  assert.equal(source.includes("export function parseSendTarget"), true);
+  assert.equal(source.includes("export function readMessageId"), true);
+  assert.equal(source.includes("export function readBooleanParam"), true);
+  assert.equal(source.includes("export function resolveTopicName"), true);
+});

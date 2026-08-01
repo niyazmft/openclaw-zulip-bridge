@@ -1,0 +1,1 @@
+All validations pass. Here is the structured acceptance report.

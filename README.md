@@ -393,6 +393,30 @@ The host's `tools.profile: "coding"` removes the `message` tool from the agent. 
 ### Zulip responses are slower than Telegram
 Zulip API round-trips from the container take ~600ms each. To reduce latency, keep `showThinkingPlaceholder: false` (default) and avoid enabling the placeholder unless users need the extra visual feedback.
 
+### `describeMessageTool` fails with "expected chat channel metadata: zulip to be defined"
+
+**Fixed in v2026.8.4+.** The function was calling `getChatChannelMeta("zulip")` which only resolves first-party/bundled channel metadata. Since Zulip is a third-party plugin, it always returned `undefined`. The fix returns the plugin's own channel metadata directly.
+
+**Severity:** Low — the error is caught gracefully and doesn't crash anything. It only affects profiles where the `message` tool is available (e.g., `full`, `messaging`). On the default `coding` profile, `describeMessageTool` is never called.
+
+### Typing indicator never stops / replies not delivered
+
+**Fixed in v2026.8.4+.** The SDK's `createTypingCallbacks.onIdle()` may return `undefined` in some host versions. Calling `.catch()` on `undefined` throws a `TypeError` that was silently swallowed by the dispatcher's `onError` handler, preventing `sendMessageZulip` from ever being called.
+
+**Fix:** The deliver callback now guards `.catch()` with a type check and wraps the entire body in a try-catch with proper error logging.
+
+### Fallback reader misses replies from local OSS models
+
+**Fixed in v2026.8.4+.** The fallback reader (which reads assistant text from trajectory files when the `message` tool is not invoked) previously filtered files by filesystem `mtime` with a 30-second window. This was unreliable because session files are reused across multiple messages and buffered filesystem writes don't always update `mtime` synchronously.
+
+**Fix:** The mtime filter was removed entirely. The fallback now uses event-time filtering (`event.ts >= dispatchStartTime`) which is deterministic and immune to filesystem race conditions.
+
+### `humanDelay` adds ~16s delay before typing indicator
+
+**Fixed in v2026.8.4+.** The SDK's `resolveHumanDelayConfig` has a built-in default of ~14-16 seconds even when not configured in gateway settings. The plugin now sets `humanDelay: 0` to disable this delay.
+
+**Result:** Typing indicator now starts within 0.3-5 seconds of dispatch (down from ~16s).
+
 ---
 
 ## Security & Permissions
