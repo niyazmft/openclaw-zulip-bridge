@@ -1,0 +1,178 @@
+{
+  "runId": "3e24dca6",
+  "agent": "worker",
+  "task": "In the project at /Volumes/external-hd/workspace/openclaw-zulip-bridge, I need to split `src/actions.ts` (901 lines) into multiple files.\n\nThe file is at src/actions.ts. Read it first to understand the structure.\n\nThe plan is to create these files:\n\n### 1. `src/actions-utils.ts` - Shared helper functions\nMove these functions from actions.ts:\n- `resolveZulipClient`\n- `splitStreamTarget`\n- `parseSendTarget`\n- `assertStringLength`\n- `readMessageId`\n- `readMessageContent`\n- `readSendMessageContent`\n- `resolveTopicName`\n- `parseBooleanValue`\n- `readBooleanParam`\n- `parseStringArrayParam`\n- `readStreamId`\n- `readUserIdParam`\n- `readUserIdOrEmailParam`\n- `readRealmUpdateParams`\n- `requireAdminActionsEnabled`\n- `requireZulipAdmin`\n- Constants: `providerId`, `MAX_STRING_LENGTH`, `SAFE_REALM_SETTINGS`, `resolvedTopicPrefixes`\n- Types: `StreamTarget`, `SendTarget`\n\nImports needed: `resolveZulipAccount` from `./zulip/accounts.js`, client functions from `./zulip/client.js`, SDK types from `openclaw/plugin-sdk/channel-core`\n\n### 2. `src/actions-send.ts` - Send action handler\nExport a function `handleSendAction` that takes `(client, params)` and handles the \"send\" action.\nImport `parseSendTarget`, `readSendMessageContent`, `readStringParam` from utils.\nImport `sendZulipStreamMessage`, `sendZulipPrivateMessage` from client.\nReturn `jsonResult(...)`.\n\n### 3. `src/actions-messages.ts` - Message actions\nExport functions:\n- `handleReadAction(client, params)`\n- `handleEditAction(client, params)`\n- `handleDeleteAction(client, params)`\n- `handleReactAction(client, params)`\n- `handlePinAction(client, params, action)`\n- `handleSearchAction(client, params)`\n\nImport helpers from utils and client functions.\n\n### 4. `src/actions-admin.ts` - Admin actions\nExport functions:\n- `handleChannelListAction(client, params)`\n- `handleChannelSubscribeAction(client, params)`\n- `handleChannelCreateAction(client, params, account)`\n- `handleChannelEditAction(client, params, account)`\n- `handleChannelDeleteAction(client, params, account)`\n- `handleMemberInfoAction(client, params)`\n- `handleUserPresenceAction(client, params)`\n- `handleUserDeactivateAction(client, params, account)`\n- `handleUserReactivateAction(client, params, account)`\n- `handleOrgSettingsAction(client, params)`\n- `handleOrgSettingsEditAction(client, params, account)`\n- `handleInviteAction(client, params)`\n- `handleResolveTopicAction(client, params)`\n\nImport helpers from utils and client functions.\n\n### 5. `src/actions.ts` - Main adapter (rewrite)\nKeep only:\n- Import `zulipChannelMeta` from `./channel.js`\n- Import `resolveZulipClient` from `./actions-utils.js`\n- Import all action handlers from the new files\n- The `zulipMessageActions` adapter with `describeMessageTool`, `listActions`, `extractToolSend`, and `handleAction` that routes to the appropriate handler\n\nIMPORTANT RULES:\n1. All files use ESM with `.js` extensions (NodeNext resolution)\n2. Use `import type` for type-only imports\n3. The `jsonResult`, `readStringParam`, `readNumberParam`, `OpenClawConfig`, `ChannelMessageActionName` types come from `openclaw/plugin-sdk/channel-core`\n4. The `ChannelMessageActionAdapter` type comes from `openclaw/plugin-sdk/channel-contract`\n5. Client functions come from `./zulip/client.js`\n6. After creating all files, run `npm run typecheck` to verify\n\nDo NOT change any logic - only move code between files. Each action handler should work exactly as before.",
+  "exitCode": 0,
+  "processSignal": "SIGTERM",
+  "usage": {
+    "input": 556074,
+    "output": 16117,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cost": 0,
+    "turns": 19
+  },
+  "model": "ollama/deepseek-v4-flash:cloud:high",
+  "attemptedModels": [
+    "ollama/deepseek-v4-flash:cloud:high"
+  ],
+  "modelAttempts": [
+    {
+      "model": "ollama/deepseek-v4-flash:cloud:high",
+      "success": true,
+      "exitCode": 0,
+      "usage": {
+        "input": 556074,
+        "output": 16117,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": 0,
+        "turns": 19
+      }
+    }
+  ],
+  "durationMs": 272034,
+  "toolCount": 23,
+  "launchContractDigest": "0420501620ea6ce37efc19ce1d00c6dea03bce1cbb063af15920636060acc4fe",
+  "acceptance": {
+    "status": "checked",
+    "evidenceStatus": "checked",
+    "explicit": false,
+    "effectiveAcceptance": {
+      "level": "checked",
+      "explicit": false,
+      "inferredReason": [
+        "write-capable worker/task"
+      ],
+      "criteria": [
+        {
+          "id": "criterion-1",
+          "must": "Implement the requested change without widening scope",
+          "evidence": [
+            "changed-files",
+            "tests-added",
+            "commands-run",
+            "residual-risks",
+            "no-staged-files"
+          ],
+          "severity": "required"
+        }
+      ],
+      "evidence": [
+        "changed-files",
+        "tests-added",
+        "commands-run",
+        "residual-risks",
+        "no-staged-files"
+      ],
+      "verify": [],
+      "stopRules": []
+    },
+    "inferredReason": [
+      "write-capable worker/task"
+    ],
+    "criteria": [
+      {
+        "id": "criterion-1",
+        "must": "Implement the requested change without widening scope",
+        "evidence": [
+          "changed-files",
+          "tests-added",
+          "commands-run",
+          "residual-risks",
+          "no-staged-files"
+        ],
+        "severity": "required"
+      }
+    ],
+    "runtimeChecks": [
+      {
+        "id": "criterion:criterion-1",
+        "status": "passed",
+        "message": "Required criterion 'criterion-1' satisfied."
+      },
+      {
+        "id": "evidence:changed-files",
+        "status": "passed",
+        "message": "changed-files evidence present."
+      },
+      {
+        "id": "evidence:tests-added",
+        "status": "not-applicable",
+        "message": "tests-added evidence explicitly reported as not applicable."
+      },
+      {
+        "id": "evidence:commands-run",
+        "status": "passed",
+        "message": "commands-run evidence present."
+      },
+      {
+        "id": "evidence:residual-risks",
+        "status": "passed",
+        "message": "residual-risks evidence present."
+      },
+      {
+        "id": "evidence:no-staged-files",
+        "status": "passed",
+        "message": "no-staged-files evidence present."
+      },
+      {
+        "id": "no-staged-files",
+        "status": "passed",
+        "message": "No staged files detected."
+      }
+    ],
+    "verifyRuns": [],
+    "childReport": {
+      "criteriaSatisfied": [
+        {
+          "id": "criterion-1",
+          "status": "satisfied",
+          "evidence": "Split src/actions.ts (901 lines) into 5 files: actions-utils.ts (365 lines), actions-send.ts (28 lines), actions-messages.ts (161 lines), actions-admin.ts (383 lines), and the rewritten actions.ts (171 lines). All logic preserved exactly. npm run check passes (typecheck, build, smoke, test, package)."
+        }
+      ],
+      "changedFiles": [
+        "src/actions.ts",
+        "src/actions-utils.ts",
+        "src/actions-send.ts",
+        "src/actions-messages.ts",
+        "src/actions-admin.ts"
+      ],
+      "testsAddedOrUpdated": [],
+      "commandsRun": [
+        {
+          "command": "npm run typecheck",
+          "result": "passed",
+          "summary": "tsc -p tsconfig.json — no errors"
+        },
+        {
+          "command": "npm run check",
+          "result": "passed",
+          "summary": "bootstrap → typecheck → build → smoke → test (131 pass, 1 skip) → package — all passed"
+        }
+      ],
+      "validationOutput": [
+        "npm run typecheck: no errors",
+        "npm run check: all 6 steps passed (bootstrap, typecheck, build, smoke, test, package)"
+      ],
+      "residualRisks": [
+        "none — all logic preserved, no behavioral changes"
+      ],
+      "noStagedFiles": true,
+      "diffSummary": "src/actions.ts reduced from 901 lines to 171 lines (adapter only). 4 new files created: actions-utils.ts (shared helpers), actions-send.ts (send handler), actions-messages.ts (read/edit/delete/react/pin/search handlers), actions-admin.ts (channel/member/user/org/invite/resolve-topic handlers). Pre-existing unrelated changes in src/zulip/monitor.ts and src/zulip/send.ts are unchanged.",
+      "reviewFindings": [
+        "no blockers: all code moved verbatim, imports reorganized per ESM NodeNext resolution, typecheck and full check pass"
+      ],
+      "manualNotes": "The pre-existing modifications to src/zulip/monitor.ts and src/zulip/send.ts are unrelated to this refactor and were present before the change."
+    }
+  },
+  "effects": {
+    "fileMutation": {
+      "status": "observed",
+      "expected": true,
+      "attempted": true
+    }
+  },
+  "transcriptPath": "/Volumes/external-hd/workspace/openclaw-zulip-bridge/.pi-subagents/artifacts/3e24dca6_worker_0_transcript.jsonl",
+  "timestamp": 1785604132495
+}

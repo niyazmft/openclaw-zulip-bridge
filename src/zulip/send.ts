@@ -14,7 +14,7 @@ import {
   uploadZulipFile,
   type ZulipClient,
 } from "./client.js";
-import { formatZulipLog, maskPII } from "./monitor-helpers.js";
+import { maskPII } from "./monitor-helpers.js";
 
 export type ZulipSendOpts = {
   apiKey?: string;
@@ -221,17 +221,17 @@ export async function sendMessageZulip(
   const stream = target.kind === "stream" ? target.stream : undefined;
   const topic = target.kind === "stream" ? target.topic || opts.topic : undefined;
 
-  core.log?.(
-    formatZulipLog("zulip outbound attempt", {
-      accountId: account.accountId,
-      target: maskPII(to),
-      kind,
-      stream: stream ? maskPII(stream) : undefined,
-      topic,
-      sessionKey: opts.sessionKey,
-      hasMedia: Boolean(opts.mediaUrl),
-    }),
-  );
+  const zulipLogger = core.logging?.getChildLogger?.({ module: "zulip" });
+
+  zulipLogger?.info?.("zulip outbound attempt", {
+    accountId: account.accountId,
+    target: maskPII(to),
+    kind,
+    stream: stream ? maskPII(stream) : undefined,
+    topic,
+    sessionKey: opts.sessionKey,
+    hasMedia: Boolean(opts.mediaUrl),
+  });
 
   let message = text?.trim() ?? "";
   const rawMediaUrl = opts.mediaUrl?.trim();
@@ -246,12 +246,10 @@ export async function sendMessageZulip(
     if (isRemote && !isZulipHosted) {
       // Security: reject internal/private IPs to prevent SSRF via mediaUrl
       if (isInternalHost(mediaUrl)) {
-        core.log?.(
-          formatZulipLog("zulip outbound security warning: rejected internal mediaUrl", {
-            accountId: account.accountId,
-            mediaUrl: maskPII(mediaUrl),
-          }),
-        );
+        zulipLogger?.info?.("zulip outbound security warning: rejected internal mediaUrl", {
+          accountId: account.accountId,
+          mediaUrl: maskPII(mediaUrl),
+        });
         mediaUrl = undefined;
       } else {
         const maxBytes = (cfg.agents?.defaults?.mediaMaxMb ?? 5) * 1024 * 1024;
@@ -287,12 +285,10 @@ export async function sendMessageZulip(
         }
       }
     } else if (!isRemote) {
-      core.log?.(
-        formatZulipLog("zulip outbound security warning: rejected non-http mediaUrl", {
-          accountId: account.accountId,
-          mediaUrl: maskPII(mediaUrl),
-        }),
-      );
+      zulipLogger?.info?.("zulip outbound security warning: rejected non-http mediaUrl", {
+        accountId: account.accountId,
+        mediaUrl: maskPII(mediaUrl),
+      });
       mediaUrl = undefined;
     }
     message = normalizeMessage(message, mediaUrl);
@@ -312,7 +308,7 @@ export async function sendMessageZulip(
   }
 
   let messageId = "unknown";
-  const zulipLogger = core.logging?.getChildLogger?.({ module: "zulip" });
+
   if (target.kind === "user") {
     zulipLogger?.info?.("zulip api send private", {
       accountId: account.accountId,
@@ -364,17 +360,15 @@ export async function sendMessageZulip(
     }
   }
 
-  core.log?.(
-    formatZulipLog("zulip outbound success", {
-      accountId: account.accountId,
-      messageId,
-      target: maskPII(to),
-      kind,
-      stream: stream ? maskPII(stream) : undefined,
-      topic: target.kind === "stream" ? target.topic || opts.topic || DEFAULT_TOPIC : undefined,
-      sessionKey: opts.sessionKey,
-    }),
-  );
+  zulipLogger?.info?.("zulip outbound success", {
+    accountId: account.accountId,
+    messageId,
+    target: maskPII(to),
+    kind,
+    stream: stream ? maskPII(stream) : undefined,
+    topic: target.kind === "stream" ? target.topic || opts.topic || DEFAULT_TOPIC : undefined,
+    sessionKey: opts.sessionKey,
+  });
 
   core.channel.activity.record({
     channel: "zulip",
