@@ -213,7 +213,6 @@ test("reply-handler source: typing indicator stops on first chunk delivery", asy
 
 test("monitor source: start reaction is fire-and-forget", async () => {
   const source = await fs.readFile(monitorPath, "utf8");
-  assert.equal(source.includes("Issue #224"), true);
   assert.equal(source.includes("void addReactionSafe({"), true);
 });
 

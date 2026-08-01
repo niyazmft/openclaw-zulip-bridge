@@ -139,7 +139,6 @@ export async function recoverInterruptedMessages(params: {
         senderEmail: maskPII(senderEmail),
       });
 
-      // Issue #246: Set a fresh session key so the re-dispatched message
       // creates a new session instead of reusing the dead one from the
       // previous gateway instance. The pattern matches what the host uses
       // for Zulip DM sessions: agent:{agentId}:zulip:direct:{email}

@@ -41,7 +41,6 @@ export function resolveThreadSessionKeys(params: {
  * Formats a log message with standardized, machine-parseable identifiers.
  */
 export function formatZulipLog(message: string, fields: Record<string, unknown>): string {
-  // ⚡ Bolt Optimization: Use a single for...in loop to build the string
   // This avoids intermediate array allocations and redundant iterations
   // caused by Object.entries().filter().map().join(), making it ~5x faster.
   let parts = "";
@@ -125,7 +124,6 @@ export function delay(ms: number): Promise<void> {
 
 /**
  * Compute and track conversation metadata for inbound messages.
- * Issue #211: conversation_turn, session_gap_seconds, topic_changed
  */
 export function trackConversationMetadata(params: {
   sessionKey: string;

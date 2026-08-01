@@ -58,7 +58,6 @@ export async function pollOnce(params: {
         response.code === "BAD_EVENT_QUEUE_ID" || msg.toLowerCase().includes("bad event queue");
       if (isBadQueue) {
         await queueManager.markQueueExpired();
-        // Issue #245: Apply backoff on bad-queue recovery to avoid rapid-fire
         // /events requests that consume the rate-limit budget.
         const pLogger = core.logging?.getChildLogger?.({ module: "zulip" });
         pLogger?.info?.("zulip poll throttle: bad queue (error response), waiting 1s", {
@@ -89,7 +88,6 @@ export async function pollOnce(params: {
       lastConnectedAt: Date.now(),
     });
 
-    // Issue #245: Apply 1s delay when no message-type events were processed,
     // not only when the events array is empty. Heartbeat events (non-message)
     // should not trigger an immediate re-poll.
     const hadMessageEvents = events.some((e: any) => e.type === "message" && e.message);
@@ -136,7 +134,6 @@ export async function pollOnce(params: {
       void Promise.all(processing);
     } finally {
       if (maxEventId > 0) {
-        // ⚡ Bolt Optimization: Batch disk I/O updates for event ID
         // Previously, we updated the queue manager (which writes to disk) for every event.
         // By keeping track of the maxEventId and updating once per batch, we turn
         // O(N) disk writes into O(1) writes, drastically reducing I/O operations.
@@ -151,7 +148,6 @@ export async function pollOnce(params: {
     const errStr = String(err);
     if (errStr.toLowerCase().includes("bad event queue")) {
       await queueManager.markQueueExpired();
-      // Issue #245: Apply backoff on bad-queue recovery to avoid rapid-fire
       // /events requests that consume the rate-limit budget.
       const pLogger = core.logging?.getChildLogger?.({ module: "zulip" });
       pLogger?.info?.("zulip poll throttle: bad queue (exception path), waiting 1s", {

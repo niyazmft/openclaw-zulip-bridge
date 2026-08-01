@@ -4,35 +4,20 @@ import type { ZulipClient } from "./zulip/client.js";
 import {
   splitStreamTarget,
   readStreamId,
-  readUserIdParam,
-  readUserIdOrEmailParam,
   readBooleanParam,
   parseStringArrayParam,
-  readRealmUpdateParams,
-  resolveTopicName,
-  readMessageId,
   assertStringLength,
   requireAdminActionsEnabled,
-  requireZulipAdmin,
   MAX_STRING_LENGTH,
 } from "./actions-utils.js";
 import {
   fetchZulipSubscriptions,
   fetchZulipStreams,
-  subscribeZulipStream,
   createZulipStream,
   updateZulipStream,
   resolveZulipStreamId,
   deleteZulipStream,
   fetchZulipMemberInfo,
-  fetchZulipUserPresence,
-  deactivateZulipUser,
-  reactivateZulipUser,
-  fetchZulipServerSettings,
-  updateZulipRealm,
-  inviteZulipUsersToStream,
-  fetchZulipMessages,
-  updateZulipMessageTopic,
 } from "./zulip/client.js";
 
 export async function handleChannelListAction(
@@ -53,19 +38,6 @@ export async function handleChannelListAction(
     subscriptions,
     ...(publicStreams ? { publicStreams } : {}),
   });
-}
-
-export async function handleChannelSubscribeAction(
-  client: ZulipClient,
-  params: Record<string, unknown>,
-) {
-  const raw =
-    readStringParam(params, "stream") ??
-    readStringParam(params, "channelId") ??
-    readStringParam(params, "to", { required: true });
-  const target = splitStreamTarget(raw);
-  const result = await subscribeZulipStream(client, target.stream);
-  return jsonResult({ ok: true, stream: target.stream, result });
 }
 
 export async function handleChannelCreateAction(
@@ -206,178 +178,4 @@ export async function handleMemberInfoAction(
     readStringParam(params, "user");
   const user = await fetchZulipMemberInfo(client, userId ?? undefined);
   return jsonResult({ ok: true, user });
-}
-
-export async function handleUserPresenceAction(
-  client: ZulipClient,
-  params: Record<string, unknown>,
-) {
-  const userIdOrEmail = readUserIdOrEmailParam(params);
-  const presence = await fetchZulipUserPresence(client, userIdOrEmail);
-  return jsonResult({ ok: true, user: userIdOrEmail, presence });
-}
-
-export async function handleUserDeactivateAction(
-  client: ZulipClient,
-  params: Record<string, unknown>,
-  account: ResolvedZulipAccount,
-) {
-  requireAdminActionsEnabled(account);
-  await requireZulipAdmin(client);
-  const confirm = readBooleanParam(params, "confirm", "confirmed", "acknowledge");
-  if (confirm !== true) {
-    throw new Error(
-      "User deactivation requires confirm: true. " +
-      "This action disables the user's Zulip account and removes their login access.",
-    );
-  }
-  const userId = readUserIdParam(params);
-  await deactivateZulipUser(client, userId);
-  return jsonResult({ ok: true, userId, deactivated: true });
-}
-
-export async function handleUserReactivateAction(
-  client: ZulipClient,
-  params: Record<string, unknown>,
-  account: ResolvedZulipAccount,
-) {
-  requireAdminActionsEnabled(account);
-  await requireZulipAdmin(client);
-  const confirm = readBooleanParam(params, "confirm", "confirmed", "acknowledge");
-  if (confirm !== true) {
-    throw new Error(
-      "User reactivation requires confirm: true. " +
-      "This action restores a previously deactivated Zulip user account.",
-    );
-  }
-  const userId = readUserIdParam(params);
-  await reactivateZulipUser(client, userId);
-  return jsonResult({ ok: true, userId, reactivated: true });
-}
-
-export async function handleOrgSettingsAction(
-  client: ZulipClient,
-  params: Record<string, unknown>,
-) {
-  const settings = await fetchZulipServerSettings(client);
-  return jsonResult({ ok: true, settings });
-}
-
-export async function handleOrgSettingsEditAction(
-  client: ZulipClient,
-  params: Record<string, unknown>,
-  account: ResolvedZulipAccount,
-) {
-  requireAdminActionsEnabled(account);
-  await requireZulipAdmin(client);
-  const confirm = readBooleanParam(params, "confirm", "confirmed", "acknowledge");
-  if (confirm !== true) {
-    throw new Error(
-      "Organization settings update requires confirm: true. " +
-      "This action modifies global Zulip realm configuration.",
-    );
-  }
-  const updates = readRealmUpdateParams(params);
-  await updateZulipRealm(client, updates);
-  return jsonResult({ ok: true, updated: Object.keys(updates) });
-}
-
-export async function handleInviteAction(
-  client: ZulipClient,
-  params: Record<string, unknown>,
-) {
-  const raw =
-    readStringParam(params, "stream") ??
-    readStringParam(params, "channelId") ??
-    readStringParam(params, "to", { required: true });
-  const target = splitStreamTarget(raw);
-  let principals =
-    parseStringArrayParam(params, "principals") ??
-    parseStringArrayParam(params, "principal") ??
-    parseStringArrayParam(params, "userIds") ??
-    parseStringArrayParam(params, "users");
-  // Support comma-separated string for userId param (message tool compat)
-  if ((!principals || principals.length === 0) && typeof params.userId === "string") {
-    principals = params.userId
-      .split(",")
-      .map((s: string) => s.trim())
-      .filter(Boolean);
-  }
-  if (!principals || principals.length === 0) {
-    throw new Error("principals are required to invite Zulip users to a stream.");
-  }
-  for (const principal of principals) {
-    if (typeof principal === "string") {
-      assertStringLength(principal, "principal", MAX_STRING_LENGTH);
-    }
-  }
-  await inviteZulipUsersToStream(client, {
-    stream: target.stream,
-    principals,
-  });
-  return jsonResult({ ok: true, stream: target.stream, principals });
-}
-
-export async function handleResolveTopicAction(
-  client: ZulipClient,
-  params: Record<string, unknown>,
-) {
-  const explicitTopic = readStringParam(params, "topic") ?? readStringParam(params, "subject");
-  const rawStream =
-    readStringParam(params, "stream") ??
-    readStringParam(params, "channelId") ??
-    readStringParam(params, "to");
-  const target = rawStream ? splitStreamTarget(rawStream) : undefined;
-  const topic = explicitTopic ?? target?.topic;
-
-  if (!topic) {
-    throw new Error("topic is required to resolve a Zulip topic.");
-  }
-
-  assertStringLength(topic, "topic", MAX_STRING_LENGTH);
-  const { topic: resolvedTopic, alreadyResolved } = resolveTopicName(topic);
-  if (alreadyResolved) {
-    return jsonResult({ ok: true, topic, resolvedTopic, alreadyResolved: true });
-  }
-
-  const messageId = (() => {
-    try {
-      return readMessageId(params);
-    } catch {
-      return undefined;
-    }
-  })();
-
-  let targetMessageId = messageId;
-  if (!targetMessageId) {
-    if (!target?.stream) {
-      throw new Error(
-        "stream is required to resolve a Zulip topic when messageId is not provided.",
-      );
-    }
-    const messages = await fetchZulipMessages(client, {
-      stream: target.stream,
-      topic,
-      limit: 1,
-    });
-    const latest = messages[0];
-    if (!latest?.id) {
-      throw new Error("No messages found for the specified stream/topic.");
-    }
-    targetMessageId = String(latest.id);
-  }
-
-  await updateZulipMessageTopic(client, {
-    messageId: targetMessageId,
-    topic: resolvedTopic,
-    propagateMode: "change_all",
-  });
-
-  return jsonResult({
-    ok: true,
-    stream: target?.stream,
-    topic,
-    resolvedTopic,
-    messageId: targetMessageId,
-  });
 }

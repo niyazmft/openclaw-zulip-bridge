@@ -3,7 +3,6 @@ const DEFAULT_ONCHAR_PREFIXES = [">", "!"];
 const HTML_TAG_REGEX = /<[^>]+>/g;
 const MENTION_REGEX = /@\*\*([^*]+)\*\*/g;
 
-// ⚡ Bolt Optimization: Single-pass HTML entity replacement
 // Combined regex for all common entities - avoids 4 separate .replace() passes
 const HTML_ENTITY_REGEX = /&(lt|gt|amp|quot);/g;
 const HTML_ENTITY_MAP: Record<string, string> = {
@@ -13,7 +12,6 @@ const HTML_ENTITY_MAP: Record<string, string> = {
   '&quot;': '"',
 };
 
-// ⚡ Bolt Optimization: Pre-compile regex for bot mention matching
 // Exported for callers who want to cache the regex at initialization time
 export function createBotMentionRegex(botUsername: string): RegExp {
   const escaped = botUsername.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -22,7 +20,6 @@ export function createBotMentionRegex(botUsername: string): RegExp {
 
 /**
  * Strips HTML tags and unescapes common HTML entities from Zulip message content.
- * ⚡ Bolt Optimization: Single-pass entity replacement reduces string processing
  */
 export function stripHtmlToText(html: string): string {
   if (!html.includes('<') && !html.includes('&') && !html.includes('@**')) {
@@ -50,7 +47,6 @@ export function normalizeMention(text: string, mention: string | RegExp | undefi
     return text.replace(/\s+/g, " ").trim();
   }
   
-  // ⚡ Bolt Optimization: Use pre-compiled regex if provided (avoids per-message allocation)
   // Falls back to creating regex from string for backward compatibility
   const re = mention instanceof RegExp 
     ? mention 

@@ -16,18 +16,10 @@ import {
 } from "./actions-messages.js";
 import {
   handleChannelListAction,
-  handleChannelSubscribeAction,
   handleChannelCreateAction,
   handleChannelEditAction,
   handleChannelDeleteAction,
   handleMemberInfoAction,
-  handleUserPresenceAction,
-  handleUserDeactivateAction,
-  handleUserReactivateAction,
-  handleOrgSettingsAction,
-  handleOrgSettingsEditAction,
-  handleInviteAction,
-  handleResolveTopicAction,
 } from "./actions-admin.js";
 
 export const zulipMessageActions: ChannelMessageActionAdapter = {
@@ -56,17 +48,6 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
       "pin",
       "unpin",
     ]);
-    // TODO: These actions require core SDK changes to MESSAGE_ACTION_TARGET_MODE.
-    // Re-enable once the SDK supports plugin-registered action target modes.
-    // See: https://github.com/openclaw/openclaw/issues/TBD
-    // actions.add("channel-subscribe" as ChannelMessageActionName);
-    // actions.add("invite" as ChannelMessageActionName);
-    // actions.add("resolve-topic" as ChannelMessageActionName);
-    // actions.add("user-presence" as ChannelMessageActionName);
-    // actions.add("user-deactivate" as ChannelMessageActionName);
-    // actions.add("user-reactivate" as ChannelMessageActionName);
-    // actions.add("org-settings" as ChannelMessageActionName);
-    // actions.add("org-settings-edit" as ChannelMessageActionName);
     return Array.from(actions);
   },
   extractToolSend: ({ args }) => {
@@ -92,10 +73,6 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
       return handleChannelListAction(client, params);
     }
 
-    if ((action as string) === "channel-subscribe") {
-      return handleChannelSubscribeAction(client, params);
-    }
-
     if (action === "channel-create") {
       return handleChannelCreateAction(client, params, account);
     }
@@ -110,30 +87,6 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
 
     if (action === "member-info") {
       return handleMemberInfoAction(client, params);
-    }
-
-    if ((action as string) === "user-presence") {
-      return handleUserPresenceAction(client, params);
-    }
-
-    if ((action as string) === "user-deactivate") {
-      return handleUserDeactivateAction(client, params, account);
-    }
-
-    if ((action as string) === "user-reactivate") {
-      return handleUserReactivateAction(client, params, account);
-    }
-
-    if ((action as string) === "org-settings") {
-      return handleOrgSettingsAction(client, params);
-    }
-
-    if ((action as string) === "org-settings-edit") {
-      return handleOrgSettingsEditAction(client, params, account);
-    }
-
-    if ((action as string) === "invite") {
-      return handleInviteAction(client, params);
     }
 
     if (action === "read") {
@@ -154,10 +107,6 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
 
     if (action === "pin" || action === "unpin") {
       return handlePinAction(client, params, action);
-    }
-
-    if ((action as string) === "resolve-topic") {
-      return handleResolveTopicAction(client, params);
     }
 
     if (action === "search") {

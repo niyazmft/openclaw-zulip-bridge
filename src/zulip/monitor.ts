@@ -123,11 +123,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     });
     await dedupeStore.load();
 
-    // Issue #211: Conversation metadata tracking (conversation_turn, session_gap_seconds, topic_changed)
     const messageCounts = new Map<string, number>();
     const lastMessageTimes = new Map<string, number>();
     const lastTopicCache = new Map<string, string>();
-    // Issue #222: Track inbound DM message counts against the unrotated base
     // session key so we can rotate DM sessions before context bloat accumulates.
     const dmBaseMessageCounts = new Map<string, number>();
 
@@ -144,7 +142,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
     const groupPolicy = accountSection.groupPolicy ?? account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
 
-    // ⚡ Bolt Optimization: Lazily evaluate readAllowFromStore
     // Pre-compute the fallback for groupAllowFrom, but defer disk read until needed.
     // This avoids disk I/O for messages where sender is already authorized by static config.
     const configGroupAllowFromFallback = configGroupAllowFrom.length > 0 ? configGroupAllowFrom : configAllowFrom;
@@ -205,10 +202,8 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       accountId: account.accountId,
     });
 
-    // ⚡ Bolt Optimization: Cache lowercase mention prefix AND pre-compiled regex outside the event loop
     // to prevent redundant string allocations and .toLowerCase() calls for every message.
     const botUsernameMention = `@${botUsername.toLowerCase()}`;
-    // ⚡ Bolt Optimization: Pre-compile regex using shared helper to avoid duplication
     // Guard against null/undefined botUsername to prevent TypeError
     const botUsernameMentionRegex = botUsername 
       ? createBotMentionRegex(botUsername)
@@ -470,11 +465,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         },
       });
 
-      // Issue #222: Rotate Zulip DM session keys after a configured number of
       // inbound turns so one long/broken conversation cannot bloat context for
       // every future message in the same DM. Streams and topics keep stable keys.
       let baseSessionKey = route.sessionKey ?? `zulip:${account.accountId}:${channelId}`;
-      // Issue #246: If this is a recovery dispatch, use a fresh session key
       // to avoid the dead session from the previous gateway instance.
       if ((message as any)._recoverySessionKey) {
         baseSessionKey = (message as any)._recoverySessionKey;
@@ -496,7 +489,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       });
       const sessionKey = threadKeys.sessionKey;
 
-      // Issue #211: Compute conversation metadata (conversation_turn, session_gap_seconds, topic_changed)
       const { conversationTurn, sessionGapSeconds, topicChanged } = trackConversationMetadata({
         sessionKey,
         channelId,
@@ -588,7 +580,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         MediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
         MediaType: mediaTypes[0],
         MediaTypes: mediaTypes.length > 0 ? mediaTypes : undefined,
-        // Issue #211: Context metadata for agent
         ConversationTurn: conversationTurn,
         SessionGapSeconds: sessionGapSeconds,
         TopicChanged: topicChanged,
@@ -622,7 +613,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         preview: maskPII(previewLine),
       });
 
-      // Issue #224: Start reaction is best-effort; don't block model inference
       // on the Zulip API round-trip.
       logger?.info?.("zulip reaction add start", {
         accountId: account.accountId,
@@ -696,7 +686,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             reactionsEnabled,
             logVerbose: logVerboseMessage,
           });
-          // Issue #212: Best-effort cleanup orphaned placeholder on dispatch error
           if (placeholderPromise) {
             void (async () => {
               const phId = placeholderMessageId ?? (await placeholderPromise.catch(() => undefined));
@@ -781,7 +770,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       }
     };
 
-    // Issue #246: Recover interrupted messages after gateway restart.
     // Scan recent DMs for messages with stale 👀 reactions (no ✅/⚠️, no response).
     // This runs once on startup before the main polling loop.
     try {
@@ -858,7 +846,6 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         await deleteZulipQueue(client, queue.queueId);
       }
     }
-    // Issue #237: Flush dedupe store on graceful shutdown to prevent
     // duplicate message processing after restart.
     await dedupeStore.flush();
   } catch (err) {
