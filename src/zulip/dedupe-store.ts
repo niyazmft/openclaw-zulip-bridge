@@ -37,6 +37,12 @@ export class ZulipDedupeStore {
     if (dataDir) {
       return path.join(dataDir, `zulip_dedupe_${safeAccountId}.json`);
     }
+    // Fallback: use ~/.openclaw/ when core.paths?.dataDir is not available
+    // (e.g., Termux/Android where the host doesn't expose dataDir)
+    const homeDir = os.homedir();
+    if (homeDir) {
+      return path.join(homeDir, ".openclaw", `zulip_dedupe_${safeAccountId}.json`);
+    }
     return path.join(os.tmpdir(), "openclaw-zulip", `zulip_dedupe_${safeAccountId}.json`);
   }
 
