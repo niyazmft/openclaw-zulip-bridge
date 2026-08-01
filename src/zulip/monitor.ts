@@ -777,6 +777,33 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       }
     };
 
+    // Issue #246: Recover interrupted messages after gateway restart.
+    // Scan recent DMs for messages with stale 👀 reactions (no ✅/⚠️, no response).
+    // This runs once on startup before the main polling loop.
+    try {
+      const { recoverInterruptedMessages } = await import("./recovery.js");
+      await recoverInterruptedMessages({
+        client,
+        botEmail,
+        botUserId,
+        botUsername,
+        baseUrl,
+        accountId: account.accountId,
+        reactionStart,
+        reactionSuccess,
+        reactionError,
+        reactionsEnabled,
+        logVerboseMessage,
+        logger,
+        handleMessage,
+      });
+    } catch (recoveryErr) {
+      logger?.error?.("zulip recovery: startup failed", {
+        accountId: account.accountId,
+        error: String(recoveryErr),
+      });
+    }
+
     if (account.streaming === false) {
       logger?.info?.("zulip monitoring disabled by configuration", {
         accountId: account.accountId,
