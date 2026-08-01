@@ -1,4 +1,4 @@
-import { jsonResult, readStringParam } from "openclaw/plugin-sdk/channel-core";
+import { readStringParam, jsonResult } from "./actions-utils.js";
 import { parseSendTarget, readSendMessageContent } from "./actions-utils.js";
 import { sendZulipStreamMessage, sendZulipPrivateMessage } from "./zulip/client.js";
 import type { ZulipClient } from "./zulip/client.js";

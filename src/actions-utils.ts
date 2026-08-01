@@ -1,5 +1,9 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/channel-core";
-import { readStringParam, readNumberParam } from "openclaw/plugin-sdk/channel-core";
+import { readStringParam, readNumberParam, jsonResult } from "openclaw/plugin-sdk/channel-core";
+
+// Re-export for other action files to avoid duplicate CJS require() calls
+// that can cause "is not a function" errors in the bundled CJS build.
+export { readStringParam, readNumberParam, jsonResult };
 import { resolveZulipAccount } from "./zulip/accounts.js";
 import type { ResolvedZulipAccount } from "./zulip/accounts.js";
 import { createZulipClient, normalizeZulipBaseUrl, fetchZulipMemberInfo } from "./zulip/client.js";
