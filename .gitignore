@@ -13,3 +13,4 @@ deploy.sh
 ProjectManager/
 docs/
 reports/
+.pi-subagents/
