@@ -65,6 +65,20 @@ export type ZulipMessage = {
   display_recipient?: string | Array<{ id: number; email: string; full_name: string }> | null;
   subject?: string | null;
   recipient_id?: string | null;
+  /** Reactions on the message, returned by /messages endpoint. */
+  reactions?: Array<{
+    emoji_name: string;
+    emoji_code?: string;
+    reaction_type?: string;
+    user?: { email: string; id: number; full_name?: string };
+    user_id?: number;
+  }>;
+  /**
+   * Internal: Override the session key for recovery dispatch.
+   * Set by recoverInterruptedMessages() to create a fresh session
+   * when the original session was lost due to gateway restart.
+   */
+  _recoverySessionKey?: string;
 };
 
 /**

@@ -474,7 +474,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       // inbound turns so one long/broken conversation cannot bloat context for
       // every future message in the same DM. Streams and topics keep stable keys.
       let baseSessionKey = route.sessionKey ?? `zulip:${account.accountId}:${channelId}`;
-      if (isDM) {
+      // Issue #246: If this is a recovery dispatch, use a fresh session key
+      // to avoid the dead session from the previous gateway instance.
+      if ((message as any)._recoverySessionKey) {
+        baseSessionKey = (message as any)._recoverySessionKey;
+      } else if (isDM) {
         const turnLimit = account.dmSessionTurnLimit ?? 20;
         if (turnLimit > 0) {
           const dmTurnCount = (dmBaseMessageCounts.get(baseSessionKey) ?? 0) + 1;
@@ -776,6 +780,32 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       });
       }
     };
+
+    // Issue #246: Recover interrupted messages after gateway restart.
+    // Scan recent DMs for messages with stale 👀 reactions (no ✅/⚠️, no response).
+    // This runs once on startup before the main polling loop.
+    try {
+      const { recoverInterruptedMessages } = await import("./recovery.js");
+      await recoverInterruptedMessages({
+        client,
+        botEmail,
+        botUserId,
+        botUsername,
+        baseUrl,
+        accountId: account.accountId,
+        reactionStart,
+        reactionSuccess,
+        reactionError,
+        logVerboseMessage,
+        logger,
+        handleMessage,
+      });
+    } catch (recoveryErr) {
+      logger?.error?.("zulip recovery: startup failed", {
+        accountId: account.accountId,
+        error: String(recoveryErr),
+      });
+    }
 
     if (account.streaming === false) {
       logger?.info?.("zulip monitoring disabled by configuration", {
