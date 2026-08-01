@@ -58,8 +58,11 @@ export async function pollOnce(params: {
         response.code === "BAD_EVENT_QUEUE_ID" || msg.toLowerCase().includes("bad event queue");
       if (isBadQueue) {
         await queueManager.markQueueExpired();
-        resetPollBackoff();
-        return { pollBackoffMs: 0, shouldContinue: true };
+        // Issue #245: Apply backoff on bad-queue recovery to avoid rapid-fire
+        // /events requests that consume the rate-limit budget.
+        const backoffMs = 1000;
+        await delay(backoffMs);
+        return { pollBackoffMs: backoffMs, shouldContinue: true };
       }
       throw new Error(`Zulip events error: ${response.msg}`);
     }
@@ -81,7 +84,11 @@ export async function pollOnce(params: {
       lastConnectedAt: Date.now(),
     });
 
-    if (events.length === 0) {
+    // Issue #245: Apply 1s delay when no message-type events were processed,
+    // not only when the events array is empty. Heartbeat events (non-message)
+    // should not trigger an immediate re-poll.
+    const hadMessageEvents = events.some((e: any) => e.type === "message" && e.message);
+    if (!hadMessageEvents) {
       await delay(1000);
     }
 
@@ -133,8 +140,11 @@ export async function pollOnce(params: {
     const errStr = String(err);
     if (errStr.toLowerCase().includes("bad event queue")) {
       await queueManager.markQueueExpired();
-      resetPollBackoff();
-      return { pollBackoffMs: 0, shouldContinue: true };
+      // Issue #245: Apply backoff on bad-queue recovery to avoid rapid-fire
+      // /events requests that consume the rate-limit budget.
+      const backoffMs = 1000;
+      await delay(backoffMs);
+      return { pollBackoffMs: backoffMs, shouldContinue: true };
     }
     const status = (err as { status?: number })?.status;
     const retryAfterMs = (err as { retryAfterMs?: number })?.retryAfterMs;

@@ -1,5 +1,5 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/channel-core";
-import { readStringParam, readNumberParam, jsonResult } from "openclaw/plugin-sdk/channel-core";
+import { readStringParam, readNumberParam, jsonResult } from "openclaw/plugin-sdk/core";
 
 // Re-export for other action files to avoid duplicate CJS require() calls
 // that can cause "is not a function" errors in the bundled CJS build.
