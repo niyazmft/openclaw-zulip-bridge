@@ -60,6 +60,11 @@ export async function pollOnce(params: {
         await queueManager.markQueueExpired();
         // Issue #245: Apply backoff on bad-queue recovery to avoid rapid-fire
         // /events requests that consume the rate-limit budget.
+        const pLogger = core.logging?.getChildLogger?.({ module: "zulip" });
+        pLogger?.info?.("zulip poll throttle: bad queue (error response), waiting 1s", {
+          accountId,
+          queueId: maskPII(queue.queueId),
+        });
         const backoffMs = 1000;
         await delay(backoffMs);
         return { pollBackoffMs: backoffMs, shouldContinue: true };
@@ -89,6 +94,12 @@ export async function pollOnce(params: {
     // should not trigger an immediate re-poll.
     const hadMessageEvents = events.some((e: any) => e.type === "message" && e.message);
     if (!hadMessageEvents) {
+      const pLogger = core.logging?.getChildLogger?.({ module: "zulip" });
+      pLogger?.info?.("zulip poll throttle: no message events, waiting 1s", {
+        accountId,
+        eventCount: events.length,
+        eventTypes: [...new Set(events.map((e: any) => e.type))],
+      });
       await delay(1000);
     }
 
@@ -142,6 +153,10 @@ export async function pollOnce(params: {
       await queueManager.markQueueExpired();
       // Issue #245: Apply backoff on bad-queue recovery to avoid rapid-fire
       // /events requests that consume the rate-limit budget.
+      const pLogger = core.logging?.getChildLogger?.({ module: "zulip" });
+      pLogger?.info?.("zulip poll throttle: bad queue (exception path), waiting 1s", {
+        accountId,
+      });
       const backoffMs = 1000;
       await delay(backoffMs);
       return { pollBackoffMs: backoffMs, shouldContinue: true };

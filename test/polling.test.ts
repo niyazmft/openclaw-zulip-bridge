@@ -54,7 +54,7 @@ test("heartbeat throttle: does NOT delay when only message events present", () =
 
 // ── Logic tests for the bad-queue backoff ───────────────────────────────────
 
-function simulateBadQueueRecovery(): { pollBackoffMs: number } {
+function simulateBadQueueRecovery(): { pollBackoffMs: number; shouldContinue: boolean } {
   // This is the exact logic from polling.ts after the fix
   const backoffMs = 1000;
   return { pollBackoffMs: backoffMs, shouldContinue: true };
