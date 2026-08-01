@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-// ── Regression tests for Issue #245 ─────────────────────────────────────────
 // The fix: polling loop should apply a 1s delay when:
 // 1. Events are present but none are message-type (heartbeat-only responses)
 // 2. Bad-queue recovery path (both structured error and exception paths)
@@ -98,5 +97,5 @@ test("polling source: bad-queue recovery uses backoffMs", async () => {
   assert.equal(source.includes('return { pollBackoffMs: 0, shouldContinue: true }'), false);
   // The new pattern should be present
   assert.equal(source.includes("backoffMs"), true);
-  assert.equal(source.includes("Issue #245"), true);
+  assert.equal(source.includes("hadMessageEvents"), true);
 });

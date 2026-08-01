@@ -122,7 +122,6 @@ export async function dispatchZulipReply(params: {
           hasMedia: Boolean(payload.mediaUrl || payload.mediaUrls?.length),
         });
         try {
-          // Issue #224: Stop the typing indicator as soon as the first chunk is
           // delivered so the user does not see "bot is typing" after the reply
           // is already visible. This is best-effort and idempotent.
           if (!typingStopped) {
@@ -257,7 +256,6 @@ export async function dispatchZulipReply(params: {
     },
       onError: (err: unknown) => {
         core.error?.(`zulip reply failed: ${String(err)}`);
-        // Issue #224: Ensure typing indicator stops promptly on dispatch error.
         if (!typingStopped) {
           typingStopped = true;
           const idleResult = typingCallbacks.onIdle();

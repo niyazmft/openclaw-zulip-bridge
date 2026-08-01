@@ -10,7 +10,6 @@ export type DedupeStoreOpts = {
   maxSize: number;
 };
 
-// ⚡ Bolt Optimization: Debounce disk I/O to avoid synchronous writes on every message
 const SAVE_DEBOUNCE_MS = 5000; // Save at most once every 5 seconds
 
 export class ZulipDedupeStore {
@@ -82,7 +81,6 @@ export class ZulipDedupeStore {
   }
 
   /**
-   * ⚡ Bolt Optimization: Simple timeout-based debounce - no promises to avoid memory leaks
    */
   private scheduleSave(): void {
     this.dirty = true;
@@ -99,7 +97,6 @@ export class ZulipDedupeStore {
   }
 
   /**
-   * ⚡ Bolt Optimization: Flush pending saves immediately (for graceful shutdown)
    */
   async flush(): Promise<void> {
     if (this.saveTimeout) {
@@ -129,7 +126,6 @@ export class ZulipDedupeStore {
 
     this.touch(key, now);
     this.prune(now);
-    // ⚡ Bolt Optimization: Debounce save to avoid disk I/O on every message
     // Don't await - let it run in background with debounce
     this.scheduleSave();
     return false;
