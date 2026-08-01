@@ -1,6 +1,5 @@
 import {
   createChatChannelPlugin,
-  getChatChannelMeta,
   deleteAccountFromConfigSection,
   setAccountEnabledInConfigSection,
   formatPairingApproveHint,
@@ -29,7 +28,7 @@ import { maskPII, formatZulipLog } from "./zulip/monitor-helpers.js";
 import { probeZulip } from "./zulip/probe.js";
 import { sendMessageZulip } from "./zulip/send.js";
 
-const meta = {
+export const zulipChannelMeta = {
   id: "zulip",
   label: "Zulip",
   selectionLabel: "Zulip (plugin)",
@@ -66,7 +65,7 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
   base: {
     id: "zulip",
     meta: {
-      ...meta,
+      ...zulipChannelMeta,
     },
     setup: zulipSetupAdapter,
     setupWizard: zulipSetupWizard,

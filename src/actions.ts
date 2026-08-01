@@ -6,8 +6,8 @@ import {
   readNumberParam,
   readStringParam,
 } from "openclaw/plugin-sdk/channel-core";
-import { getChatChannelMeta } from "openclaw/plugin-sdk/core";
 import { resolveZulipAccount } from "./zulip/accounts.js";
+import { zulipChannelMeta } from "./channel.js";
 import {
   addZulipReaction,
   createZulipClient,
@@ -398,7 +398,7 @@ function readRealmUpdateParams(
 
 export const zulipMessageActions: ChannelMessageActionAdapter = {
   describeMessageTool: () => {
-    return getChatChannelMeta("zulip");
+    return zulipChannelMeta;
   },
   listActions: ({ cfg }) => {
     const accounts = [resolveZulipAccount({ cfg })].filter((account) =>
