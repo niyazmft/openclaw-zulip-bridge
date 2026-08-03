@@ -3,6 +3,13 @@ import { logInboundDrop } from "openclaw/plugin-sdk/channel-inbound";
 import { resolveControlCommandGate } from "openclaw/plugin-sdk/command-auth";
 import { createReplyPrefixOptions } from "openclaw/plugin-sdk/channel-reply-options-runtime";
 import { resolveChannelMediaMaxBytes } from "openclaw/plugin-sdk/media-runtime";
+import {
+  deriveInboundMessageHookContext,
+  fireAndForgetBoundedHook,
+  toPluginMessageContext,
+  toPluginMessageReceivedEvent,
+} from "openclaw/plugin-sdk/hook-runtime";
+import { getGlobalHookRunner } from "openclaw/plugin-sdk/plugin-runtime";
 import { getZulipRuntime } from "../runtime.js";
 import {
   deleteZulipQueue,
@@ -598,6 +605,29 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             to,
             accountId: route.accountId,
           },
+        });
+      }
+
+      // Fire message_received hook so plugins (e.g. Honcho memory) can
+      // capture sender attribution before OpenClaw strips the metadata block.
+      try {
+        const canonical = deriveInboundMessageHookContext(ctxPayload);
+        const hookRunner = getGlobalHookRunner();
+        if (hookRunner?.hasHooks?.("message_received")) {
+          fireAndForgetBoundedHook(
+            () =>
+              hookRunner.runMessageReceived(
+                toPluginMessageReceivedEvent(canonical),
+                toPluginMessageContext(canonical),
+              ),
+            "zulip: message_received plugin hook failed",
+          );
+        }
+      } catch (hookErr) {
+        logger?.debug?.("zulip message_received hook error", {
+          accountId: account.accountId,
+          messageId,
+          error: String(hookErr),
         });
       }
 
