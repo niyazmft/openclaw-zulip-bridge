@@ -146,6 +146,20 @@ declare module "openclaw/plugin-sdk/setup-runtime" {
   export const createSetupInputPresenceValidator: any;
 }
 
+declare module "openclaw/plugin-sdk/hook-runtime" {
+  export const deriveInboundMessageHookContext: any;
+  export const fireAndForgetBoundedHook: any;
+  export const createInternalHookEvent: any;
+  export const toInternalMessageReceivedContext: any;
+  export const toPluginMessageContext: any;
+  export const toPluginMessageReceivedEvent: any;
+  export const triggerInternalHook: any;
+}
+
+declare module "openclaw/plugin-sdk/plugin-runtime" {
+  export const getGlobalHookRunner: any;
+}
+
 declare module "openclaw/plugin-sdk/zod" {
   export const z: any;
 }

@@ -73,3 +73,63 @@ export const MarkdownConfigSchema = zodMock;
 export const DmPolicySchema = zodMock;
 export const GroupPolicySchema = zodMock;
 export const BlockStreamingCoalesceSchema = zodMock;
+
+// Hook runtime stubs
+export const deriveInboundMessageHookContext = (ctx) => ({
+  from: ctx.From ?? '',
+  to: ctx.To,
+  content: ctx.RawBody ?? ctx.Body ?? '',
+  body: ctx.Body,
+  timestamp: typeof ctx.Timestamp === 'number' ? ctx.Timestamp : undefined,
+  channelId: 'zulip',
+  accountId: ctx.AccountId,
+  conversationId: ctx.OriginatingTo ?? ctx.To ?? ctx.From,
+  sessionKey: ctx.SessionKey,
+  messageId: ctx.MessageSid,
+  senderId: ctx.SenderId,
+  senderName: ctx.SenderName,
+  senderUsername: ctx.SenderUsername,
+  provider: ctx.Provider,
+  surface: ctx.Surface,
+  isGroup: Boolean(ctx.GroupSubject || ctx.GroupChannel),
+  groupId: Boolean(ctx.GroupSubject || ctx.GroupChannel) ? (ctx.OriginatingTo ?? ctx.To ?? ctx.From) : undefined,
+});
+
+export const fireAndForgetBoundedHook = (fn, label, _timeoutOrUndefined, _limits) => {
+  try {
+    const result = fn();
+    if (result && typeof result.catch === 'function') {
+      result.catch(() => {});
+    }
+  } catch {}
+};
+
+export const toPluginMessageReceivedEvent = (canonical) => ({
+  from: canonical.from,
+  content: canonical.content,
+  timestamp: canonical.timestamp,
+  messageId: canonical.messageId,
+  senderId: canonical.senderId,
+  sessionKey: canonical.sessionKey,
+  metadata: {
+    provider: canonical.provider,
+    surface: canonical.surface,
+    senderId: canonical.senderId,
+    senderName: canonical.senderName,
+  },
+});
+
+export const toPluginMessageContext = (canonical) => ({
+  channelId: canonical.channelId,
+  accountId: canonical.accountId,
+  conversationId: canonical.conversationId,
+  sessionKey: canonical.sessionKey,
+  messageId: canonical.messageId,
+  senderId: canonical.senderId,
+});
+
+export const getGlobalHookRunner = () => null;
+
+export const createInternalHookEvent = () => ({});
+export const toInternalMessageReceivedContext = () => ({});
+export const triggerInternalHook = () => {};
