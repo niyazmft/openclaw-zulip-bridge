@@ -10,6 +10,14 @@ metadata: {
     }
   }
 }
+permissions:
+  - messaging:send
+  - messaging:receive
+  - streams:read
+  - streams:write
+  - users:read
+  - reactions:manage
+  - files:upload
 ---
 # 💬 Zulip Bridge Skill
 
