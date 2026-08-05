@@ -554,9 +554,16 @@ pnpm test -- test/policy.test.ts
 
 ## Security
 
-For security vulnerabilities, please **do not** open a public issue. Contact the maintainer directly through GitHub or email.
+See [SECURITY.md](SECURITY.md) for the full security policy, including:
 
----
+- **Credential handling** — how API keys, emails, and URLs are resolved, used, and protected
+- **Data access** — what files the plugin reads from the local filesystem and why
+- **Network communication** — what servers the plugin connects to and over what protocol
+- **Audit logging** — persistent security event logging
+- **Rate limiting** — per-sender rate limits to prevent abuse
+- **Dependency management** — pinned dev dependencies and host-provided runtime
+
+For security vulnerabilities, please **do not** open a public issue. Contact the maintainer directly through GitHub or email (see [SECURITY.md](SECURITY.md#reporting-a-vulnerability)).
 
 ## License
 
