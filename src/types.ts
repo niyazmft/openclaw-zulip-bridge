@@ -97,6 +97,15 @@ export type ZulipAccountConfig = {
    * Default: 20.
    */
   dmSessionTurnLimit?: number;
+  /**
+   * Enable recovery of interrupted messages after a gateway restart.
+   * When true, the bot scans recent DMs for messages with a 👀 reaction
+   * but no ✅/⚠️ reaction and no bot response, then re-dispatches them
+   * with a fresh session key.
+   *
+   * Default: false (opt-in).
+   */
+  enableSessionRecovery?: boolean;
 };
 
 export type ZulipConfig = {

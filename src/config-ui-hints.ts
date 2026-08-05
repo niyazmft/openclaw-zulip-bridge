@@ -73,4 +73,8 @@ export const zulipChannelConfigUiHints = {
     label: "DM session turn limit",
     help: "Maximum inbound conversation turns in a single Zulip DM session before starting a fresh session. Prevents one long/broken conversation from bloating context for all future replies. 0 disables rotation.",
   },
+  enableSessionRecovery: {
+    label: "Enable session recovery",
+    help: "When enabled, the bot scans recent DMs on startup for messages interrupted by a gateway restart and re-dispatches them. Default: disabled (opt-in).",
+  },
 } satisfies Record<string, ZulipChannelConfigUiHint>;

@@ -31,6 +31,7 @@ export type ResolvedZulipAccount = {
   autoSendOnMissingTool?: boolean;
   showThinkingPlaceholder?: boolean;
   dmSessionTurnLimit?: number;
+  enableSessionRecovery?: boolean;
 };
 
 function resolveZulipSection(cfg: OpenClawConfig): ZulipConfig | undefined {
@@ -181,6 +182,7 @@ export function resolveZulipAccount(params: {
     autoSendOnMissingTool: merged.autoSendOnMissingTool,
     showThinkingPlaceholder: merged.showThinkingPlaceholder,
     dmSessionTurnLimit: merged.dmSessionTurnLimit,
+    enableSessionRecovery: merged.enableSessionRecovery,
   };
 }
 
