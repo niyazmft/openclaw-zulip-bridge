@@ -11,7 +11,7 @@ import type { ZulipClient } from "./zulip/client.js";
 
 export const providerId = "zulip";
 export const MAX_STRING_LENGTH = 10000;
-export const SAFE_REALM_SETTINGS = [
+const SAFE_REALM_SETTINGS = [
   "name",
   "description",
   "default_language",
@@ -53,13 +53,6 @@ export function resolveZulipClient(cfg: OpenClawConfig, accountId?: string | nul
 export function requireAdminActionsEnabled(account: ResolvedZulipAccount): void {
   if (!account.enableAdminActions) {
     throw new Error("Admin actions require enableAdminActions: true in Zulip config");
-  }
-}
-
-export async function requireZulipAdmin(client: ZulipClient): Promise<void> {
-  const me = await fetchZulipMemberInfo(client, "me");
-  if (!me.is_admin) {
-    throw new Error("Zulip admin privileges are required for this action.");
   }
 }
 
@@ -198,7 +191,7 @@ export function readSendMessageContent(params: Record<string, unknown>): string 
   return trimmed;
 }
 
-export const resolvedTopicPrefixes = ["✔", "✅"];
+const resolvedTopicPrefixes = ["✔", "✅"];
 
 export function resolveTopicName(topic: string): { topic: string; alreadyResolved: boolean } {
   const trimmed = topic.trim();
@@ -290,44 +283,6 @@ export function readStreamId(params: Record<string, unknown>): string {
   throw new Error("streamId is required for Zulip channel actions.");
 }
 
-export function readUserIdParam(params: Record<string, unknown>): string {
-  const userId =
-    readStringParam(params, "userId") ??
-    readStringParam(params, "memberId") ??
-    readStringParam(params, "id") ??
-    readStringParam(params, "user");
-  if (userId) {
-    return userId;
-  }
-  const numericId =
-    readNumberParam(params, "userId", { integer: true }) ??
-    readNumberParam(params, "memberId", { integer: true }) ??
-    readNumberParam(params, "id", { integer: true });
-  if (typeof numericId === "number") {
-    return String(numericId);
-  }
-  throw new Error("userId is required for Zulip user actions.");
-}
-
-export function readUserIdOrEmailParam(params: Record<string, unknown>): string {
-  const userIdOrEmail =
-    readStringParam(params, "userId") ??
-    readStringParam(params, "memberId") ??
-    readStringParam(params, "id") ??
-    readStringParam(params, "user") ??
-    readStringParam(params, "email");
-  if (userIdOrEmail) {
-    return userIdOrEmail;
-  }
-  const numericId =
-    readNumberParam(params, "userId", { integer: true }) ??
-    readNumberParam(params, "memberId", { integer: true }) ??
-    readNumberParam(params, "id", { integer: true });
-  if (typeof numericId === "number") {
-    return String(numericId);
-  }
-  throw new Error("userId or email is required for Zulip presence.");
-}
 
 export function readRealmUpdateParams(
   params: Record<string, unknown>,

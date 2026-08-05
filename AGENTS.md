@@ -23,6 +23,10 @@ npm run check:package      # Validates version sync, required fields, and npm pa
 - **Monitor lifecycle**: The monitor must be started via `gateway.startAccount` inside the `base` parameter of `createChatChannelPlugin`. Putting `gateway` at the top level of the returned object causes `createChatChannelPlugin` to strip it during destructuring, resulting in the host throwing "Channel zulip does not support runtime start".
   - `gateway.startAccount(ctx)` receives `ctx.setStatus`, `ctx.abortSignal`, `ctx.account`, `ctx.accountId`, `ctx.cfg`, `ctx.runtime`, `ctx.log`.
 - **Bot workspace**: `src/zulip/workspace.ts` provides sandboxed file storage under `data/zulip-workspace/{accountId}/` with path-traversal rejection, automatic cleanup, and optional Zulip upload integration.
+- **Session recovery**: `src/zulip/recovery.ts` recovers interrupted messages after gateway restart. Opt-in via `enableSessionRecovery: true` (default: `false`).
+- **Audit logging**: `src/zulip/audit-logger.ts` writes persistent JSON-line audit events to `{dataDir}/audit/{accountId}.audit.log` with 1MB rotation.
+- **Rate limiting**: Configurable per-sender rate limit via `maxMessagesPerMinute` (default: `60`, `0` disables). Sliding 60-second window.
+- **Security docs**: See `SECURITY.md` for full security policy covering credential handling, data access, and network communication.
 
 ## TypeScript Conventions
 

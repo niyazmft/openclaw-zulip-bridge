@@ -34,10 +34,6 @@ type ZulipPresenceEntry = {
 
 export type ZulipPresenceMap = Record<string, ZulipPresenceEntry>;
 
-export type ZulipServerSettings = ZulipApiResponse & Record<string, unknown>;
-
-export type ZulipRealmUpdate = Record<string, string | number | boolean>;
-
 export type ZulipStream = {
   id: string;
   name?: string | null;
@@ -1015,26 +1011,3 @@ export async function reactivateZulipUser(client: ZulipClient, userId: string): 
   assertSuccess(payload, "Zulip reactivate user failed");
 }
 
-export async function fetchZulipServerSettings(client: ZulipClient): Promise<ZulipServerSettings> {
-  const payload = await client.request<ZulipServerSettings>("/server_settings");
-  assertSuccess(payload, "Zulip server settings failed");
-  return payload;
-}
-
-export async function updateZulipRealm(
-  client: ZulipClient,
-  params: ZulipRealmUpdate,
-): Promise<void> {
-  const body = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    body.set(key, String(value));
-  }
-  if (Array.from(body.keys()).length === 0) {
-    throw new Error("No realm settings provided to update.");
-  }
-  const payload = await client.request<ZulipApiResponse>("/realm", {
-    method: "PATCH",
-    body: body.toString(),
-  });
-  assertSuccess(payload, "Zulip realm update failed");
-}

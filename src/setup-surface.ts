@@ -18,7 +18,7 @@ import { isZulipConfigured, zulipSetupAdapter } from "./setup-core.js";
 const channel = "zulip" as const;
 export { zulipSetupAdapter } from "./setup-core.js";
 
-export const ZULIP_SETUP_HELP_LINES = [
+const ZULIP_SETUP_HELP_LINES = [
   "1) In Zulip: Settings -> Bots -> Add a new bot",
   "2) Bot type: 'Generic bot' is recommended",
   "3) Copy the bot's Email and API Key from 'Active bots'",
