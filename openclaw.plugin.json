@@ -112,6 +112,7 @@
             "type": "integer",
             "minimum": 0
           },
+          "enableSessionRecovery": { "type": "boolean" },
           "accounts": {
             "type": "object",
             "additionalProperties": true
@@ -295,6 +296,10 @@
         "dmSessionTurnLimit": {
           "label": "DM session turn limit",
           "description": "Maximum inbound conversation turns in a single Zulip DM session before starting a fresh session. Prevents one long/broken conversation from bloating context for all future replies. 0 disables rotation."
+        },
+        "enableSessionRecovery": {
+          "label": "Enable session recovery",
+          "description": "When enabled, the bot scans recent DMs on startup for messages interrupted by a gateway restart and re-dispatches them. Default: disabled (opt-in)."
         }
       }
     }

@@ -800,29 +800,35 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       }
     };
 
-    // Scan recent DMs for messages with stale 👀 reactions (no ✅/⚠️, no response).
-    // This runs once on startup before the main polling loop.
-    try {
-      const { recoverInterruptedMessages } = await import("./recovery.js");
-      await recoverInterruptedMessages({
-        client,
-        botEmail,
-        botUserId,
-        botUsername,
-        baseUrl,
+    // Session recovery: scan recent DMs for messages with stale 👀 reactions
+    // (no ✅/⚠️, no response) and re-dispatch them with a fresh session key.
+    // Only runs when explicitly enabled by the user.
+    if (account.config.enableSessionRecovery === true) {
+      logger?.info?.("zulip session recovery is enabled — scanning recent DMs for interrupted messages", {
         accountId: account.accountId,
-        reactionStart,
-        reactionSuccess,
-        reactionError,
-        logVerboseMessage,
-        logger,
-        handleMessage,
       });
-    } catch (recoveryErr) {
-      logger?.error?.("zulip recovery: startup failed", {
-        accountId: account.accountId,
-        error: String(recoveryErr),
-      });
+      try {
+        const { recoverInterruptedMessages } = await import("./recovery.js");
+        await recoverInterruptedMessages({
+          client,
+          botEmail,
+          botUserId,
+          botUsername,
+          baseUrl,
+          accountId: account.accountId,
+          reactionStart,
+          reactionSuccess,
+          reactionError,
+          logVerboseMessage,
+          logger,
+          handleMessage,
+        });
+      } catch (recoveryErr) {
+        logger?.error?.("zulip recovery: startup failed", {
+          accountId: account.accountId,
+          error: String(recoveryErr),
+        });
+      }
     }
 
     if (account.streaming === false) {

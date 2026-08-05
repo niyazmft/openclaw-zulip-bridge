@@ -49,6 +49,7 @@ const ZulipAccountSchema = z.object({
   autoSendOnMissingTool: z.boolean().optional(),
   showThinkingPlaceholder: z.boolean().optional(),
   dmSessionTurnLimit: z.number().int().min(0).optional(),
+  enableSessionRecovery: z.boolean().optional(),
 });
 
 const ZulipConfigSchema = buildCatchallMultiAccountChannelSchema(
