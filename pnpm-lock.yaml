@@ -9,19 +9,19 @@ importers:
   .:
     devDependencies:
       '@types/node':
-        specifier: ^24.5.2
+        specifier: 24.12.2
         version: 24.12.2
       esbuild:
-        specifier: ^0.25.12
+        specifier: 0.25.12
         version: 0.25.12
       knip:
-        specifier: ^6.12.2
+        specifier: 6.13.1
         version: 6.13.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
       typescript:
-        specifier: ^5.9.2
+        specifier: 5.9.3
         version: 5.9.3
       zod:
-        specifier: ^3.25.76
+        specifier: 3.25.76
         version: 3.25.76
 
 packages:

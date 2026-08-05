@@ -50,6 +50,7 @@ const ZulipAccountSchema = z.object({
   showThinkingPlaceholder: z.boolean().optional(),
   dmSessionTurnLimit: z.number().int().min(0).optional(),
   enableSessionRecovery: z.boolean().optional(),
+  maxMessagesPerMinute: z.number().int().min(0).optional(),
 });
 
 const ZulipConfigSchema = buildCatchallMultiAccountChannelSchema(

@@ -106,6 +106,14 @@ export type ZulipAccountConfig = {
    * Default: false (opt-in).
    */
   enableSessionRecovery?: boolean;
+  /**
+   * Maximum number of inbound messages per minute from a single sender.
+   * Prevents a single user from flooding the bot with messages.
+   * Use 0 to disable rate limiting.
+   *
+   * Default: 60.
+   */
+  maxMessagesPerMinute?: number;
 };
 
 export type ZulipConfig = {
