@@ -32,6 +32,7 @@ export type ResolvedZulipAccount = {
   showThinkingPlaceholder?: boolean;
   dmSessionTurnLimit?: number;
   enableSessionRecovery?: boolean;
+  maxMessagesPerMinute?: number;
 };
 
 function resolveZulipSection(cfg: OpenClawConfig): ZulipConfig | undefined {
@@ -183,6 +184,7 @@ export function resolveZulipAccount(params: {
     showThinkingPlaceholder: merged.showThinkingPlaceholder,
     dmSessionTurnLimit: merged.dmSessionTurnLimit,
     enableSessionRecovery: merged.enableSessionRecovery,
+    maxMessagesPerMinute: merged.maxMessagesPerMinute,
   };
 }
 

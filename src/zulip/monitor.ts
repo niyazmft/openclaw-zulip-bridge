@@ -47,6 +47,7 @@ import { addReactionSafe, removeReactionSafe } from "./reactions.js";
 import { initializeZulipMonitor } from "./bootstrap.js";
 import { pollOnce } from "./polling.js";
 import { dispatchZulipReply } from "./reply-handler.js";
+import { AuditLogger } from "./audit-logger.js";
 
 export type MonitorZulipOpts = {
   apiKey?: string;
@@ -71,6 +72,13 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
   const logger = core.logging?.getChildLogger
     ? core.logging.getChildLogger({ module: "zulip" })
     : null;
+
+  // Initialize audit logger for persistent security event logging
+  const auditLogger = new AuditLogger(
+    core.paths?.dataDir ?? "/tmp/openclaw-zulip",
+    opts.accountId ?? "default",
+  );
+  void auditLogger.logMonitorStart(opts.accountId ?? "default");
 
   // Assert health immediately so the host health-monitor doesn't kill us during initialization
   opts.statusSink?.({
@@ -789,6 +797,39 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     };
 
     const processMessage = async (message: ZulipMessage): Promise<void> => {
+      // Rate limiting: check per-sender message rate
+      const maxRate = account.maxMessagesPerMinute ?? 60;
+      if (maxRate > 0) {
+        const senderId = message.sender_email || String(message.sender_id ?? "");
+        if (senderId) {
+          const now = Date.now();
+          const windowMs = 60_000;
+          const senderCounts = messageCounts;
+          const senderKey = `rate:${senderId}`;
+          const lastReset = lastMessageTimes.get(senderKey) ?? 0;
+          if (now - lastReset > windowMs) {
+            senderCounts.set(senderKey, 1);
+            lastMessageTimes.set(senderKey, now);
+          } else {
+            const count = (senderCounts.get(senderKey) ?? 0) + 1;
+            senderCounts.set(senderKey, count);
+            if (count > maxRate) {
+              logger?.warn?.("zulip rate limit exceeded", {
+                accountId: account.accountId,
+                senderId: maskPII(senderId),
+                limit: maxRate,
+                count,
+              });
+              void auditLogger.logRateLimitExceeded(account.accountId, {
+                senderId: maskPII(senderId),
+                limit: maxRate,
+              });
+              return;
+            }
+          }
+        }
+      }
+
       try {
         await handleMessage(message);
       } catch (err) {
@@ -871,6 +912,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       accountId: account.accountId,
       aborted: opts.abortSignal?.aborted,
     });
+    void auditLogger.logMonitorStop(account.accountId, opts.abortSignal?.aborted ? "aborted" : "finished");
 
     if (queueManager) {
       const queue = queueManager.getQueue();

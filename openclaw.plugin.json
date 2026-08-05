@@ -113,6 +113,7 @@
             "minimum": 0
           },
           "enableSessionRecovery": { "type": "boolean" },
+          "maxMessagesPerMinute": { "type": "integer", "minimum": 0 },
           "accounts": {
             "type": "object",
             "additionalProperties": true
@@ -300,6 +301,10 @@
         "enableSessionRecovery": {
           "label": "Enable session recovery",
           "description": "When enabled, the bot scans recent DMs on startup for messages interrupted by a gateway restart and re-dispatches them. Default: disabled (opt-in)."
+        },
+        "maxMessagesPerMinute": {
+          "label": "Max messages per minute",
+          "description": "Maximum number of inbound messages per minute from a single sender. Prevents a single user from flooding the bot. 0 disables rate limiting. Default: 60."
         }
       }
     }
