@@ -249,6 +249,9 @@ For advanced users, add to your `openclaw.json`:
 | `responsePrefix` | string | - | Custom response prefix override |
 | `showThinkingPlaceholder` | boolean | `false` | Post a "🤔 Thinking..." placeholder while generating. Disabled by default because it adds a Zulip API round-trip; typing indicators are shown either way. |
 | `dmSessionTurnLimit` | number | `20` | Maximum inbound DM conversation turns before starting a fresh session. Prevents one long/broken conversation from bloating context for all future replies in the same DM. Set to `0` to disable rotation. |
+| `enableSessionRecovery` | boolean | `false` | Scan recent DMs on startup for messages interrupted by a gateway restart and re-dispatch them. Opt-in for security. |
+| `maxMessagesPerMinute` | number | `60` | Maximum inbound messages per minute from a single sender. Prevents flooding. Set to `0` to disable. |
+| `autoSendOnMissingTool` | boolean | `true` | If the agent ends a run with text but never invoked the messaging tool, deliver the text to the channel anyway. |
 
 #### Environment Variables
 

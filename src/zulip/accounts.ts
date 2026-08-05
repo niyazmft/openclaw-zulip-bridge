@@ -87,7 +87,7 @@ function resolveZulipRequireMention(config: ZulipAccountConfig): boolean | undef
   return config.requireMention;
 }
 
-export function getZulipEnvSecret(name: string): string | undefined {
+function getZulipEnvSecret(name: string): string | undefined {
   return process.env[name]?.trim();
 }
 

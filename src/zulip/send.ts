@@ -104,15 +104,6 @@ function getCachedTarget(raw: string): ZulipTarget {
   return cached;
 }
 
-/**
- * Clear all caches. Useful for testing or when config changes require fresh clients.
- * @internal
- */
-export function clearSendCache(): void {
-  clientCache.clear();
-  targetCache.clear();
-}
-
 function normalizeMessage(text: string, mediaUrl?: string): string {
   const trimmed = text.trim();
   const media = mediaUrl?.trim();
