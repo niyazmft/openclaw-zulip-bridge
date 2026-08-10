@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) in the format `YYYY.M.PATCH`.
 
+## [2026.8.8] - 2026-08-10
+
+### Fixed
+- **`openclaw doctor --fix` crash** (#265): `formatPairingApproveHint` was imported from `openclaw/plugin-sdk/channel-core`, which does not export it on host 2026.7.x — the import resolved to `undefined` and calling it threw `TypeError: (0, import_channel_core.formatPairingApproveHint) is not a function`. Moved the import to `openclaw/plugin-sdk/core` (where the host SDK actually exports it), matching the existing `normalizeAccountId` import path.
+
+### Changed
+- **Regression guard**: Added `test/sdk-import-paths.test.ts` to statically assert `formatPairingApproveHint` stays on the `core` subpath and that all `channel-core` value imports are host-exported symbols, so a future SDK migration cannot silently reintroduce the wrong import path.
+
 ## [2026.8.4] - 2026-07-27
 
 ### Added

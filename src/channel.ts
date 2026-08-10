@@ -2,10 +2,9 @@ import {
   createChatChannelPlugin,
   deleteAccountFromConfigSection,
   setAccountEnabledInConfigSection,
-  formatPairingApproveHint,
   type ChannelAccountSnapshot,
 } from "openclaw/plugin-sdk/channel-core";
-import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/core";
+import { DEFAULT_ACCOUNT_ID, normalizeAccountId, formatPairingApproveHint } from "openclaw/plugin-sdk/core";
 import { setZulipRuntime } from "./runtime.js";
 import type { ZulipConfig } from "./types.js";
 import { zulipMessageActions } from "./actions.js";

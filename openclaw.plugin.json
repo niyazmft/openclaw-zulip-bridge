@@ -2,7 +2,7 @@
   "id": "zulip",
   "name": "Zulip",
   "description": "OpenClaw Zulip channel plugin",
-  "version": "2026.8.7",
+  "version": "2026.8.8",
   "activation": {
     "onStartup": true
   },
