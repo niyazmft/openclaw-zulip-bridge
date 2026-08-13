@@ -87,8 +87,27 @@ function resolveZulipRequireMention(config: ZulipAccountConfig): boolean | undef
   return config.requireMention;
 }
 
-function getZulipEnvSecret(name: string): string | undefined {
-  return process.env[name]?.trim();
+// Explicit env access (not dynamic process.env[name]) so ClawHub's static scan
+// can match each referenced variable against the declared envVars in the
+// manifest metadata (see package.json openclaw.envVars). Dynamic access trips
+// the scanner's hasBroadEnvAccess heuristic and is always flagged.
+function getZulipEnvSecret(
+  name: "ZULIP_API_KEY" | "ZULIP_EMAIL" | "ZULIP_URL" | "ZULIP_SITE" | "ZULIP_REALM",
+): string | undefined {
+  switch (name) {
+    case "ZULIP_API_KEY":
+      return process.env.ZULIP_API_KEY?.trim();
+    case "ZULIP_EMAIL":
+      return process.env.ZULIP_EMAIL?.trim();
+    case "ZULIP_URL":
+      return process.env.ZULIP_URL?.trim();
+    case "ZULIP_SITE":
+      return process.env.ZULIP_SITE?.trim();
+    case "ZULIP_REALM":
+      return process.env.ZULIP_REALM?.trim();
+    default:
+      return undefined;
+  }
 }
 
 function hasZulipEnvSecrets(): boolean {

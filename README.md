@@ -72,6 +72,7 @@ That's it — no manual config editing needed.
 - **SSRF Protection**: Rejects internal IPs, localhost, and AWS metadata endpoints for base URLs.
 - **Security Hardening**: URL encoding for all path parameters, path traversal sanitization, symlink rejection.
 - **Standardized Observability**: Machine-parseable logs for easy monitoring and troubleshooting.
+- **Pre-Publish Security Gate**: Vendored ClawHub moderation engine (`npm run check:clawscan`) scans source + built output with the exact rules ClawHub runs on publish, plus gitleaks secret detection and `npm audit` dependency checks — all wired into `npm run check` and CI.
 
 ---
 
@@ -553,6 +554,22 @@ pnpm test
 pnpm test -- test/policy.test.ts
 ```
 
+### Full Validation Pipeline
+
+```bash
+pnpm run check   # bootstrap → typecheck → build → smoke → test → package → clawscan → audit
+```
+
+Individual checks:
+
+```bash
+pnpm run check:clawscan   # ClawHub moderation-engine replica (vendored) — scans src/ + dist/ + dist-cjs/ + docs
+pnpm run check:gitleaks   # Secret detection (skips locally if gitleaks not installed; CI runs it)
+pnpm run check:audit      # npm audit --omit=dev (production dependency vulnerabilities)
+```
+
+`check:clawscan` is a **strict gate**: it exits non-zero on any finding, so a finding blocks merge/publish. It runs the exact ClawHub moderation engine (vendored from `openclaw/clawhub`, engine v2.4.26) against the same artifacts ClawHub scans on publish — a clean local run means a clean ClawHub static scan.
+
 ---
 
 ## Security
@@ -565,6 +582,12 @@ See [SECURITY.md](SECURITY.md) for the full security policy, including:
 - **Audit logging** — persistent security event logging
 - **Rate limiting** — per-sender rate limits to prevent abuse
 - **Dependency management** — pinned dev dependencies and host-provided runtime
+
+### Pre-Publish Security Gate
+
+Before publishing to ClawHub, the plugin runs a **ClawScan replica** (`npm run check:clawscan`) — the exact ClawHub moderation engine vendored into `scripts/clawscan/`. It scans source + built output + docs with the same rules ClawHub applies on publish (`env_credential_access`, `potential_exfiltration`, `dangerous_exec`, etc.) and fails the build on any finding. gitleaks (secret detection) and `npm audit` (dependency vulnerabilities) run alongside it in CI.
+
+This gate is why the plugin's env-var credential access is written explicitly (`process.env.ZULIP_API_KEY`, not `process.env[name]`) and why the `ZULIP_*` variables are declared in `package.json` `openclaw.envVars` — the scanner suppresses `env_credential_access` only when every referenced env var is declared in manifest metadata and access is explicit.
 
 For security vulnerabilities, please **do not** open a public issue. Contact the maintainer directly through GitHub or email (see [SECURITY.md](SECURITY.md#reporting-a-vulnerability)).
 
