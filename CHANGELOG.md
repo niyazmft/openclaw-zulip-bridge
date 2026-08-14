@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) in the format `YYYY.M.PATCH`.
 
+## [2026.8.9] - 2026-08-13
+
+### Added
+- **ClawScan replica** (#267): Vendored the exact ClawHub moderation engine (`scripts/clawscan/`, engine v2.4.26) as a pre-publish security gate. `npm run check:clawscan` scans source + built output + docs with the same rules ClawHub runs on publish; strict gate (exits non-zero on any finding). Wired into `npm run check` and CI.
+- **gitleaks + npm audit**: `check:gitleaks` (secret detection; CI-only via `gitleaks/gitleaks-action`, skips locally if not installed) and `check:audit` (`npm audit --omit=dev`) added to the check pipeline.
+
+### Fixed
+- **ClawHub `suspicious.env_credential_access` false positive** (#267): `getZulipEnvSecret` refactored from dynamic `process.env[name]` to explicit `process.env.ZULIP_*` access, and `envVars` declared in `package.json` `openclaw.envVars`. The scanner's `hasBroadEnvAccess` heuristic no longer matches, and the declared-env exemption now applies. Verified clean with the vendored replica (was: `suspicious.env_credential_access` at `dist-cjs/index.cjs:857` / `setup-entry.cjs:852`).
+
 ## [2026.8.8] - 2026-08-10
 
 ### Fixed

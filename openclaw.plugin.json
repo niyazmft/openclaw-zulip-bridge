@@ -2,7 +2,7 @@
   "id": "zulip",
   "name": "Zulip",
   "description": "OpenClaw Zulip channel plugin",
-  "version": "2026.8.8",
+  "version": "2026.8.9",
   "activation": {
     "onStartup": true
   },
@@ -437,7 +437,7 @@
         },
         "blockStreaming": {
           "label": "Block Streaming",
-          "description": "When true, replies are delivered as completed blocks. When false, plain text from the model streams through as it arrives — useful for models that don't reliably tool-call."
+          "description": "When true, replies are delivered as completed blocks. When false, plain text from the model streams through as it arrives \u2014 useful for models that don't reliably tool-call."
         },
         "autoSendOnMissingTool": {
           "label": "Auto-send on missing tool call",

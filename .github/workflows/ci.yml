@@ -9,6 +9,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # gitleaks-action needs full history to compute the PR diff range
+          # (<head>^..<head>); a shallow clone breaks it with
+          # "ambiguous argument ... unknown revision".
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -19,5 +24,13 @@ jobs:
       - name: Verify bootstrap
         run: pnpm run check:bootstrap
       - run: pnpm run check
+      - name: ClawScan replica (ClawHub moderation engine)
+        run: pnpm run check:clawscan
+      - name: npm audit (production deps)
+        run: pnpm run check:audit
+      - name: gitleaks (secret detection)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Enforce pristine working directory
         run: git diff --exit-code || { echo "Working directory is not clean. Lockfile or generated files might be out of sync."; false; }

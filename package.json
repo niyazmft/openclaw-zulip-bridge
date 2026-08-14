@@ -1,6 +1,6 @@
 {
   "name": "@niyazmft/openclaw-zulip",
-  "version": "2026.8.8",
+  "version": "2026.8.9",
   "description": "OpenClaw Zulip channel plugin",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
@@ -46,7 +46,14 @@
         "ZULIP_REALM"
       ],
       "reason": "Zulip credentials from environment variables (documented pattern)"
-    }
+    },
+    "envVars": [
+      "ZULIP_API_KEY",
+      "ZULIP_EMAIL",
+      "ZULIP_URL",
+      "ZULIP_SITE",
+      "ZULIP_REALM"
+    ]
   },
   "files": [
     "dist/",
@@ -71,7 +78,10 @@
     "check:package": "node scripts/check-package.js",
     "check:smoke": "node --loader ./test/smoke-loader.js scripts/smoke-test-dist.js",
     "check:bootstrap": "node scripts/check-bootstrap.js",
-    "check": "pnpm run check:bootstrap && pnpm run typecheck && pnpm run build && pnpm run check:smoke && pnpm run test && pnpm run check:package"
+    "check:clawscan": "node --experimental-strip-types --loader ./scripts/clawscan/loader.js scripts/clawscan/run.mjs",
+    "check:gitleaks": "gitleaks git --pre-commit --redact 2>/dev/null || gitleaks detect --source . --redact 2>/dev/null || echo 'gitleaks not installed; skipping (CI runs it)'",
+    "check:audit": "npm audit --omit=dev",
+    "check": "pnpm run check:bootstrap && pnpm run typecheck && pnpm run build && pnpm run check:smoke && pnpm run test && pnpm run check:package && pnpm run check:clawscan && pnpm run check:audit"
   },
   "devDependencies": {
     "@types/node": "24.12.2",

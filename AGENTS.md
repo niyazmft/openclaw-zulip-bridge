@@ -3,13 +3,16 @@
 ## Essential Commands
 
 ```bash
-npm run check              # Full validation: bootstrap → typecheck → build → smoke → test → package
+npm run check              # Full validation: bootstrap → typecheck → build → smoke → test → package → clawscan → audit
 npm run typecheck          # tsc -p tsconfig.json (noEmit, type-checking only)
 npm run build              # tsc -p tsconfig.build.json (emits to dist/)
 npm run test               # node --test --experimental-strip-types --loader ./test-loader.js test/*.test.ts
 npm run check:bootstrap    # Verifies tsc is installed (skips devDeps if NODE_ENV=production)
 npm run check:smoke        # Validates built dist/ artifacts with a loader that does NOT remap .js→.ts
 npm run check:package      # Validates version sync, required fields, and npm pack integrity
+npm run check:clawscan     # ClawHub moderation-engine replica (vendored) — scans src/ + dist/ + dist-cjs/ + docs
+npm run check:gitleaks     # Secret detection (skips locally if gitleaks not installed; CI runs it)
+npm run check:audit        # npm audit --omit=dev (production dependency vulnerabilities)
 ```
 
 **Command order matters**: `npm run check` runs steps sequentially. Building must precede smoke tests and package checks.
@@ -113,6 +116,16 @@ Migration complete as of v2026.7.0:
 - Keep both root `configSchema` and `channelConfigs` in the manifest. OpenClaw 2026.6.x still validates the root schema at load time
 - Manifest `uiHints` synced with runtime schema for full cold-path label coverage
 - `minGatewayVersion` / `minHostVersion` bumped to `>=2026.6.0`
+
+## ClawScan Replica (pre-publish security gate)
+
+`scripts/clawscan/` vendors the **exact ClawHub moderation engine** (`convex/lib/moderationEngine.ts` + `moderationReasonCodes.ts`, engine v2.4.26, commit `60b02c09`) and runs it against source + built output + docs. This is the same scanner ClawHub runs on publish, so a clean local run means a clean ClawHub scan (for the static rules).
+
+- **Run**: `npm run check:clawscan` (also part of `npm run check` and CI)
+- **Strict gate**: exits non-zero on any finding — a finding blocks merge/publish
+- **Vendor update**: re-download from the commit header in `scripts/clawscan/vendor/moderationEngine.ts` and re-apply the one-line import patch (`./moderationReasonCodes` → `./moderationReasonCodes.js`)
+- **Env-var exemption**: the scanner suppresses `env_credential_access` only when every referenced env var is declared in manifest metadata (`envVars`/`env`/`primaryEnv`/`requires.env`) AND access is explicit (not `process.env[name]`). The plugin satisfies both: explicit access in `getZulipEnvSecret` (`src/zulip/accounts.ts`) + `openclaw.envVars` in `package.json`.
+- **#268 safety**: the local-file attach fix must keep file reads in `readSafeLocalFile` and network sends in `uploadZulipFile` — a new `readFile`+`fetch` pair in an action handler would trip `potential_exfiltration`.
 
 ## Troubleshooting
 
