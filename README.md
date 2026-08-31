@@ -9,6 +9,14 @@
 
 High-performance OpenClaw channel plugin for Zulip streams and private messages with persistent event queues, traffic policies, and comprehensive observability.
 
+> 🔗 **Part of a single Zulip adapter family for open-source AI agents.**
+> This repo is the **OpenClaw** adapter (TypeScript). Its sibling,
+> [`zulip-hermes-integration`](https://github.com/niyazmft/zulip-hermes-integration), does the
+> same thing for the **Hermes (Nous Research)** agent (Python). Same thesis, two runtimes:
+> bring a self-hosted AI agent into threaded, topic-first Zulip chat as a full teammate —
+> sovereign, no chat-vendor lock-in. The pattern Slack and Block's Buzz are racing to
+> productize, delivered **open source** and **self-hosted**.
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)
@@ -590,6 +598,10 @@ Before publishing to ClawHub, the plugin runs a **ClawScan replica** (`npm run c
 This gate is why the plugin's env-var credential access is written explicitly (`process.env.ZULIP_API_KEY`, not `process.env[name]`) and why the `ZULIP_*` variables are declared in `package.json` `openclaw.envVars` — the scanner suppresses `env_credential_access` only when every referenced env var is declared in manifest metadata and access is explicit.
 
 For security vulnerabilities, please **do not** open a public issue. Contact the maintainer directly through GitHub or email (see [SECURITY.md](SECURITY.md#reporting-a-vulnerability)).
+
+## Related
+
+- [zulip-hermes-integration](https://github.com/niyazmft/zulip-hermes-integration) — the Hermes (Python) sibling adapter in the same Zulip agent family
 
 ## License
 
