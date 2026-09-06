@@ -1,7 +1,7 @@
 import type { OpenClawConfig, ChannelAccountSnapshot } from "openclaw/plugin-sdk/channel-core";
 import { logInboundDrop } from "openclaw/plugin-sdk/channel-inbound";
 import { resolveControlCommandGate } from "openclaw/plugin-sdk/command-auth";
-import { createReplyPrefixOptions } from "openclaw/plugin-sdk/channel-reply-options-runtime";
+import { createReplyPrefixOptions } from "openclaw/plugin-sdk/channel-reply-pipeline";
 import { resolveChannelMediaMaxBytes } from "openclaw/plugin-sdk/media-runtime";
 import {
   deriveInboundMessageHookContext,

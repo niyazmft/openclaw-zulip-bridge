@@ -240,7 +240,9 @@ test("reply-handler source: onIdle() guard with type check", async () => {
     path.resolve(process.cwd(), "src/zulip/reply-handler.ts"),
     "utf8",
   );
-  assert.equal(source.includes("typeof (idleResult as Promise<void>).catch === \"function\""), true);
+  // 2026.9.1 SDK: onIdle() is synchronous (returns void), so it is called
+  // directly with optional chaining instead of a Promise truthiness guard.
+  assert.equal(source.includes("typingCallbacks.onIdle?.()"), true);
   assert.equal(source.includes("deliverErr"), true);
   assert.equal(source.includes("zulip deliver error"), true);
 });
