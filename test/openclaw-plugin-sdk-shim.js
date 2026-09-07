@@ -37,6 +37,7 @@ export const migrateBaseNameToDefaultAccount = noOp;
 export const setAccountEnabledInConfigSection = noOp;
 
 export const logInboundDrop = noOp;
+export const formatInboundEnvelope = (params) => params;
 export const logTypingFailure = noOp;
 export const buildPendingHistoryContextFromMap = () => [];
 export const DEFAULT_GROUP_HISTORY_LIMIT = 20;
