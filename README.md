@@ -25,6 +25,7 @@ High-performance OpenClaw channel plugin for Zulip streams and private messages 
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Verification](#verification)
+- [Attaching Local Files](#attaching-local-files)
 - [Architecture](#architecture)
 - [Troubleshooting](#troubleshooting)
 - [Known Issues](#known-issues)
@@ -71,6 +72,7 @@ That's it — no manual config editing needed.
 - **Multiple Accounts**: Support for multiple Zulip accounts and realms in a single instance.
 - **Mention Gating**: Intelligent stream handling with `oncall`, `onmessage`, and `onchar` modes.
 - **Durable Deduplication**: Built-in persistent deduplication store to prevent duplicate message processing.
+- **First-Class File Attachments**: The agent can upload generated files and attach them to replies via the core `upload-file` action, or reference sandboxed local paths in `media`. See [Attaching Local Files](#attaching-local-files).
 - **Media Support**: Automatically processes Zulip uploads and inline images.
 - **Rich Feedback**: Optional reaction-based status indicators for request start, success, and errors.
 - **Placeholder Editing**: Shows "🤔 Thinking..." placeholder while AI generates a response, then edits it in-place.
@@ -291,6 +293,32 @@ After setup, verify the bridge works:
 
 3. **Test Direct Message**: Send a DM to the bot
 4. **Test Stream**: Mention `@bot-name` in a monitored stream
+
+---
+
+## Attaching Local Files
+
+The agent can attach files to replies in one step using the core `message` tool's **`upload-file`** action (OpenClaw 2026.9.2+ hosts hydrate file sources into the action automatically):
+
+```json
+{
+  "action": "upload-file",
+  "to": "stream:general:help",
+  "media": "/abs/path/to/generated-report.pdf",
+  "caption": "Here is the report you asked for"
+}
+```
+
+The plugin stages the bytes in a sandboxed workspace (`{dataDir}/workspace/`, path-traversal rejected, files auto-pruned after ~1 hour), uploads to Zulip's `/user_uploads` endpoint, and posts the Zulip-hosted URL to the target with the caption.
+
+**Sandbox rules (enforced, not advisory):**
+
+- Only files under the plugin **data dir** (including the workspace) or the system **tmpdir** can be uploaded. Arbitrary paths (e.g. `/etc/passwd`, `~/.ssh/id_rsa`) are refused and dropped with a security log line.
+- Symlinks that resolve outside the allowed roots are rejected.
+- Upload size is capped by the host's `mediaMaxMb` setting (default 5 MB).
+- `file://` URLs are accepted as path sugar and resolved through the same allowlist.
+
+The same rules apply when the agent references a local path as `media` in a regular `send` action or when a reply payload carries a local media path (e.g. media saved by other tools under the data dir).
 
 ---
 

@@ -276,11 +276,24 @@ export async function sendMessageZulip(
         }
       }
     } else if (!isRemote) {
-      zulipLogger?.info?.("zulip outbound security warning: rejected non-http mediaUrl", {
-        accountId: account.accountId,
-        mediaUrl: maskPII(mediaUrl),
-      });
-      mediaUrl = undefined;
+      // Local path support (#268): attach files under the plugin data dir
+      // (including the bot workspace) or the system tmpdir. uploadZulipFile
+      // enforces the path allowlist + symlink/traversal safety, so arbitrary
+      // paths (e.g. /etc/passwd) are still refused and dropped with a log.
+      try {
+        const localPath = mediaUrl.startsWith("file://")
+          ? fileURLToPath(mediaUrl)
+          : mediaUrl;
+        const upload = await uploadZulipFile(client, localPath);
+        mediaUrl = upload.url;
+      } catch (err) {
+        zulipLogger?.info?.("zulip outbound security warning: rejected local mediaUrl", {
+          accountId: account.accountId,
+          mediaUrl: maskPII(rawMediaUrl),
+          error: String(err),
+        });
+        mediaUrl = undefined;
+      }
     }
     message = normalizeMessage(message, mediaUrl);
   }

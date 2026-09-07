@@ -16,7 +16,16 @@ export function readNumberParam() {
   return undefined;
 }
 
-export function readStringParam() {
+export function readStringParam(params, key, opts = {}) {
+  const value = params?.[key];
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+    if (opts.allowEmpty) return trimmed;
+  }
+  if (opts.required) {
+    throw new Error(`Missing required param: ${key}`);
+  }
   return undefined;
 }
 

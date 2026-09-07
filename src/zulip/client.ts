@@ -523,26 +523,56 @@ export async function uploadZulipFile(
   client: ZulipClient,
   filePath: string,
 ): Promise<{ url: string }> {
-  const resolvedPath = path.resolve(filePath);
   const tmpDir = path.resolve(os.tmpdir());
-  const rawDataDir = getZulipRuntime().paths?.dataDir;
-  const dataDir = rawDataDir ? path.resolve(rawDataDir) : null;
+  // Host 2026.9.2 runtimes may not expose paths.dataDir; default to the
+  // standard ~/.openclaw data dir (same default as the fallback reader).
+  const rawDataDir = getZulipRuntime().paths?.dataDir ?? path.join(os.homedir(), ".openclaw");
+  const dataDir = path.resolve(rawDataDir);
+  const workspaceDir = path.join(dataDir, "workspace");
 
-  const allowedPaths: string[] = [tmpDir + path.sep];
-  if (dataDir) {
-    allowedPaths.push(dataDir + path.sep);
+  const allowedPaths: string[] = [tmpDir + path.sep, dataDir + path.sep];
+  const isAllowedPath = (candidate: string) =>
+    allowedPaths.some((allowed) => candidate.startsWith(allowed));
+
+  // Relative paths (e.g. "haiku.txt" from the agent workspace) resolve
+  // against the gateway process CWD, which is rarely meaningful. Try the
+  // agent workspace and the data dir first, then the caller's CWD (#268).
+  const candidates = [filePath];
+  if (!path.isAbsolute(filePath)) {
+    candidates.push(path.join(workspaceDir, filePath));
+    candidates.push(path.join(dataDir, filePath));
+    candidates.push(path.join(tmpDir, filePath));
   }
 
-  const isAllowed = allowedPaths.some((allowed) => resolvedPath.startsWith(allowed));
-  if (!isAllowed) {
-      throw new Error(
-          `Refusing to upload file from unauthorized path: ${filePath}. ` +
-          `Allowed paths are under ${tmpDir}${dataDir ? ` or ${dataDir}` : ""}.`
+  let buffer: Buffer | undefined;
+  let resolvedPath: string | undefined;
+  let lastRefusal: Error | undefined;
+  for (const candidate of candidates) {
+    const resolved = path.resolve(candidate);
+    if (!isAllowedPath(resolved)) {
+      lastRefusal = new Error(
+        `Refusing to upload file from unauthorized path: ${filePath}. ` +
+        `Allowed paths are under ${tmpDir} or ${dataDir}.`,
       );
+      continue;
+    }
+    try {
+      buffer = await readSafeLocalFile(resolved);
+      resolvedPath = resolved;
+      break;
+    } catch (err) {
+      // Not found here (or symlink-refused) — try the next candidate.
+      lastRefusal = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+  if (!buffer || !resolvedPath) {
+    throw (
+      lastRefusal ??
+      new Error(`Refusing to upload file: unable to read ${filePath}.`)
+    );
   }
 
   const filename = filePath.split("/").pop() || "upload.bin";
-  const buffer = await readSafeLocalFile(filePath);
   const form = new FormData();
   form.append("file", new Blob([buffer]), filename);
   const payload = await zulipRequestWithRetry<ZulipApiResponse & { uri?: string }>(
