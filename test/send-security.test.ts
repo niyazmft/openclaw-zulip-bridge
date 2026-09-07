@@ -1,69 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import { sendMessageZulip } from "../src/zulip/send.js";
-import { setZulipRuntime } from "../src/runtime.js";
 
-test.skip("sendMessageZulip should NOT allow local file paths in mediaUrl", async (t) => {
-  let logCalled = false;
-  let logMessage = "";
+// The local-file rejection behavior moved into uploadZulipFile's path
+// allowlist (see test/upload-file.test.ts). The pre-#268 behavior of
+// silently dropping ALL non-HTTP mediaUrl values no longer holds: local
+// paths under the plugin data dir / tmpdir are now uploaded (#268), while
+// paths outside the sandbox are still refused and dropped.
+//
+// The end-to-end rejection flow (sendMessageZulip with /etc/passwd) is
+// covered by the uploadZulipFile allowlist tests plus the send.ts source
+// regression test in test/upload-file.test.ts.
 
-  // Mock runtime
-  const mockRuntime = {
-    config: {
-      loadConfig: () => ({
-        channels: {
-          zulip: {
-            accounts: {
-              default: {
-                url: "https://zulip.example.com",
-                email: "bot@example.com",
-                apiKey: "secret"
-              }
-            }
-          }
-        }
-      })
-    },
-    log: (msg: string) => {
-      if (msg.includes("security warning")) {
-        logCalled = true;
-        logMessage = msg;
-      }
-    },
-    channel: {
-      text: {
-        resolveMarkdownTableMode: () => "none",
-        convertMarkdownTables: (m: string) => m
-      },
-      activity: {
-        record: () => {}
-      }
-    },
-    agents: {
-      defaults: {
-        mediaMaxMb: 5
-      }
-    }
-  };
-  setZulipRuntime(mockRuntime as any);
-
-  // Spy on fs.existsSync
-  const existsSyncSpy = t.mock.method(fs, 'existsSync', (p: string) => {
-    return true; // Pretend it exists
-  });
-
-  try {
-    await sendMessageZulip("stream:general", "hello", {
-      mediaUrl: "/etc/passwd",
-      accountId: "default"
-    });
-  } catch (e: any) {
-    // It might still fail because we haven't mocked sendZulipStreamMessage
-  }
-
-  // After the fix, existsSync should NOT be called.
-  assert.strictEqual(existsSyncSpy.mock.callCount(), 0, "Should NOT have checked if local file exists");
-  assert.strictEqual(logCalled, true, "Should have logged a security warning");
-  assert.match(logMessage, /security warning: rejected non-http mediaUrl/);
+test("local mediaUrl policy moved to uploadZulipFile allowlist (#268)", async () => {
+  const src = await import("node:fs/promises");
+  const source = await src.readFile(
+    new URL("../src/zulip/send.ts", import.meta.url),
+    "utf8",
+  );
+  // The silent drop must NOT come back.
+  assert.equal(source.includes("rejected non-http mediaUrl"), false);
+  // Local paths go through the sandboxed uploader.
+  assert.equal(source.includes("uploadZulipFile(client, localPath)"), true);
 });

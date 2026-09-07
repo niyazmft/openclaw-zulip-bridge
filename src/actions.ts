@@ -21,6 +21,7 @@ import {
   handleChannelDeleteAction,
   handleMemberInfoAction,
 } from "./actions-admin.js";
+import { handleUploadFileAction } from "./actions-upload.js";
 
 export const zulipMessageActions: ChannelMessageActionAdapter = {
   describeMessageTool: () => {
@@ -47,6 +48,7 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
       "member-info",
       "pin",
       "unpin",
+      "upload-file",
     ]);
     return Array.from(actions);
   },
@@ -87,6 +89,10 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
 
     if (action === "member-info") {
       return handleMemberInfoAction(client, params);
+    }
+
+    if (action === "upload-file") {
+      return handleUploadFileAction(client, params);
     }
 
     if (action === "read") {
