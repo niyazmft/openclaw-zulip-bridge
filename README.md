@@ -260,6 +260,7 @@ For advanced users, add to your `openclaw.json`:
 | `dmSessionTurnLimit` | number | `20` | Maximum inbound DM conversation turns before starting a fresh session. Prevents one long/broken conversation from bloating context for all future replies in the same DM. Set to `0` to disable rotation. |
 | `enableSessionRecovery` | boolean | `false` | Scan recent DMs on startup for messages interrupted by a gateway restart and re-dispatch them. Opt-in for security. |
 | `maxMessagesPerMinute` | number | `60` | Maximum inbound messages per minute from a single sender. Prevents flooding. Set to `0` to disable. |
+| `maxMessageLength` | number | `20000` | Maximum total length of a single outbound message in characters. Messages exceeding this limit are truncated before delivery. Prevents downstream plugins (e.g., Honcho memory) from failing on excessively long content. Set to `0` to disable truncation. |
 | `autoSendOnMissingTool` | boolean | `true` | If the agent ends a run with text but never invoked the messaging tool, deliver the text to the channel anyway. |
 
 #### Environment Variables
@@ -489,6 +490,23 @@ Without both safeguards, admin actions will throw an error. This prevents accide
 **Root Cause:** Model warmup + cold inference for the first agent run. Subsequent messages reply in ~2–4s.
 
 **Mitigation:** None needed. This is normal for external model providers.
+
+---
+
+### DM/Thread Session Conflation After Restart
+
+**Status:** Host-side limitation with plugin-side mitigation
+
+**Problem:** After a gateway restart, the agent may occasionally conflate context from different DM conversations or stream topics, causing replies that reference the wrong topic or conversation history.
+
+**Root Cause:** The OpenClaw host uses a filesystem fallback reader for third-party plugins when the SQLite session store WAL has not flushed. The fallback reader matches trajectory events by session key prefix, which can occasionally load stale events from a different conversation if the session key patterns overlap after restart.
+
+**Mitigation:**
+1. The plugin sets `MessageThreadId` to the sender ID for DMs and to the topic name for streams, giving the host explicit thread context for every conversation.
+2. Use `dmSessionTurnLimit` (default: 20) to rotate DM sessions and limit the blast radius of any conflation.
+3. Use `/new` or `/reset` in a DM to force a fresh session if you notice the agent referencing wrong context.
+
+**Fix:** The proper fix requires upstream OpenClaw to improve session recovery for third-party plugins (native channels use SQLite-backed session stores that do not have this limitation).
 
 ---
 

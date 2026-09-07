@@ -8,6 +8,15 @@ import { extractZulipTopicDirective } from "./text-utils.js";
 import { readLatestAssistantTexts } from "./fallback-reader.js";
 import type { ReplyPayload } from "openclaw/plugin-sdk/reply-payload";
 
+/** Truncates text to a maximum length, appending an ellipsis if truncated. */
+function truncateText(text: string, maxLength: number): string {
+  if (maxLength <= 0 || text.length <= maxLength) return text;
+  const ellipsis = "\n\n[...message truncated]";
+  const maxContentLength = maxLength - ellipsis.length;
+  if (maxContentLength <= 0) return text.slice(0, maxLength);
+  return text.slice(0, maxContentLength) + ellipsis;
+}
+
 /**
  * Handles the reply dispatching logic for a Zulip message.
  */
@@ -33,6 +42,7 @@ export async function dispatchZulipReply(params: {
   statusSink?: (patch: any) => void;
   logVerboseMessage: (msg: string) => void;
   placeholderMessageIdPromise?: Promise<string | undefined>;
+  maxMessageLength?: number;
 }): Promise<unknown> {
   const {
     core,
@@ -55,6 +65,7 @@ export async function dispatchZulipReply(params: {
     statusSink,
     logVerboseMessage,
     placeholderMessageIdPromise,
+    maxMessageLength,
   } = params;
 
   const typingParams = isDM
@@ -143,7 +154,11 @@ export async function dispatchZulipReply(params: {
           }
           const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
           const rawText = core.channel.text.convertMarkdownTables(payload.text ?? "", tableMode);
-          const { text, topic: topicOverride } = extractZulipTopicDirective(rawText);
+          const { text: extractedText, topic: topicOverride } = extractZulipTopicDirective(rawText);
+          const text =
+            maxMessageLength != null && maxMessageLength > 0
+              ? truncateText(extractedText, maxMessageLength)
+              : extractedText;
           const resolvedTopic = topicOverride ? topicOverride.slice(0, 60) : topic;
           zLogger?.info?.("zulip deliver before send", {
             accountId: account.accountId,
@@ -336,17 +351,21 @@ export async function dispatchZulipReply(params: {
               const resolvedTopic = topicOverride
                 ? topicOverride.slice(0, 60)
                 : topic;
+              const truncatedText =
+                maxMessageLength != null && maxMessageLength > 0
+                  ? truncateText(cleanText, maxMessageLength)
+                  : cleanText;
               const chunkMode = core.channel.text.resolveChunkMode(
                 cfg,
                 "zulip",
                 account.accountId,
               );
               const chunks = core.channel.text.chunkMarkdownTextWithMode(
-                cleanText,
+                truncatedText,
                 textLimit,
                 chunkMode,
               );
-              for (const chunk of chunks.length > 0 ? chunks : [cleanText]) {
+              for (const chunk of chunks.length > 0 ? chunks : [truncatedText]) {
                 if (!chunk) continue;
                 await sendMessageZulip(to, chunk, {
                   accountId: account.accountId,

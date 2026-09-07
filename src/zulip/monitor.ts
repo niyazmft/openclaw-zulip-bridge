@@ -583,7 +583,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         Surface: "zulip" as const,
         MessageSid: messageId,
         ReplyToId: topic !== DEFAULT_TOPIC ? topic : undefined,
-        MessageThreadId: topic !== DEFAULT_TOPIC ? topic : undefined,
+        MessageThreadId: topic !== DEFAULT_TOPIC ? topic : isDM ? senderId : undefined,
         Timestamp: timestamp,
         WasMentioned: kind !== "dm" ? effectiveWasMentioned : undefined,
         CommandAuthorized: commandAuthorized,
@@ -694,6 +694,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         statusSink: opts.statusSink,
         logVerboseMessage,
         placeholderMessageIdPromise: placeholderPromise,
+        maxMessageLength: account.maxMessageLength ?? 20000,
       });
 
       if (reactionsEnabled) {

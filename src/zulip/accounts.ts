@@ -33,6 +33,7 @@ export type ResolvedZulipAccount = {
   dmSessionTurnLimit?: number;
   enableSessionRecovery?: boolean;
   maxMessagesPerMinute?: number;
+  maxMessageLength?: number;
 };
 
 function resolveZulipSection(cfg: OpenClawConfig): ZulipConfig | undefined {
@@ -204,6 +205,7 @@ export function resolveZulipAccount(params: {
     dmSessionTurnLimit: merged.dmSessionTurnLimit,
     enableSessionRecovery: merged.enableSessionRecovery,
     maxMessagesPerMinute: merged.maxMessagesPerMinute,
+    maxMessageLength: merged.maxMessageLength,
   };
 }
 
