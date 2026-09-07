@@ -460,9 +460,14 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       });
 
       const roomLabel = streamName ? `#${streamName}` : `stream:${streamId}`;
+      // Include the Zulip topic in the conversation label so the session
+      // display name (and the inbound envelope the agent sees) distinguishes
+      // topics within the same stream, e.g. "#main / release-plan".
+      const topicSuffix =
+        kind !== "dm" && topic && topic !== DEFAULT_TOPIC ? ` / ${topic}` : "";
       const fromLabel = formatInboundFromLabel({
         isGroup: kind !== "dm",
-        groupLabel: roomLabel,
+        groupLabel: `${roomLabel}${topicSuffix}`,
         groupId: channelId,
         groupFallback: "Stream",
         directLabel: senderName,
