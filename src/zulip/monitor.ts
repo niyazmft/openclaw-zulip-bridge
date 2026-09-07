@@ -1,5 +1,5 @@
 import type { OpenClawConfig, ChannelAccountSnapshot } from "openclaw/plugin-sdk/channel-core";
-import { logInboundDrop } from "openclaw/plugin-sdk/channel-inbound";
+import { logInboundDrop, formatInboundEnvelope } from "openclaw/plugin-sdk/channel-inbound";
 import { resolveControlCommandGate } from "openclaw/plugin-sdk/command-auth";
 import { createReplyPrefixOptions } from "openclaw/plugin-sdk/channel-reply-pipeline";
 import { resolveChannelMediaMaxBytes } from "openclaw/plugin-sdk/media-runtime";
@@ -527,7 +527,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
       const timestamp = message.timestamp ? message.timestamp * 1000 : undefined;
       const textWithId = `${bodyText}\n[zulip message id: ${messageId}]`;
-      const body = core.channel.reply.formatInboundEnvelope({
+      const body = formatInboundEnvelope({
         channel: "Zulip",
         from: fromLabel,
         timestamp,
