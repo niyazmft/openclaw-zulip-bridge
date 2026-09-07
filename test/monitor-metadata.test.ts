@@ -257,6 +257,26 @@ test("monitor source: uses logger?.info instead of core.log", async () => {
   assert.ok(coreLogLines.length <= 2, `expected <=2 core.log lines, got ${coreLogLines.length}`);
 });
 
+test("reply-handler source: truncateText helper is present", async () => {
+  const source = await fs.readFile(
+    path.resolve(process.cwd(), "src/zulip/reply-handler.ts"),
+    "utf8",
+  );
+  assert.equal(source.includes("function truncateText"), true);
+  assert.equal(source.includes("[...message truncated]"), true);
+});
+
+test("monitor source: maxMessageLength is passed to dispatchZulipReply", async () => {
+  const source = await fs.readFile(monitorPath, "utf8");
+  assert.equal(source.includes("maxMessageLength:"), true);
+});
+
+test("monitor source: MessageThreadId is set for DMs", async () => {
+  const source = await fs.readFile(monitorPath, "utf8");
+  // Should set MessageThreadId for DMs to senderId
+  assert.equal(source.includes("MessageThreadId: topic !== DEFAULT_TOPIC ? topic : isDM ? senderId : undefined"), true);
+});
+
 test("send source: uses zulipLogger instead of core.log", async () => {
   const source = await fs.readFile(
     path.resolve(process.cwd(), "src/zulip/send.ts"),

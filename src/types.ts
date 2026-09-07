@@ -114,6 +114,15 @@ export type ZulipAccountConfig = {
    * Default: 60.
    */
   maxMessagesPerMinute?: number;
+  /**
+   * Maximum total length of a single outbound message in characters.
+   * Messages exceeding this limit are truncated before delivery.
+   * This prevents downstream plugins (e.g., Honcho memory) from failing
+   * on excessively long content, and keeps Zulip replies readable.
+   *
+   * Default: 20000. Use 0 to disable truncation.
+   */
+  maxMessageLength?: number;
 };
 
 export type ZulipConfig = {

@@ -195,6 +195,10 @@
             "type": "integer",
             "minimum": 0
           },
+          "maxMessageLength": {
+            "type": "integer",
+            "minimum": 0
+          },
           "accounts": {
             "type": "object",
             "additionalProperties": true
@@ -458,6 +462,10 @@
         "maxMessagesPerMinute": {
           "label": "Max messages per minute",
           "description": "Maximum number of inbound messages per minute from a single sender. Prevents a single user from flooding the bot. 0 disables rate limiting. Default: 60."
+        },
+        "maxMessageLength": {
+          "label": "Max message length",
+          "description": "Maximum total length of a single outbound message in characters. Messages exceeding this limit are truncated before delivery. Prevents downstream plugins from failing on excessively long content. Default: 20000. Use 0 to disable."
         }
       }
     }

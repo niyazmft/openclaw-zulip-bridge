@@ -77,4 +77,8 @@ export const zulipChannelConfigUiHints = {
     label: "Enable session recovery",
     help: "When enabled, the bot scans recent DMs on startup for messages interrupted by a gateway restart and re-dispatches them. Default: disabled (opt-in).",
   },
+  maxMessageLength: {
+    label: "Max message length",
+    help: "Maximum total length of a single outbound message in characters. Messages exceeding this limit are truncated before delivery. Prevents downstream plugins from failing on excessively long content. Default: 20000. Use 0 to disable.",
+  },
 } satisfies Record<string, ZulipChannelConfigUiHint>;
