@@ -117,6 +117,9 @@ declare module "openclaw/plugin-sdk/media-runtime" {
 
 declare module "openclaw/plugin-sdk/reply-payload" {
   export type ReplyPayload = any;
+  export function isReplyPayloadNonTerminalToolErrorWarning(
+    payload: any,
+  ): boolean;
 }
 
 declare module "openclaw/plugin-sdk/runtime-env" {

@@ -277,6 +277,33 @@ test("monitor source: MessageThreadId is set for DMs", async () => {
   assert.equal(source.includes("MessageThreadId: topic !== DEFAULT_TOPIC ? topic : isDM ? senderId : undefined"), true);
 });
 
+test("monitor source: conversation label includes Zulip topic (#274)", async () => {
+  const source = await fs.readFile(monitorPath, "utf8");
+  // Topic suffix feeds ConversationLabel so session display names distinguish topics
+  assert.equal(source.includes("topicSuffix"), true);
+  assert.equal(source.includes("groupLabel: `${roomLabel}${topicSuffix}`"), true);
+});
+
+test("reply-handler source: suppresses non-terminal tool error warnings (#273 #247)", async () => {
+  const source = await fs.readFile(
+    path.resolve(process.cwd(), "src/zulip/reply-handler.ts"),
+    "utf8",
+  );
+  assert.equal(source.includes("isReplyPayloadNonTerminalToolErrorWarning"), true);
+  assert.equal(source.includes("zulip deliver skipped: non-terminal tool error warning"), true);
+});
+
+test("reply-handler source: suppresses compaction/fallback/status notices (#247)", async () => {
+  const source = await fs.readFile(
+    path.resolve(process.cwd(), "src/zulip/reply-handler.ts"),
+    "utf8",
+  );
+  assert.equal(source.includes("payload.isCompactionNotice === true"), true);
+  assert.equal(source.includes("payload.isFallbackNotice === true"), true);
+  assert.equal(source.includes("payload.isStatusNotice === true"), true);
+  assert.equal(source.includes("zulip deliver skipped: status notice"), true);
+});
+
 test("send source: uses zulipLogger instead of core.log", async () => {
   const source = await fs.readFile(
     path.resolve(process.cwd(), "src/zulip/send.ts"),

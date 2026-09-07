@@ -430,6 +430,20 @@ Zulip API round-trips from the container take ~600ms each. To reduce latency, ke
 
 **Result:** Typing indicator now starts within 0.3-5 seconds of dispatch (down from ~16s).
 
+### Internal status messages ("Exec failed", compaction notices) leak into chat
+
+**Fixed for OpenClaw 2026.9.2+ hosts.** Host-generated transient notices are now suppressed before delivery:
+
+- **Non-terminal tool-error warnings** (e.g. `⚠️ Exec failed: ...` chains) — detected via the SDK's `isReplyPayloadNonTerminalToolErrorWarning()` marker (new in 2026.9.2). The final reply always follows, so these are pure noise in chat.
+- **Compaction / fallback / status notices** — runtime-internal events that native channels render as transient indicators. Zulip has no transient surface, so the plugin drops them.
+- **Agent-run failure messages** (`I finished the turn, but it did not produce a visible reply...`) are **still delivered** — they are deliberately user-facing and are the only signal that a run produced nothing.
+
+On hosts older than 2026.9.2 the suppression flags are absent, so such messages may still appear. Upgrade the host for the full fix.
+
+### Zulip topics all show as the same session name in the WebUI
+
+**Fixed.** Stream sessions now include the topic in the conversation label, e.g. `#main / release-plan` instead of `#main`. New messages update the session display name going forward; existing sessions pick up the new name on their next message.
+
 ---
 
 ## Security & Permissions
@@ -461,6 +475,24 @@ Without both safeguards, admin actions will throw an error. This prevents accide
 - Keep `enableAdminActions: false` unless you explicitly need stream management or user lifecycle operations
 - Restrict `streams` and `allowFrom` to minimize exposure
 - Avoid delegating this plugin to agents that should not delete messages/channels or alter users and organization settings
+
+### Multi-User Data Isolation
+
+How conversation context is scoped when multiple users talk to the same bot:
+
+| Surface | Isolation | Mechanism |
+|---------|-----------|-----------|
+| DM sessions | ✅ Per-user | Each sender gets their own session key (`...zulip:direct:{sender}`) via the host's `dmScope: "per-channel-peer"`. DM session rotation (`dmSessionTurnLimit`) further bounds context lifetime. |
+| Stream/topic sessions | ⚠️ Shared by design | All users in a stream/topic share one session. This is intentional — participants see the same channel, so shared context matches visible conversation. |
+| Agent memory / workspace | ❌ Host-global | Long-term memory, notes, and workspace files are scoped by the host, not by this plugin. Content one user provides can resurface in another user's session. |
+| Tool/credential scope | ❌ Host-global | The agent's tools and credentials are the same regardless of which user is talking. |
+
+**Recommendations for multi-user deployments:**
+
+1. Treat stream sessions as **public context** — never rely on them for private data.
+2. Restrict `allowFrom`/`groupAllowFrom` to trusted users; for strict single-user isolation, allowlist a single address.
+3. Scope agent memory and credentials at the host level (separate agents/bindings per trust boundary) — see the host's `agents` and `bindings` configuration.
+4. Prefer DMs for anything private; the per-user DM session keys ensure DM context never mixes across senders.
 
 ---
 

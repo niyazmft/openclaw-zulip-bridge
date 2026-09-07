@@ -52,6 +52,7 @@ export const markLegacyAlias = (v) => v;
 
 export const createReplyPrefixOptions = () => ({});
 export const createTypingCallbacks = () => ({ onStart: noOp, onStop: noOp });
+export const isReplyPayloadNonTerminalToolErrorWarning = () => false;
 export const resolveChannelMediaMaxBytes = () => 5 * 1024 * 1024;
 
 export const createPatchedAccountSetupAdapter = (adapter) => adapter;

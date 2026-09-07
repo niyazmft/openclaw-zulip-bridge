@@ -6,7 +6,10 @@ import { addReactionSafe } from "./reactions.js";
 import { formatZulipLog, maskPII } from "./monitor-helpers.js";
 import { extractZulipTopicDirective } from "./text-utils.js";
 import { readLatestAssistantTexts } from "./fallback-reader.js";
-import type { ReplyPayload } from "openclaw/plugin-sdk/reply-payload";
+import {
+  isReplyPayloadNonTerminalToolErrorWarning,
+  type ReplyPayload,
+} from "openclaw/plugin-sdk/reply-payload";
 
 /** Truncates text to a maximum length, appending an ellipsis if truncated. */
 function truncateText(text: string, maxLength: number): string {
@@ -124,8 +127,44 @@ export async function dispatchZulipReply(params: {
       humanDelay: 0,
       typingCallbacks,
       deliver: async (payload: ReplyPayload) => {
-        deliveredAny = true;
         const zLogger = core.logging?.getChildLogger?.({ module: "zulip" });
+
+        // Suppress host-generated transient notices so they do not leak into
+        // Zulip as plain chat messages (#273, #247):
+        // - Non-terminal tool-error warnings (e.g. "Exec failed: ..." chains)
+        //   are marked by the SDK; the final reply always follows.
+        // - Compaction / fallback / status notices are runtime-internal and
+        //   rendered as transient indicators on native channels. Zulip has
+        //   no transient surface, so they would only be noise.
+        // Agent-run failure messages (payload.isError) are deliberately
+        // user-facing and are still delivered.
+        if (isReplyPayloadNonTerminalToolErrorWarning(payload)) {
+          zLogger?.info?.("zulip deliver skipped: non-terminal tool error warning", {
+            accountId: account.accountId,
+            messageId,
+            textLen: (payload.text ?? "").length,
+          });
+          return;
+        }
+        if (
+          payload.isCompactionNotice === true ||
+          payload.isFallbackNotice === true ||
+          payload.isStatusNotice === true
+        ) {
+          zLogger?.info?.("zulip deliver skipped: status notice", {
+            accountId: account.accountId,
+            messageId,
+            kind: payload.isCompactionNotice
+              ? "compaction"
+              : payload.isFallbackNotice
+                ? "fallback"
+                : "status",
+            textLen: (payload.text ?? "").length,
+          });
+          return;
+        }
+
+        deliveredAny = true;
         zLogger?.info?.("zulip deliver callback fired", {
           accountId: account.accountId,
           messageId,
