@@ -12,6 +12,28 @@ if (pkg.version !== manifest.version) {
   errors.push(`Version mismatch: package.json has ${pkg.version}, openclaw.plugin.json has ${manifest.version}`);
 }
 
+// 1b. Version references across published files must match package.json (#version-drift)
+const versionRefs = [
+  { file: 'README.md', pattern: new RegExp(`version-([0-9.]+)-blue`), label: 'version badge' },
+  { file: 'SKILL.md', pattern: new RegExp(`^version:\\s*([0-9.]+)`, 'm'), label: 'skill version' },
+];
+for (const { file, pattern, label } of versionRefs) {
+  if (!existsSync(file)) continue;
+  const content = readFileSync(file, 'utf8');
+  const match = content.match(pattern);
+  if (!match) {
+    errors.push(`Missing ${label} in ${file} (expected pattern ${pattern})`);
+  } else if (match[1] !== pkg.version) {
+    errors.push(`Version mismatch: ${file} ${label} has ${match[1]}, package.json has ${pkg.version}`);
+  }
+}
+if (existsSync('package-lock.json')) {
+  const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+  if (lock.version !== pkg.version) {
+    errors.push(`Version mismatch: package-lock.json has ${lock.version}, package.json has ${pkg.version}`);
+  }
+}
+
 // 2. Presence of required OpenClaw fields in package.json
 const requiredOpenClawFields = ['compat', 'extensions', 'setupEntry'];
 for (const field of requiredOpenClawFields) {
