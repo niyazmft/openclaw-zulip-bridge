@@ -5,6 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import { uploadZulipFile, type ZulipClient } from "../src/zulip/client.js";
 import { handleUploadFileAction } from "../src/actions-upload.js";
+import {
+  collectSendAttachmentSources,
+  resolveAttachmentUrls,
+} from "../src/actions-send.js";
 import { setZulipRuntime } from "../src/runtime.js";
 
 function fakeClient(): { client: ZulipClient; calls: string[] } {
@@ -190,6 +194,59 @@ test("handleUploadFileAction requires a file source", async () => {
   } finally {
     await fs.rm(dataDir, { recursive: true, force: true });
   }
+});
+
+// ── send-with-attachments (#268) ─────────────────────────────────────────
+
+test("collectSendAttachmentSources gathers top-level and structured sources", () => {
+  const sources = collectSendAttachmentSources({
+    mediaUrl: "/tmp/a.png",
+    media: "/tmp/b.pdf",
+    mediaUrls: ["/tmp/c.bin", "https://example.com/d.png", "/tmp/a.png"],
+    attachments: [
+      { media: "/etc/passwd", name: "passwd", type: "file" },
+      { name: "no-media" },
+      "not-an-object",
+    ],
+  });
+  assert.deepEqual(sources, [
+    "/tmp/a.png",
+    "/tmp/b.pdf",
+    "/tmp/c.bin",
+    "https://example.com/d.png",
+    "/etc/passwd",
+  ]);
+});
+
+test("collectSendAttachmentSources returns empty for plain text sends", () => {
+  assert.deepEqual(collectSendAttachmentSources({ to: "stream:general", message: "hi" }), []);
+});
+
+test("resolveAttachmentUrls passes http(s) through and uploads sandboxed locals", async () => {
+  await setMinimalRuntime();
+  const { client } = fakeClient();
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "zulip-att-"));
+  const filePath = path.join(dir, "colors.csv");
+  await fs.writeFile(filePath, "color,hex\n", "utf8");
+  try {
+    const urls = await resolveAttachmentUrls(client, [
+      "https://example.com/x.png",
+      filePath,
+    ]);
+    assert.deepEqual(urls, [
+      "https://example.com/x.png",
+      "https://zulip.example.com/user_uploads/abc/file.png",
+    ]);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("resolveAttachmentUrls refuses sandbox-external paths and skips them", async () => {
+  await setMinimalRuntime();
+  const { client } = fakeClient();
+  const urls = await resolveAttachmentUrls(client, ["/etc/passwd"]);
+  assert.deepEqual(urls, []);
 });
 
 // ── Source regression tests ────────────────────────────────────────────────
