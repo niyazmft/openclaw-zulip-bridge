@@ -525,19 +525,18 @@ export async function uploadZulipFile(
 ): Promise<{ url: string }> {
   const resolvedPath = path.resolve(filePath);
   const tmpDir = path.resolve(os.tmpdir());
-  const rawDataDir = getZulipRuntime().paths?.dataDir;
-  const dataDir = rawDataDir ? path.resolve(rawDataDir) : null;
+  // Host 2026.9.2 runtimes may not expose paths.dataDir; default to the
+  // standard ~/.openclaw data dir (same default as the fallback reader).
+  const rawDataDir = getZulipRuntime().paths?.dataDir ?? path.join(os.homedir(), ".openclaw");
+  const dataDir = path.resolve(rawDataDir);
 
-  const allowedPaths: string[] = [tmpDir + path.sep];
-  if (dataDir) {
-    allowedPaths.push(dataDir + path.sep);
-  }
+  const allowedPaths: string[] = [tmpDir + path.sep, dataDir + path.sep];
 
   const isAllowed = allowedPaths.some((allowed) => resolvedPath.startsWith(allowed));
   if (!isAllowed) {
       throw new Error(
           `Refusing to upload file from unauthorized path: ${filePath}. ` +
-          `Allowed paths are under ${tmpDir}${dataDir ? ` or ${dataDir}` : ""}.`
+          `Allowed paths are under ${tmpDir} or ${dataDir}.`
       );
   }
 

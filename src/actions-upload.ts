@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { readStringParam, jsonResult } from "./actions-utils.js";
 import { uploadZulipFile, type ZulipClient } from "./zulip/client.js";
@@ -42,10 +43,9 @@ export async function handleUploadFileAction(
     ""
   ).trim();
 
-  const dataDir = getZulipRuntime().paths?.dataDir;
-  if (!dataDir) {
-    throw new Error("Zulip data directory unavailable; cannot stage upload.");
-  }
+  const dataDir =
+    getZulipRuntime().paths?.dataDir ??
+    path.join(os.homedir(), ".openclaw");
 
   const buffer = Buffer.from(bufferB64, "base64");
   const workspace = createBotWorkspace(dataDir);
