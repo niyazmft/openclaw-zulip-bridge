@@ -111,7 +111,7 @@ export async function dispatchZulipReply(params: {
     core.channel.reply.createReplyDispatcherWithTyping({
       ...prefixOptions,
       humanDelay: 0,
-      onReplyStart: typingCallbacks.onReplyStart,
+      typingCallbacks,
       deliver: async (payload: ReplyPayload) => {
         deliveredAny = true;
         const zLogger = core.logging?.getChildLogger?.({ module: "zulip" });
