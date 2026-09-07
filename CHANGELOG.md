@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) in the format `YYYY.M.PATCH`.
 
+## [2026.9.0] - 2026-09-07
+
+### Added
+- **First-class local file attach flow** (#268): Implemented the core-owned `upload-file` message action — the host hydrates file sources into a buffer, the plugin stages bytes in the sandboxed bot workspace (`dataDir/workspace/`, traversal-rejected, TTL-pruned), uploads via `/user_uploads`, and delivers the Zulip-hosted URL to the target with caption. Wires the previously test-only `createBotWorkspace` into the real flow. `sendMessageZulip` and `send`-action attachments now also accept sandboxed local paths (and `file://` URLs) instead of silently dropping them; relative filenames resolve against the agent workspace. Paths outside the sandbox (e.g. `/etc/passwd`) remain refused and logged.
+- **Message length truncation** (#272): New `maxMessageLength` config (default 20,000 chars, `0` disables). Outbound messages exceeding the limit are truncated with a `[...message truncated]` marker before delivery, preventing downstream plugins (e.g. Honcho memory) from failing on >25,000-char content.
+
+### Fixed
+- **Internal status messages no longer leak into chat** (#273, #247): The deliver callback drops host-generated transient notices before they reach Zulip — non-terminal tool-error warnings (SDK `isReplyPayloadNonTerminalToolErrorWarning`, 2026.9.2+) and compaction/fallback/status notices. Agent-run failure messages (`isError`) are still delivered deliberately. Hosts older than 2026.9.2 still lack the markers.
+- **Zulip topic in session display name** (#274): Stream conversation labels and `GroupChannel` now include the topic (`#general / topic`), so the OpenClaw WebUI shows distinct names per topic instead of duplicate `zulip:#stream` entries. DM sessions set `MessageThreadId` to the sender (#269) for explicit thread context after restarts.
+- **Upload allowlist on 2026.9.2 hosts** (#268 follow-up): `getZulipRuntime().paths?.dataDir` is undefined on 2026.9.2, which degraded the upload path allowlist to tmpdir-only. Now defaults to `~/.openclaw` (same fallback as the session fallback reader), and relative attachment filenames resolve against the agent workspace (`~/.openclaw/workspace`) before the CWD fallback.
+- **Typing lifecycle on 2026.9.1+** (#279): `typingCallbacks` is passed whole to `createReplyDispatcherWithTyping` so the SDK's typing controller gets `onCleanup` and the indicator stops with the reply.
+
+### Security
+- **Multi-user isolation documentation** (#270): New "Multi-User Data Isolation" section documenting per-user DM sessions, shared-by-design stream sessions, and host-global memory/tool scope with operator recommendations.
+
 ## [2026.8.9] - 2026-08-13
 
 ### Added
