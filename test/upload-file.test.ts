@@ -63,6 +63,31 @@ test("uploadZulipFile rejects path traversal into system files", async () => {
   );
 });
 
+test("uploadZulipFile resolves relative paths against the agent workspace", async () => {
+  const dataDir = await setMinimalRuntime();
+  const { client } = fakeClient();
+  // The agent's write tool saves into ~/.openclaw/workspace; the agent may
+  // pass just the bare filename when attaching.
+  const wsDir = path.join(dataDir, "workspace");
+  await fs.mkdir(wsDir, { recursive: true });
+  await fs.writeFile(path.join(wsDir, "haiku.txt"), "silent autumn rain", "utf8");
+  try {
+    const { url } = await uploadZulipFile(client, "haiku.txt");
+    assert.match(url, /^https:\/\/zulip\.example\.com\/user_uploads\//);
+  } finally {
+    await fs.rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("uploadZulipFile still refuses relative traversal outside the sandbox", async () => {
+  await setMinimalRuntime();
+  const { client } = fakeClient();
+  await assert.rejects(
+    uploadZulipFile(client, "../../etc/passwd"),
+    /Refusing to upload|ENOENT|no such file/i,
+  );
+});
+
 test("uploadZulipFile accepts a temp file and returns a base-relative URL", async () => {
   await setMinimalRuntime();
   const { client, calls } = fakeClient();
