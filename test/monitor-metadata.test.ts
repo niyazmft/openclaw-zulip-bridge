@@ -279,9 +279,11 @@ test("monitor source: MessageThreadId is set for DMs", async () => {
 
 test("monitor source: conversation label includes Zulip topic (#274)", async () => {
   const source = await fs.readFile(monitorPath, "utf8");
-  // Topic suffix feeds ConversationLabel so session display names distinguish topics
+  // Topic suffix feeds ConversationLabel AND GroupChannel (the gateway derives
+  // the WebUI session title verbatim from GroupChannel)
   assert.equal(source.includes("topicSuffix"), true);
   assert.equal(source.includes("groupLabel: `${roomLabel}${topicSuffix}`"), true);
+  assert.equal(source.includes("GroupChannel: streamName ? `#${streamName}${topicSuffix}` : undefined"), true);
 });
 
 test("reply-handler source: suppresses non-terminal tool error warnings (#273 #247)", async () => {

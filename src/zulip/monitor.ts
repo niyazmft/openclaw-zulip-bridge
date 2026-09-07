@@ -460,9 +460,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       });
 
       const roomLabel = streamName ? `#${streamName}` : `stream:${streamId}`;
-      // Include the Zulip topic in the conversation label so the session
-      // display name (and the inbound envelope the agent sees) distinguishes
-      // topics within the same stream, e.g. "#main / release-plan".
+      // Include the Zulip topic in the channel label so the host's session
+      // display name distinguishes topics within the same stream (issue #274).
+      // The gateway derives the WebUI session title verbatim from GroupChannel
+      // (buildGroupDisplayTitle), and the host's outbound target parser splits
+      // on "/" and trims, so "#general / topic" still resolves as a target.
       const topicSuffix =
         kind !== "dm" && topic && topic !== DEFAULT_TOPIC ? ` / ${topic}` : "";
       const fromLabel = formatInboundFromLabel({
@@ -581,7 +583,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         ChatType: chatType,
         ConversationLabel: fromLabel,
         GroupSubject: kind !== "dm" ? roomLabel : undefined,
-        GroupChannel: streamName ? `#${streamName}` : undefined,
+        GroupChannel: streamName ? `#${streamName}${topicSuffix}` : undefined,
         SenderName: senderName,
         SenderId: senderId,
         Provider: "zulip" as const,
