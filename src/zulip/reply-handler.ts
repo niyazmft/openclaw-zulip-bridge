@@ -1,4 +1,4 @@
-import { createTypingCallbacks } from "openclaw/plugin-sdk/channel-reply-options-runtime";
+import { createTypingCallbacks } from "openclaw/plugin-sdk/channel-reply-pipeline";
 import { logTypingFailure } from "openclaw/plugin-sdk/channel-feedback";
 import { sendZulipTyping, editZulipMessage } from "./client.js";
 import { sendMessageZulip } from "./send.js";
@@ -126,11 +126,8 @@ export async function dispatchZulipReply(params: {
           // is already visible. This is best-effort and idempotent.
           if (!typingStopped) {
             typingStopped = true;
-            // Guard: onIdle() may return undefined in some SDK versions
-            const idleResult = typingCallbacks.onIdle();
-            if (idleResult && typeof (idleResult as Promise<void>).catch === "function") {
-              void (idleResult as Promise<void>).catch(() => undefined);
-            }
+            // onIdle() is synchronous (returns void) in the 2026.9.1 SDK
+            typingCallbacks.onIdle?.();
           }
           if (!placeholderConsumed) {
             placeholderConsumed = true;
@@ -258,10 +255,8 @@ export async function dispatchZulipReply(params: {
         core.error?.(`zulip reply failed: ${String(err)}`);
         if (!typingStopped) {
           typingStopped = true;
-          const idleResult = typingCallbacks.onIdle();
-          if (idleResult && typeof (idleResult as Promise<void>).catch === "function") {
-            void (idleResult as Promise<void>).catch(() => undefined);
-          }
+          // onIdle() is synchronous (returns void) in the 2026.9.1 SDK
+          typingCallbacks.onIdle?.();
         }
       },
     });

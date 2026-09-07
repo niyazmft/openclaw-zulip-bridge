@@ -33,8 +33,8 @@
       "clawhubSpec": "@niyazmft/openclaw-zulip"
     },
     "build": {
-      "openclawVersion": "2026.7.0",
-      "pluginSdkVersion": "2026.7.0",
+      "openclawVersion": "2026.9.1",
+      "pluginSdkVersion": "2026.9.1",
       "stageRuntimeDependencies": true
     },
     "securityExemptions": {
@@ -87,7 +87,9 @@
     "@types/node": "24.12.2",
     "esbuild": "0.25.12",
     "knip": "6.13.1",
-    "typescript": "5.9.3",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
     "zod": "3.25.76"
   }
 }

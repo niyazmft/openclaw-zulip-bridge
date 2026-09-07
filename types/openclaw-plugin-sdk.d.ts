@@ -73,6 +73,10 @@ declare module "openclaw/plugin-sdk/config-types" {
   export type OpenClawConfig = any;
 }
 
+declare module "openclaw/plugin-sdk/config-contracts" {
+  export type OpenClawConfig = any;
+}
+
 declare module "openclaw/plugin-sdk/account-core" {
   export const applyAccountNameToChannelSection: any;
   export const deleteAccountFromConfigSection: any;
@@ -86,9 +90,15 @@ declare module "openclaw/plugin-sdk/command-auth" {
 
 declare module "openclaw/plugin-sdk/channel-inbound" {
   export const logInboundDrop: any;
+  export const formatInboundEnvelope: any;
 }
 
 declare module "openclaw/plugin-sdk/channel-reply-options-runtime" {
+  export const createReplyPrefixOptions: any;
+  export const createTypingCallbacks: any;
+}
+
+declare module "openclaw/plugin-sdk/channel-reply-pipeline" {
   export const createReplyPrefixOptions: any;
   export const createTypingCallbacks: any;
 }
