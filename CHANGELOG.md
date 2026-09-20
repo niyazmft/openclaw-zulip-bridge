@@ -7,6 +7,9 @@ and this project adheres to [Calendar Versioning](https://calver.org/) in the fo
 
 ## [Unreleased]
 
+### Fixed
+- **CLI `message send --channel zulip` failed with "Zulip runtime not initialized"** (#285): the CLI loads the plugin entry and dispatches channel actions *without* running gateway registration (`registerFull`), so the runtime singleton was never set and `getZulipRuntime()` threw before any network call. `getZulipRuntime()` now falls back to a minimal, cached CLI runtime when no host runtime is registered: config read from `{dataDir}/openclaw.json` (empty object on failure, so `ZULIP_*` env credentials still resolve), console logging, the resolved data dir, and the `channel.text` helpers needed to format and chunk outbound text. The gateway runtime stays authoritative. Gateway-only subsystems (mentions, reply dispatch, session routing, pairing, remote-media fetch) are deliberately absent, and a remote `mediaUrl` sent from the CLI now fails with an actionable message instead of a `TypeError`.
+
 ## [2026.9.1] - 2026-09-17
 
 ### Added
