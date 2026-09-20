@@ -123,6 +123,18 @@ export type ZulipAccountConfig = {
    * Default: 20000. Use 0 to disable truncation.
    */
   maxMessageLength?: number;
+  /**
+   * Operator opt-in for plaintext HTTP and private/internal host addresses.
+   *
+   * Off by default. Zulip authenticates with HTTP Basic on every request, so an
+   * `http://` realm exposes the bot's email and API key in cleartext. Enabling
+   * this also relaxes the private-IP (SSRF) ban, because a self-hosted Zulip on
+   * a LAN usually is a private address. Only enable it on a trusted network.
+   *
+   * Default: false. Can also be set for the default account with
+   * `ZULIP_ALLOW_INSECURE_HTTP=1`.
+   */
+  allowInsecureHttp?: boolean;
 };
 
 export type ZulipConfig = {

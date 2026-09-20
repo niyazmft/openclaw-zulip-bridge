@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import type { PluginRuntime } from "openclaw/plugin-sdk/channel-core";
 import { getZulipRuntime } from "../runtime.js";
+import { resolveZulipDataDir } from "./data-dir.js";
 import { downloadZulipUpload } from "./uploads.js";
 import { formatZulipLog, maskPII } from "./monitor-helpers.js";
 
@@ -32,7 +32,9 @@ async function saveZulipMediaBuffer(params: {
       contentType: saved.contentType ?? contentType,
     };
   }
-  const baseDir = core.paths?.dataDir ?? path.join(os.tmpdir(), "openclaw-zulip");
+  // Shared resolver: keeps inbound media beside dedupe/queue/audit state and
+  // avoids the old `/tmp` fallback, which does not exist on Android.
+  const baseDir = resolveZulipDataDir(core);
   if (!checkedMediaDirs.has(baseDir)) {
     await fs.mkdir(baseDir, { recursive: true }).catch(() => {});
     checkedMediaDirs.add(baseDir);

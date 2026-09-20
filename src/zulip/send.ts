@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getZulipRuntime } from "../runtime.js";
 import { resolveZulipAccount } from "./accounts.js";
+import { resolveZulipDataDir } from "./data-dir.js";
 import {
   createZulipClient,
   isInternalHost,
@@ -52,17 +52,19 @@ function getCacheKeyForClient(
   baseUrl: string,
   email: string,
   apiKey: string,
+  allowInsecureHttp?: boolean,
 ): string {
   // Simple concatenation is faster than JSON.stringify for cache keys
-  return `${baseUrl}\0${email}\0${apiKey}`;
+  return `${baseUrl}\0${email}\0${apiKey}\0${allowInsecureHttp ? "1" : "0"}`;
 }
 
 function getCachedClient(
   baseUrl: string,
   email: string,
   apiKey: string,
+  allowInsecureHttp?: boolean,
 ): ZulipClient {
-  const key = getCacheKeyForClient(baseUrl, email, apiKey);
+  const key = getCacheKeyForClient(baseUrl, email, apiKey, allowInsecureHttp);
   const existing = clientCache.get(key);
   if (existing) {
     // Move to end to maintain LRU order (re-insert as most recent)
@@ -77,7 +79,7 @@ function getCachedClient(
       clientCache.delete(firstKey);
     }
   }
-  const client = createZulipClient({ baseUrl, email, apiKey });
+  const client = createZulipClient({ baseUrl, email, apiKey, allowInsecureHttp });
   clientCache.set(key, client);
   return client;
 }
@@ -116,7 +118,11 @@ function isHttpUrl(value: string): boolean {
 
 
 async function writeTempFile(buffer: Buffer, filename: string): Promise<string> {
-  const dir = await fsPromises.mkdtemp(path.join(os.tmpdir(), "zulip-upload-"));
+  // Stage uploads under the resolved data dir rather than os.tmpdir(), which
+  // does not exist on Android and is wiped on container recreation.
+  const dir = await fsPromises.mkdtemp(
+    path.join(resolveZulipDataDir(getCore()), "zulip-upload-"),
+  );
   const filePath = path.join(dir, filename);
   await fsPromises.writeFile(filePath, buffer);
   return filePath;
@@ -196,7 +202,9 @@ export async function sendMessageZulip(
       `Zulip apiKey/email missing for account "${account.accountId}" (set channels.zulip.accounts.${account.accountId}.apiKey/email or ZULIP_API_KEY/ZULIP_EMAIL for default).`,
     );
   }
-  const baseUrl = normalizeZulipBaseUrl(opts.baseUrl ?? account.baseUrl);
+  const baseUrl = normalizeZulipBaseUrl(opts.baseUrl ?? account.baseUrl, {
+    allowInsecureHttp: account.allowInsecureHttp,
+  });
   if (!baseUrl) {
     throw new Error(
       `Zulip url missing for account "${account.accountId}" (set channels.zulip.accounts.${account.accountId}.url or ZULIP_URL for default).`,
@@ -204,7 +212,7 @@ export async function sendMessageZulip(
   }
 
   // ⚡ Optimization: Use cached client to avoid repeated Buffer encoding and allocations
-  const client = getCachedClient(baseUrl, email, apiKey);
+  const client = getCachedClient(baseUrl, email, apiKey, account.allowInsecureHttp);
   // ⚡ Optimization: Use cached target parsing to avoid repeated string operations
   const target = getCachedTarget(to);
 

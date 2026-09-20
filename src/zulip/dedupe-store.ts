@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import type { PluginRuntime } from "openclaw/plugin-sdk/channel-core";
+import { resolveZulipStatePath } from "./data-dir.js";
 
 export type DedupeStoreOpts = {
   accountId: string;
@@ -32,17 +32,9 @@ export class ZulipDedupeStore {
 
   private getPersistencePath(): string {
     const safeAccountId = this.accountId.replace(/[^a-z0-9]/gi, "_");
-    const dataDir = this.runtime.paths?.dataDir;
-    if (dataDir) {
-      return path.join(dataDir, `zulip_dedupe_${safeAccountId}.json`);
-    }
-    // Fallback: use ~/.openclaw/ when core.paths?.dataDir is not available
-    // (e.g., Termux/Android where the host doesn't expose dataDir)
-    const homeDir = os.homedir();
-    if (homeDir) {
-      return path.join(homeDir, ".openclaw", `zulip_dedupe_${safeAccountId}.json`);
-    }
-    return path.join(os.tmpdir(), "openclaw-zulip", `zulip_dedupe_${safeAccountId}.json`);
+    // Shared resolver so dedupe/queue/audit agree on one directory
+    // (see ./data-dir.ts for the Termux/container rationale).
+    return resolveZulipStatePath(this.runtime, `zulip_dedupe_${safeAccountId}.json`);
   }
 
   /**

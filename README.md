@@ -1,6 +1,6 @@
 # OpenClaw Zulip Bridge
 
-[![Version](https://img.shields.io/badge/version-2026.9.0-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
+[![Version](https://img.shields.io/badge/version-2026.9.1-blue)](https://github.com/niyazmft/openclaw-zulip-bridge/releases)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-%3E%3D2026.6.0-green)](https://openclaw.ai)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-brightgreen)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-10.32.1-orange)](https://pnpm.io)
@@ -263,6 +263,7 @@ For advanced users, add to your `openclaw.json`:
 | `enableSessionRecovery` | boolean | `false` | Scan recent DMs on startup for messages interrupted by a gateway restart and re-dispatch them. Opt-in for security. |
 | `maxMessagesPerMinute` | number | `60` | Maximum inbound messages per minute from a single sender. Prevents flooding. Set to `0` to disable. |
 | `maxMessageLength` | number | `20000` | Maximum total length of a single outbound message in characters. Messages exceeding this limit are truncated before delivery. Prevents downstream plugins (e.g., Honcho memory) from failing on excessively long content. Set to `0` to disable truncation. |
+| `allowInsecureHttp` | boolean | `false` | Allow a plain `http://` Zulip server **and** private/internal host addresses (self-hosted LAN). Zulip sends the bot API key as HTTP Basic on every request, so this puts credentials on the wire unencrypted — only enable it on a network you trust. Also settable for the default account with `ZULIP_ALLOW_INSECURE_HTTP=1`. |
 | `autoSendOnMissingTool` | boolean | `true` | If the agent ends a run with text but never invoked the messaging tool, deliver the text to the channel anyway. |
 
 #### Environment Variables
@@ -271,7 +272,8 @@ For advanced users, add to your `openclaw.json`:
 |----------|----------|-------------|
 | `ZULIP_API_KEY` | Yes | Bot API key from Zulip |
 | `ZULIP_EMAIL` | Yes | Bot email address |
-| `ZULIP_URL` | Yes | Zulip server URL (e.g., `https://chat.example.com`) |
+| `ZULIP_URL` | Yes | Zulip server URL (e.g., `https://chat.example.com`). Must be `https://` unless `allowInsecureHttp` is set. |
+| `ZULIP_ALLOW_INSECURE_HTTP` | No | Default account only. Set to `1`/`true` to allow a plain `http://` server and private/internal addresses (trusted networks only). |
 
 ---
 

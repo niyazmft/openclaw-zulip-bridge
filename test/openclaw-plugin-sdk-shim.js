@@ -67,7 +67,16 @@ export const resolveChannelMediaMaxBytes = () => 5 * 1024 * 1024;
 export const createPatchedAccountSetupAdapter = (adapter) => adapter;
 export const defineChannelSetupFlow = (flow) => flow;
 export const resolveSetupFieldValue = () => undefined;
-export const createSetupInputPresenceValidator = () => () => true;
+export const createSetupInputPresenceValidator = (config = {}) => (ctx = {}) => {
+  // The real host validator checks required fields first and then runs the
+  // caller's `validate`. Tests only need the custom branch, so run it and fall
+  // back to success when it returns nothing.
+  if (typeof config.validate === 'function') {
+    const result = config.validate(ctx);
+    if (result) return result;
+  }
+  return true;
+};
 export const createStandardChannelSetupStatus = () => ({ ok: true });
 export const formatDocsLink = (label, url) => `${label}: ${url}`;
 export const formatPairingApproveHint = () => '';

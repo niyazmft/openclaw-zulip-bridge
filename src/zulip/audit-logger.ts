@@ -28,10 +28,16 @@ export class AuditLogger {
   private logDir: string;
   private logPath: string;
   private writeQueue: Promise<void> = Promise.resolve();
+  private onError?: (error: unknown) => void;
 
-  constructor(baseDir: string, accountId: string) {
+  constructor(
+    baseDir: string,
+    accountId: string,
+    options?: { onError?: (error: unknown) => void },
+  ) {
     this.logDir = path.join(baseDir, "audit");
     this.logPath = path.join(this.logDir, `${accountId}.audit.log`);
+    this.onError = options?.onError;
   }
 
   /**
@@ -68,7 +74,9 @@ export class AuditLogger {
     try {
       const files = await fsPromises.readdir(this.logDir);
       const rotatedFiles = files
-        .filter((f) => f.startsWith(path.basename(this.logPath)) && f.includes("."))
+        // Only rotated siblings ("<name>.audit.log.<ts>"), never the live file:
+        // the previous filter also matched the active log and could prune it.
+        .filter((f) => f.startsWith(`${path.basename(this.logPath)}.`))
         .sort()
         .reverse();
       for (const oldFile of rotatedFiles.slice(MAX_ROTATED_FILES)) {
@@ -91,8 +99,11 @@ export class AuditLogger {
         await this.rotateIfNeeded();
         const line = JSON.stringify(event) + "\n";
         await fsPromises.appendFile(this.logPath, line, "utf-8");
-      } catch {
-        // Audit logging is best-effort; failures are silently ignored
+      } catch (err) {
+        // Audit logging is best-effort, but a silently dead audit trail is its
+        // own security problem (this is how the Android "no /tmp" bug stayed
+        // hidden). Report through the optional hook instead of swallowing.
+        this.onError?.(err);
       }
     });
     return this.writeQueue;

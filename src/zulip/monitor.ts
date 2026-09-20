@@ -12,7 +12,6 @@ import {
 import { getGlobalHookRunner } from "openclaw/plugin-sdk/plugin-runtime";
 import { getZulipRuntime } from "../runtime.js";
 import {
-  deleteZulipQueue,
   editZulipMessage,
   registerZulipQueue,
   updateZulipMessageFlag,
@@ -27,6 +26,7 @@ import {
   trackConversationMetadata,
 } from "./monitor-helpers.js";
 import { ZulipDedupeStore } from "./dedupe-store.js";
+import { readAllowFromStore } from "./allowlist-store.js";
 import { sendMessageZulip } from "./send.js";
 import { decidePolicy } from "./policy.js";
 import { ZulipQueueManager } from "./queue-manager.js";
@@ -48,6 +48,7 @@ import { initializeZulipMonitor } from "./bootstrap.js";
 import { pollOnce } from "./polling.js";
 import { dispatchZulipReply } from "./reply-handler.js";
 import { AuditLogger } from "./audit-logger.js";
+import { resolveZulipDataDir } from "./data-dir.js";
 
 export type MonitorZulipOpts = {
   apiKey?: string;
@@ -73,11 +74,20 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     ? core.logging.getChildLogger({ module: "zulip" })
     : null;
 
+  // Resolve the data directory once (shared by dedupe, queue and audit — see
+  // ./data-dir.ts). On hosts that do not expose paths.dataDir this is
+  // ~/.openclaw, which exists on Termux/Android where a hard-coded /tmp does not.
+  const dataDir = resolveZulipDataDir(core);
+
   // Initialize audit logger for persistent security event logging
-  const auditLogger = new AuditLogger(
-    core.paths?.dataDir ?? "/tmp/openclaw-zulip",
-    opts.accountId ?? "default",
-  );
+  const auditLogger = new AuditLogger(dataDir, opts.accountId ?? "default", {
+    onError: (err) => {
+      logger?.warn?.("zulip audit log write failed", {
+        accountId: opts.accountId ?? "default",
+        error: String(err),
+      });
+    },
+  });
   void auditLogger.logMonitorStart(opts.accountId ?? "default");
 
   // Assert health immediately so the host health-monitor doesn't kill us during initialization
@@ -101,6 +111,17 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     const logVerboseMessage = logger && core.logging?.shouldLogVerbose && core.logging.shouldLogVerbose()
       ? (message: string) => logger.debug?.(message)
       : () => {};
+
+    if (
+      account.baseUrl &&
+      /^http:\/\//i.test(account.baseUrl) &&
+      account.allowInsecureHttp
+    ) {
+      logger?.warn?.(
+        "zulip plaintext HTTP enabled — bot credentials are sent unencrypted; use https:// unless this is a trusted network",
+        { accountId: account.accountId, baseUrl: maskPII(account.baseUrl) },
+      );
+    }
 
     const oncharPrefixes = resolveOncharPrefixes(account.oncharPrefixes);
     const oncharEnabled = account.chatmode === "onchar";
@@ -170,35 +191,24 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       const now = Date.now();
       if (now - storeLastRead < STORE_CACHE_TTL_MS) return cachedStoreAllowFrom;
 
-      let storeAllowFrom: string[] = [];
-      try {
-        const fs = await import("node:fs/promises");
-        const path = await import("node:path");
-        const os = await import("node:os");
-        const possibleDirs = [
-          core.paths?.dataDir,
-          path.join(os.homedir(), ".openclaw"),
-          "/home/node/.openclaw",
-          "/tmp/openclaw-zulip",
-        ].filter(Boolean);
-        for (const dataDir of possibleDirs) {
-          const allowPath = path.join(dataDir, "credentials", `zulip-${account.accountId}-allowFrom.json`);
-          try {
-            const raw = await fs.readFile(allowPath, "utf8");
-            const parsed = JSON.parse(raw);
-            storeAllowFrom = normalizeAllowList(parsed.allowFrom || []);
-            break;
-          } catch (e) {
-            // Try next path
-          }
-        }
-      } catch (e) {
-        // File may not exist, that's ok
+      // Security: only the resolved data dir is trusted. The previous fallback
+      // list probed `~/.openclaw`, `/home/node/.openclaw` and the world-writable
+      // `/tmp/openclaw-zulip`, so any local user could inject an allowlist. A
+      // "*" entry found on disk is ignored as well.
+      const store = await readAllowFromStore({
+        dataDir,
+        accountId: account.accountId,
+      });
+      if (store.wildcardRejected) {
+        logger?.warn?.(
+          "zulip allowlist store contained '*'; ignoring it for safety",
+          { accountId: account.accountId },
+        );
       }
 
-      cachedStoreAllowFrom = storeAllowFrom;
+      cachedStoreAllowFrom = store.allowFrom;
       storeLastRead = now;
-      return storeAllowFrom;
+      return store.allowFrom;
     }
 
     const allowTextCommands = core.channel.commands.shouldHandleTextCommands({
@@ -292,13 +302,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       // ⚡ Performance: Use cached disk-based allowlist (30s TTL)
       let senderAllowedForCommands = isSenderAllowed({
         senderId,
-        senderName,
         allowFrom: configAllowFrom,
       });
 
       let groupAllowedForCommands = isSenderAllowed({
         senderId,
-        senderName,
         allowFrom: configGroupAllowFromFallback,
       });
 
@@ -313,14 +321,12 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         if (!senderAllowedForCommands) {
           senderAllowedForCommands = isSenderAllowed({
             senderId,
-            senderName,
             allowFrom: effectiveAllowFrom,
           });
         }
         if (!groupAllowedForCommands) {
           groupAllowedForCommands = isSenderAllowed({
             senderId,
-            senderName,
             allowFrom: effectiveGroupAllowFrom,
           });
         }
@@ -799,6 +805,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     });
 
     let pollBackoffMs = 0;
+    // Idle backoff + log throttle state for the heartbeat-only path (see polling.ts).
+    let idleBackoffMs = 0;
+    const idleLogState = { lastAt: 0 };
 
     const resetPollBackoff = () => {
       pollBackoffMs = 0;
@@ -897,10 +906,13 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           accountId: account.accountId,
           opts,
           pollBackoffMs,
+          idleBackoffMs,
+          idleLogState,
           resetPollBackoff,
           processMessage,
         });
         pollBackoffMs = result.pollBackoffMs;
+        idleBackoffMs = result.idleBackoffMs;
         if (!result.shouldContinue) {
           break;
         }
@@ -922,16 +934,12 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     });
     void auditLogger.logMonitorStop(account.accountId, opts.abortSignal?.aborted ? "aborted" : "finished");
 
-    if (queueManager) {
-      const queue = queueManager.getQueue();
-      if (queue) {
-        logger?.info?.("zulip monitor cleaning up queue", {
-          accountId: account.accountId,
-          queueId: maskPII(queue.queueId),
-        });
-        await deleteZulipQueue(client, queue.queueId);
-      }
-    }
+    // Deliberately DO NOT delete the event queue on shutdown. Deleting it while
+    // the persisted queue metadata (queue id + last event id) survives means the
+    // next start connects to a queue the server already destroyed: one wasted
+    // request, a 1s stall, and a window in which inbound messages are lost. The
+    // server expires idle queues by itself; keeping the id lets a fast restart
+    // resume where it left off.
     // duplicate message processing after restart.
     await dedupeStore.flush();
   } catch (err) {

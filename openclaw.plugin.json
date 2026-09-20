@@ -2,7 +2,7 @@
   "id": "zulip",
   "name": "Zulip",
   "description": "OpenClaw Zulip channel plugin",
-  "version": "2026.9.0",
+  "version": "2026.9.1",
   "activation": {
     "onStartup": true
   },
@@ -61,6 +61,10 @@
           },
           "realm": {
             "type": "string"
+          },
+          "allowInsecureHttp": {
+            "type": "boolean",
+            "description": "Allow a plain http:// Zulip server on a trusted network, and allow private/internal host addresses. Credentials are sent unencrypted; leave off unless you control the network."
           },
           "email": {
             "type": "string"
@@ -241,6 +245,10 @@
           "realm": {
             "type": "string"
           },
+          "allowInsecureHttp": {
+            "type": "boolean",
+            "description": "Allow a plain http:// Zulip server on a trusted network, and allow private/internal host addresses. Credentials are sent unencrypted; leave off unless you control the network."
+          },
           "email": {
             "type": "string"
           },
@@ -398,6 +406,11 @@
           "label": "Zulip Realm URL",
           "sensitive": false,
           "description": "Alias for the Zulip base URL / realm."
+        },
+        "allowInsecureHttp": {
+          "label": "Allow Insecure HTTP (trusted network only)",
+          "sensitive": false,
+          "description": "Allow a plain http:// Zulip server and private/internal host addresses. Credentials are sent unencrypted; leave off unless you control the network."
         },
         "streams": {
           "label": "Zulip Streams",

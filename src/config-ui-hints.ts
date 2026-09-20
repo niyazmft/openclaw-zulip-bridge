@@ -25,6 +25,10 @@ export const zulipChannelConfigUiHints = {
     label: "Zulip Realm URL",
     help: "Alias for the Zulip base URL / realm.",
   },
+  allowInsecureHttp: {
+    label: "Allow Insecure HTTP (trusted network only)",
+    help: "Allow a plain http:// Zulip server and private/internal addresses. Credentials are sent unencrypted — leave off unless you control the network.",
+  },
   streams: {
     label: "Zulip Streams",
     help: "Optional list of stream names the bot should monitor. Use [\"*\"] or omit depending on your routing design.",

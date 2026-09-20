@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) in the format `YYYY.M.PATCH`.
 
+## [Unreleased]
+
+## [2026.9.1] - 2026-09-17
+
+### Added
+- **`allowInsecureHttp` opt-in** for self-hosted servers on a trusted network: allows a plain `http://` Zulip URL **and** private/internal host addresses (a LAN Zulip is itself a private address), settable in `channels.zulip`, per account, or via `ZULIP_ALLOW_INSECURE_HTTP=1` for the default account. Because Zulip sends the bot API key as HTTP Basic on every request, this puts credentials on the wire unencrypted: it logs a startup warning, the setup wizard only accepts HTTP once the option is already set, and base-URL errors now name the option instead of failing generically.
+
+### Fixed
+- **Idle poll spin loop / log flood** (#287): The monitor polls `/events` without an explicit `timeout`, so on hosts where the server answers immediately with a heartbeat event the loop re-polled every ~1.3s — measured on real hosts at 33,963 polls/day (`y6`, 43 MB of log) and 51,194–67,089 polls/day (`lab-openclaw`, ~99.5% of the entire gateway log, for an idle channel). Three changes:
+  - `/register` now requests `fetch_event_types: ["realm"]` so the server actually returns `event_queue_longpoll_timeout_seconds` (it omits the field otherwise), and that value is enforced as the **client-side** `/events` abort budget (clamped to Zulip's 1–90s window, +15s grace). Note: `timeout` is **not** a valid `/events` query parameter — an earlier revision of this fix sent one and it was silently ignored.
+  - The event queue is no longer deleted on clean shutdown. Deleting it while the persisted queue id survived made every restart begin with a guaranteed `BAD_EVENT_QUEUE_ID` round-trip, a 1s stall, and a window in which inbound messages could be lost.
+  - The idle path now logs on transition and then at most once per 5 minutes (was: every poll).
+  - When the server answers immediately with no message events, the loop backs off 1s → 2s → 4s → 5s (capped) and resets on the first real message. The backoff is **latency-gated**: a server that holds the long-poll (responses ≥ 2.5s) gets no added delay, so reply latency on healthy hosts is unchanged.
+- **Audit logging silently disabled on Termux/Android**: `AuditLogger` defaulted to a hard-coded `/tmp/openclaw-zulip`, which does not exist on Android, and its write failures are swallowed by design — so every audit event was dropped without a warning. Dedupe, queue and audit now share one resolver (`src/zulip/data-dir.ts`): host `paths.dataDir` → `~/.openclaw` → `os.tmpdir()`. This also moves the queue file and audit log out of container `/tmp` (wiped on recreate) into the persistent data dir.
+- **Incomplete data-dir unification**: `media-utils.ts`, `actions-upload.ts` and `send.ts` still used their own divergent `os.tmpdir()`/`~/.openclaw` fallbacks, so on Termux/Android (no `/tmp`) inbound attachments still failed to save and upload staging still landed in a wiped temp dir. All three now use `resolveZulipDataDir()`.
+- **Test pollution**: dedupe/queue tests wrote `zulip_dedupe_test_*.json` into the live data dir (13 stray files were found on `lab-openclaw`). Tests now persist into a temp dir.
+
+### Security
+- **Allowlist authorization matched a user-settable display name** (`src/zulip/auth.ts`): `isSenderAllowed()` accepted an entry equal to Zulip's `sender_full_name`, so any user could rename their profile to an allowlisted address and bypass pairing and command authorization. Authorization now matches the stable sender id only.
+- **Allowlist store could be injected from `/tmp`** (`src/zulip/monitor.ts`): the monitor probed `dataDir`, `~/.openclaw`, `/home/node/.openclaw` and the world-writable `/tmp/openclaw-zulip`, using the first readable file — and a `"*"` entry in it authorized everyone. The store is now read only from the resolved data dir via `src/zulip/allowlist-store.ts`, and a wildcard on disk is ignored.
+- **Upload path allowlist exposed credentials and session transcripts** (`src/zulip/client.ts`): any file under `dataDir` (or tmpdir) could be uploaded to Zulip, so a prompt-injected agent could exfiltrate `openclaw.json`, `credentials/**`, session transcripts or the audit log as attachments. Sensitive files and directories are now refused explicitly.
+- **Plain HTTP was accepted for the Zulip realm** (`src/zulip/client.ts`): `normalizeZulipBaseUrl()` allowed `http://` while `SECURITY.md` claimed HTTPS-only, putting the bot's API key on the wire in cleartext on every request. HTTPS is now required (see the `allowInsecureHttp` opt-in under Added).
+- **Audit logging could fail silently and could prune its own live file** (`src/zulip/audit-logger.ts`): write failures were swallowed (this is how the Android `/tmp` bug stayed hidden) and the rotation filter matched the active log, so it could delete it. Failures are now reported through an `onError` hook wired to the logger, and rotation only considers rotated siblings.
+- **Docs corrected**: `SECURITY.md` overstated the SSRF protection and audit-event coverage, and claimed "no runtime npm dependencies" (the plugin depends on `zod`) and a `pnpm-lock.yaml`-only lockfile (CI uses `package-lock.json`).
+
 ## [2026.9.0] - 2026-09-07
 
 ### Added

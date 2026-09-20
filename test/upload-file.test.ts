@@ -297,3 +297,41 @@ test("send source: local mediaUrl attempts sandboxed upload instead of silent dr
   // Keep file:// handling present.
   assert.equal(src.includes("fileURLToPath(mediaUrl)"), true);
 });
+// ── uploadZulipFile sensitive-path denylist (config/credential exfiltration) ─
+
+test("uploadZulipFile refuses to exfiltrate gateway config and credentials", async () => {
+  const dataDir = await setMinimalRuntime();
+  const { client } = fakeClient();
+  const forbidden = [
+    "openclaw.json",
+    "credentials/zulip-default-allowFrom.json",
+    "audit/default.audit.log",
+    "agents/main/sessions/session.json",
+    ".env",
+  ];
+  try {
+    for (const rel of forbidden) {
+      await assert.rejects(
+        uploadZulipFile(client, path.join(dataDir, rel)),
+        /Refusing to upload sensitive path/,
+        "expected " + rel + " to be refused",
+      );
+    }
+  } finally {
+    await fs.rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("uploadZulipFile still allows a non-sensitive data-dir file", async () => {
+  const dataDir = await setMinimalRuntime();
+  const { client } = fakeClient();
+  const file = path.join(dataDir, "media", "note.txt");
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, "hello", "utf8");
+  try {
+    const { url } = await uploadZulipFile(client, file);
+    assert.match(url, /user_uploads/);
+  } finally {
+    await fs.rm(dataDir, { recursive: true, force: true });
+  }
+});

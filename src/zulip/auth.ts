@@ -25,10 +25,14 @@ export function normalizeAllowList(entries: Array<string | number>): string[] {
 
 /**
  * Checks if a sender is allowed based on an allowlist.
+ *
+ * Security: authorization matches the sender's stable identity only. An earlier
+ * version also accepted an entry equal to `senderName`, which is Zulip's
+ * user-settable `sender_full_name`: any user could rename their profile to an
+ * allowlisted address and bypass pairing/command authorization.
  */
 export function isSenderAllowed(params: {
   senderId: string;
-  senderName?: string;
   allowFrom: string[];
 }): boolean {
   const allowFrom = params.allowFrom;
@@ -39,9 +43,5 @@ export function isSenderAllowed(params: {
     return true;
   }
   const normalizedSenderId = normalizeAllowEntry(params.senderId);
-  const normalizedSenderName = params.senderName ? normalizeAllowEntry(params.senderName) : "";
-  return allowFrom.some(
-    (entry) =>
-      entry === normalizedSenderId || (normalizedSenderName && entry === normalizedSenderName),
-  );
+  return allowFrom.some((entry) => entry === normalizedSenderId);
 }

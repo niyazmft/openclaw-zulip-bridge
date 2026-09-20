@@ -12,7 +12,7 @@ import {
   resolveZulipAccount,
   resolveDefaultZulipAccountId,
 } from "./zulip/accounts.js";
-import { normalizeZulipBaseUrl } from "./zulip/client.js";
+import { normalizeZulipBaseUrl, zulipBaseUrlError } from "./zulip/client.js";
 import { isZulipConfigured, zulipSetupAdapter } from "./setup-core.js";
 
 const channel = "zulip" as const;
@@ -133,14 +133,27 @@ export const zulipSetupWizard: ChannelSetupWizard = {
         (resolveSetupAccountId(cfg, accountId) === DEFAULT_ACCOUNT_ID
           ? process.env.ZULIP_URL?.trim()
           : undefined),
-      validate: ({ value }) => {
-        const trimmed = value?.trim();
+      validate: (ctx) => {
+        const trimmed = (ctx as { value?: string }).value?.trim();
         if (!trimmed) {
           return "Zulip site URL is required.";
         }
-        return normalizeZulipBaseUrl(trimmed)
-          ? undefined
-          : "Enter a valid URL including protocol, for example: https://chat.example.com";
+        // Accept plain http only when the operator already opted in, so
+        // re-running the wizard on a trusted-network install still works.
+        let allowInsecureHttp = false;
+        try {
+          const cfg = (ctx as { cfg?: any }).cfg;
+          const accountId = (ctx as { accountId?: string }).accountId;
+          if (cfg) {
+            allowInsecureHttp = Boolean(
+              resolveZulipAccount({ cfg, accountId: resolveSetupAccountId(cfg, accountId) })
+                .allowInsecureHttp,
+            );
+          }
+        } catch {
+          allowInsecureHttp = false;
+        }
+        return zulipBaseUrlError(trimmed, { allowInsecureHttp });
       },
       normalizeValue: ({ value }) => normalizeZulipBaseUrl(value) ?? value.trim(),
     },
