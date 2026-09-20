@@ -29,6 +29,10 @@ export const zulipChannelConfigUiHints = {
     label: "Allow Insecure HTTP (trusted network only)",
     help: "Allow a plain http:// Zulip server and private/internal addresses. Credentials are sent unencrypted — leave off unless you control the network.",
   },
+  sessionArchiveRepair: {
+    label: "Session Archive Repair (hard-link workaround)",
+    help: "Hosts where hard links are unavailable (Android/Termux) cannot publish deleted-session transcript archives, which wedges every session operation. Unset = automatic (only when the hard-link probe fails); true = always; false = never.",
+  },
   streams: {
     label: "Zulip Streams",
     help: "Optional list of stream names the bot should monitor. Use [\"*\"] or omit depending on your routing design.",

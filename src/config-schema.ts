@@ -53,6 +53,7 @@ const ZulipAccountSchema = z.object({
   maxMessagesPerMinute: z.number().int().min(0).optional(),
   maxMessageLength: z.number().int().min(0).optional(),
   allowInsecureHttp: z.boolean().optional(),
+  sessionArchiveRepair: z.boolean().optional(),
 });
 
 const ZulipConfigSchema = buildCatchallMultiAccountChannelSchema(

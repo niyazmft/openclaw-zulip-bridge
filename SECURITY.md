@@ -59,6 +59,8 @@ The plugin reads the following data from the local filesystem:
 | Deduplication store | `{dataDir}/zulip-dedupe-{accountId}.json` | Prevents duplicate message processing | N/A (internal) |
 | Queue state | `{dataDir}/zulip-queue-{accountId}.json` | Persists Zulip event queue ID across restarts | N/A (internal) |
 
+**Writes.** The plugin normally only reads this state. On a host where a one-time probe shows hard links are unavailable (Android/Termux), `sessionArchiveRepair` is active by default and the plugin additionally **writes** to the host's session database `{dataDir}/agents/{agentId}/agent/openclaw-agent.sqlite`: it publishes a `session_transcript_archives` row that the host itself cannot publish, by writing the stored blob to `{dataDir}/agents/{agentId}/sessions/` and setting that row's `published_at`. It only ever touches rows the host already marked deleted, only when the blob's sha256 matches the recorded `archive_sha256`, and never overwrites a file whose content differs. Set `sessionArchiveRepair: false` to disable it.
+
 **Session recovery** (when enabled via `enableSessionRecovery: true`):
 - Scans the last 50 DMs for messages with a 👀 reaction from the bot but no ✅/⚠️ reaction and no bot response
 - Re-dispatches interrupted messages with a fresh session key

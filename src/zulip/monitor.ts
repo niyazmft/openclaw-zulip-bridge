@@ -27,6 +27,7 @@ import {
 } from "./monitor-helpers.js";
 import { ZulipDedupeStore } from "./dedupe-store.js";
 import { readAllowFromStore } from "./allowlist-store.js";
+import { startSessionArchiveRepair } from "./session-archive-repair.js";
 import { sendMessageZulip } from "./send.js";
 import { decidePolicy } from "./policy.js";
 import { ZulipQueueManager } from "./queue-manager.js";
@@ -89,6 +90,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     },
   });
   void auditLogger.logMonitorStart(opts.accountId ?? "default");
+
+  // Platform workaround (see ./session-archive-repair.ts). Stopped in `finally`.
+  let stopSessionArchiveRepair: (() => void) | undefined;
 
   // Assert health immediately so the host health-monitor doesn't kill us during initialization
   opts.statusSink?.({
@@ -177,6 +181,16 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     const configGroupAllowFrom = normalizeAllowList(accountSection.groupAllowFrom ?? account.config.groupAllowFrom ?? []);
     const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
     const groupPolicy = accountSection.groupPolicy ?? account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
+
+    // On hosts where hard links are unavailable (Android/Termux) the host cannot
+    // publish deleted-session transcript archives, which then wedges every
+    // session operation. Dormant unless the probe shows links are broken.
+    stopSessionArchiveRepair = startSessionArchiveRepair({
+      dataDir,
+      mode: accountSection.sessionArchiveRepair ?? account.config.sessionArchiveRepair,
+      signal: opts.abortSignal,
+      logger: logger ?? undefined,
+    });
 
     // Pre-compute the fallback for groupAllowFrom, but defer disk read until needed.
     // This avoids disk I/O for messages where sender is already authorized by static config.
@@ -950,6 +964,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     });
     throw err;
   } finally {
+    stopSessionArchiveRepair?.();
     logger?.info?.("zulip monitor stopped", {
       accountId: opts.accountId,
       reason: opts.abortSignal?.aborted ? "aborted" : "finished",
