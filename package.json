@@ -87,7 +87,7 @@
   "devDependencies": {
     "@types/node": "24.12.2",
     "esbuild": "0.25.12",
-    "knip": "6.13.1",
+    "knip": "6.37.0",
     "typescript": "5.9.3"
   },
   "dependencies": {
