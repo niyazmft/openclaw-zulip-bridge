@@ -70,6 +70,10 @@
             "type": "boolean",
             "description": "Publish deleted-session transcript archives that the host cannot publish because hard links are unavailable (Android/Termux). Unset = automatic (only when a probe shows hard links are broken); true = always; false = never."
           },
+          "blockSecretLeaks": {
+            "type": "boolean",
+            "description": "Refuse to send a Zulip message that contains a credential value from the host config, so an agent cannot paste secrets into chat. Default: enabled."
+          },
           "email": {
             "type": "string"
           },
@@ -257,6 +261,10 @@
             "type": "boolean",
             "description": "Publish deleted-session transcript archives that the host cannot publish because hard links are unavailable (Android/Termux). Unset = automatic (only when a probe shows hard links are broken); true = always; false = never."
           },
+          "blockSecretLeaks": {
+            "type": "boolean",
+            "description": "Refuse to send a Zulip message that contains a credential value from the host config, so an agent cannot paste secrets into chat. Default: enabled."
+          },
           "email": {
             "type": "string"
           },
@@ -424,6 +432,11 @@
           "label": "Session Archive Repair (hard-link workaround)",
           "sensitive": false,
           "description": "Publish deleted-session transcript archives that the host cannot publish because hard links are unavailable (Android/Termux). Unset = automatic (only when a probe shows hard links are broken); true = always; false = never."
+        },
+        "blockSecretLeaks": {
+          "label": "Block Credential Leaks (recommended)",
+          "sensitive": false,
+          "description": "Refuse to send a Zulip message that contains a credential value from the host config, so an agent cannot paste secrets into chat. Default: enabled."
         },
         "streams": {
           "label": "Zulip Streams",

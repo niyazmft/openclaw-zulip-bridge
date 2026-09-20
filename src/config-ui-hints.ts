@@ -33,6 +33,10 @@ export const zulipChannelConfigUiHints = {
     label: "Session Archive Repair (hard-link workaround)",
     help: "Hosts where hard links are unavailable (Android/Termux) cannot publish deleted-session transcript archives, which wedges every session operation. Unset = automatic (only when the hard-link probe fails); true = always; false = never.",
   },
+  blockSecretLeaks: {
+    label: "Block Credential Leaks (recommended)",
+    help: "Refuse to send a Zulip message containing a credential value from the host config, so an agent cannot paste secrets into chat. Names only where the credential came from, never its value. Default: enabled.",
+  },
   streams: {
     label: "Zulip Streams",
     help: "Optional list of stream names the bot should monitor. Use [\"*\"] or omit depending on your routing design.",

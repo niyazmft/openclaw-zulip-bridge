@@ -5,6 +5,12 @@ import { fileURLToPath } from "node:url";
 import { getZulipRuntime } from "../runtime.js";
 import { resolveZulipAccount } from "./accounts.js";
 import { resolveZulipDataDir } from "./data-dir.js";
+import { AuditLogger } from "./audit-logger.js";
+import {
+  collectKnownSecrets,
+  describeLeakedSecrets,
+  findLeakedSecrets,
+} from "./secret-guard.js";
 import {
   createZulipClient,
   isInternalHost,
@@ -325,6 +331,31 @@ export async function sendMessageZulip(
 
   if (!message) {
     throw new Error("Zulip message is empty");
+  }
+
+  // Outbound secret guard (see ./secret-guard.ts). The plugin is the last hop
+  // before Zulip, so it refuses to transmit known host credentials even when an
+  // agent was asked to paste them — an upload path allowlist cannot cover
+  // read-and-type exfiltration.
+  if (account.config.blockSecretLeaks !== false) {
+    const leaked = findLeakedSecrets(message, collectKnownSecrets(cfg));
+    if (leaked.length > 0) {
+      const summary = describeLeakedSecrets(leaked);
+      zulipLogger?.warn?.("zulip outbound blocked: message contained host credentials", {
+        accountId: account.accountId,
+        leaked: summary,
+      });
+      void new AuditLogger(resolveZulipDataDir(core), account.accountId).log({
+        ts: new Date().toISOString(),
+        event: "secret_leak_blocked",
+        accountId: account.accountId,
+        direction: "outbound",
+        leaked: summary,
+      });
+      throw new Error(
+        `Refusing to send: the message contains ${summary}. Remove it and rotate the credential.`,
+      );
+    }
   }
 
   let messageId = "unknown";

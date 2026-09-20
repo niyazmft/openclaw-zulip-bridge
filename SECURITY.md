@@ -46,6 +46,7 @@ The Zulip Bridge plugin requires three credentials to authenticate with the Zuli
 - `isInternalHost()` blocks localhost, 127.0.0.1, ::1, 0.0.0.0, the AWS metadata endpoint, and RFC 1918 private ranges. This is **hostname/string matching**, not a resolver-level SSRF guard: encoded IP forms (`0x7f000001`, `2130706433`, `[::ffff:127.0.0.1]`) and public DNS names that resolve to private addresses are not caught, and media/attachment downloads follow HTTP redirects
 - The persisted allowlist store is read **only** from `{dataDir}/credentials/`. Any `"*"` entry found in that file is rejected — only static config may authorize everyone
 - The `upload-file` action refuses paths that are, or live under, `openclaw.json`, `credentials/`, `audit/`, `agents/`, `sessions/`, `.env`, `trust.json`, or `honcho-memory.json`, even when such a path sits inside an allowed root
+- **Outbound messages are scanned for credential values taken from the host config.** A match is refused rather than sent, and the audit log records which config path matched — never the value. This covers read-and-type exfiltration, which a file-upload allowlist cannot (an agent can read a config file and paste its contents; nothing is uploaded). It does not prevent the read itself — that is the host's tool policy. Disable with `blockSecretLeaks: false`.
 - Credential resolution is isolated to `getZulipEnvSecret()` which only reads the specific env vars needed
 
 ### Data Access
