@@ -13,6 +13,9 @@ and this project adheres to [Calendar Versioning](https://calver.org/) in the fo
 ### Fixed
 - **CLI `message send --channel zulip` failed with "Zulip runtime not initialized"** (#285): the CLI loads the plugin entry and dispatches channel actions *without* running gateway registration (`registerFull`), so the runtime singleton was never set and `getZulipRuntime()` threw before any network call. `getZulipRuntime()` now falls back to a minimal, cached CLI runtime when no host runtime is registered: config read from `{dataDir}/openclaw.json` (empty object on failure, so `ZULIP_*` env credentials still resolve), console logging, the resolved data dir, and the `channel.text` helpers needed to format and chunk outbound text. The gateway runtime stays authoritative. Gateway-only subsystems (mentions, reply dispatch, session routing, pairing, remote-media fetch) are deliberately absent, and a remote `mediaUrl` sent from the CLI now fails with an actionable message instead of a `TypeError`.
 
+### Security
+- **Outbound secret guard**: the plugin now refuses to send a Zulip message whose text contains a credential value from the host config. Reported after a live leak — an agent read `openclaw.json` and pasted six credential values into a Zulip DM. A path allowlist on file *uploads* cannot stop that, because nothing was uploaded: the agent read the file and typed its contents. The guard inspects the outbound text at the send choke point, blocks the message, and logs an audit event that names only *where* the credential came from (e.g. `channels.zulip.apiKey`) — never the value, since the message describing a leak must not become one. It cannot stop the file from being read (that is host tool policy); it stops the plugin from transmitting the value. New `blockSecretLeaks` config (default: enabled) opts out.
+
 ## [2026.9.1] - 2026-09-17
 
 ### Added

@@ -149,6 +149,17 @@ export type ZulipAccountConfig = {
    * - `false`: never run it
    */
   sessionArchiveRepair?: boolean;
+  /**
+   * Refuse to send a Zulip message that contains a credential value from the
+   * host config (default: true).
+   *
+   * An agent that can read the config can simply *type* a secret into chat; an
+   * allowlist on file uploads does not cover that. This guard inspects outbound
+   * text and blocks it, naming only *where* the credential came from — never
+   * echoing its value. It cannot stop the file from being read (that is the
+   * host's tool policy); it stops the plugin from transmitting it.
+   */
+  blockSecretLeaks?: boolean;
 };
 
 export type ZulipConfig = {
