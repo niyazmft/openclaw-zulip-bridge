@@ -190,7 +190,9 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         return { ok: false, error: "apiKey, email, or url missing" };
       }
       
-      return await probeZulip(baseUrl, email, apiKey, timeoutMs);
+      return await probeZulip(baseUrl, email, apiKey, timeoutMs, {
+        allowInsecureHttp: account.allowInsecureHttp,
+      });
     },
     buildAccountSnapshot: ({ account, runtime, probe }) => {
       const snapshot: ChannelAccountSnapshot = {

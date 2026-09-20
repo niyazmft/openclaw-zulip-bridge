@@ -1,10 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import { mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ZulipDedupeStore } from "../src/zulip/dedupe-store.js";
 import type { PluginRuntime } from "openclaw/plugin-sdk/channel-core";
+
+// Write persistence into a temp dir instead of the fallback (~/.openclaw),
+// which used to litter the live data dir with zulip_dedupe_test_*.json files.
+const testDataDir = mkdtempSync(path.join(os.tmpdir(), "zulip-dedupe-test-"));
 
 const mockRuntime: PluginRuntime = {
   log: () => {},
@@ -12,7 +17,8 @@ const mockRuntime: PluginRuntime = {
   exit: (code: number) => {
     throw new Error(`exit ${code}`);
   },
-};
+  paths: { dataDir: testDataDir },
+} as PluginRuntime;
 
 test("ZulipDedupeStore: basic duplicate suppression", async () => {
   const accountId = `test_basic_${Math.random()}`;

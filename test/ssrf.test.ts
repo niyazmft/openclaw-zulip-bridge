@@ -1,6 +1,10 @@
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { isInternalHost, normalizeZulipBaseUrl } from "../src/zulip/client.ts";
+import {
+  isInternalHost,
+  normalizeZulipBaseUrl,
+  zulipBaseUrlError,
+} from "../src/zulip/client.ts";
 
 describe("SSRF protection", () => {
   test("normalizeZulipBaseUrl rejects localhost", () => {
@@ -42,15 +46,22 @@ describe("SSRF protection", () => {
     assert.strictEqual(normalizeZulipBaseUrl("http://172.20.0.1"), undefined);
   });
 
-  test("normalizeZulipBaseUrl allows 172.15.x.x (outside private range)", () => {
-    assert.strictEqual(normalizeZulipBaseUrl("http://172.15.0.1"), "http://172.15.0.1");
+  test("normalizeZulipBaseUrl allows 172.15.x.x (outside private range) over HTTPS", () => {
+    assert.strictEqual(normalizeZulipBaseUrl("https://172.15.0.1"), "https://172.15.0.1");
     assert.strictEqual(normalizeZulipBaseUrl("https://172.32.0.1"), "https://172.32.0.1");
   });
 
-  test("normalizeZulipBaseUrl allows public hosts", () => {
+  test("normalizeZulipBaseUrl allows public hosts over HTTPS", () => {
     assert.strictEqual(normalizeZulipBaseUrl("https://chat.example.com"), "https://chat.example.com");
     assert.strictEqual(normalizeZulipBaseUrl("https://zulip.example.com/"), "https://zulip.example.com");
-    assert.strictEqual(normalizeZulipBaseUrl("http://myserver.localdomain"), "http://myserver.localdomain");
+  });
+
+  test("normalizeZulipBaseUrl rejects plain HTTP (credentials would leak)", () => {
+    // Zulip authenticates with HTTP Basic on every request; cleartext HTTP would
+    // expose the bot's email and API key. SECURITY.md claims HTTPS-only.
+    assert.strictEqual(normalizeZulipBaseUrl("http://172.15.0.1"), undefined);
+    assert.strictEqual(normalizeZulipBaseUrl("http://myserver.localdomain"), undefined);
+    assert.strictEqual(normalizeZulipBaseUrl("http://chat.example.com"), undefined);
   });
 
   test("isInternalHost rejects internal IPs", () => {
@@ -66,6 +77,53 @@ describe("SSRF protection", () => {
     assert.strictEqual(isInternalHost("https://chat.example.com"), false);
     assert.strictEqual(isInternalHost("https://zulip.org"), false);
     assert.strictEqual(isInternalHost("http://8.8.8.8"), false);
+  });
+
+  test("allowInsecureHttp opt-in accepts plain HTTP", () => {
+    assert.strictEqual(normalizeZulipBaseUrl("http://zulip.lan"), undefined);
+    assert.strictEqual(
+      normalizeZulipBaseUrl("http://zulip.lan", { allowInsecureHttp: true }),
+      "http://zulip.lan",
+    );
+  });
+
+  test("allowInsecureHttp opt-in also relaxes the private-IP ban", () => {
+    // A self-hosted Zulip on a LAN is a private address; the opt-in must allow it.
+    assert.strictEqual(
+      normalizeZulipBaseUrl("http://192.168.1.10", { allowInsecureHttp: true }),
+      "http://192.168.1.10",
+    );
+    assert.strictEqual(
+      normalizeZulipBaseUrl("https://10.0.0.5:8443", { allowInsecureHttp: true }),
+      "https://10.0.0.5:8443",
+    );
+    assert.strictEqual(normalizeZulipBaseUrl("https://10.0.0.5"), undefined);
+  });
+
+  test("allowInsecureHttp does not change public HTTPS handling", () => {
+    assert.strictEqual(
+      normalizeZulipBaseUrl("https://chat.example.com", { allowInsecureHttp: true }),
+      "https://chat.example.com",
+    );
+  });
+
+  test("allowInsecureHttp still rejects non-http protocols", () => {
+    assert.strictEqual(
+      normalizeZulipBaseUrl("ftp://example.com", { allowInsecureHttp: true }),
+      undefined,
+    );
+  });
+
+  test("zulipBaseUrlError explains the problem and the opt-in", () => {
+    assert.strictEqual(zulipBaseUrlError("https://chat.example.com"), undefined);
+    assert.strictEqual(
+      zulipBaseUrlError("http://zulip.lan", { allowInsecureHttp: true }),
+      undefined,
+    );
+    assert.match(String(zulipBaseUrlError("http://zulip.lan")), /allowInsecureHttp/);
+    assert.match(String(zulipBaseUrlError("https://10.0.0.5")), /allowInsecureHttp/);
+    assert.match(String(zulipBaseUrlError("ftp://example.com")), /http:\/\/ or https:\/\//);
+    assert.match(String(zulipBaseUrlError("")), /required/);
   });
 
   test("normalizeZulipBaseUrl still rejects non-http protocols", () => {

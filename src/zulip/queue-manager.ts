@@ -1,16 +1,27 @@
 import type { PluginRuntime } from "openclaw/plugin-sdk/channel-core";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { resolveZulipStatePath } from "./data-dir.js";
 import { formatZulipLog } from "./monitor-helpers.js";
 
 export type QueueMetadata = {
   queueId: string;
   lastEventId: number;
   registeredAt: number;
+  /**
+   * Long-poll timeout the server handed back at registration. Replayed on
+   * every `/events` request so the server blocks instead of answering
+   * immediately (see polling.ts). Undefined for metadata persisted by older
+   * plugin versions; callers fall back to the default.
+   */
+  longpollTimeoutSecs?: number;
 };
 
-export type QueueRegisterCallback = () => Promise<{ queueId: string; lastEventId: number }>;
+export type QueueRegisterCallback = () => Promise<{
+  queueId: string;
+  lastEventId: number;
+  longpollTimeoutSecs?: number;
+}>;
 
 export type QueueManagerOpts = {
   accountId: string;
@@ -98,6 +109,7 @@ export class ZulipQueueManager {
           queueId: queue.queueId,
           lastEventId: queue.lastEventId,
           registeredAt: Date.now(),
+          longpollTimeoutSecs: queue.longpollTimeoutSecs,
         };
         await this.saveMetadata(metadata);
         this.runtime.log?.(
@@ -157,11 +169,9 @@ export class ZulipQueueManager {
 
   private getPersistencePath(): string {
     const safeAccountId = this.accountId.replace(/[^a-z0-9]/gi, "_");
-    const dataDir = this.runtime.paths?.dataDir;
-    if (dataDir) {
-      return path.join(dataDir, `zulip_queue_${safeAccountId}.json`);
-    }
-    return path.join(os.tmpdir(), "openclaw-zulip", `zulip_queue_${safeAccountId}.json`);
+    // Shared resolver so dedupe/queue/audit agree on one directory
+    // (see ./data-dir.ts for the Termux/container rationale).
+    return resolveZulipStatePath(this.runtime, `zulip_queue_${safeAccountId}.json`);
   }
 
   private async loadMetadata(): Promise<QueueMetadata | null> {

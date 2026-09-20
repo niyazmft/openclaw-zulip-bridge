@@ -86,3 +86,75 @@ describe("resolveZulipAccount Precedence", () => {
     assert.strictEqual(resolved.apiKeySource, "config");
   });
 });
+
+describe("allowInsecureHttp resolution", () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  test("defaults to false and rejects a plain http URL", () => {
+    const resolved = resolveZulipAccount({
+      cfg: { channels: { zulip: { url: "http://zulip.lan" } } } as any,
+      accountId: DEFAULT_ACCOUNT_ID,
+    });
+    assert.strictEqual(resolved.allowInsecureHttp, false);
+    assert.strictEqual(resolved.baseUrl, undefined);
+  });
+
+  test("config opt-in allows a plain http URL", () => {
+    const resolved = resolveZulipAccount({
+      cfg: {
+        channels: { zulip: { url: "http://zulip.lan", allowInsecureHttp: true } },
+      } as any,
+      accountId: DEFAULT_ACCOUNT_ID,
+    });
+    assert.strictEqual(resolved.allowInsecureHttp, true);
+    assert.strictEqual(resolved.baseUrl, "http://zulip.lan");
+  });
+
+  test("env opt-in applies to the default account", () => {
+    process.env.ZULIP_URL = "http://zulip.lan";
+    process.env.ZULIP_ALLOW_INSECURE_HTTP = "1";
+    const resolved = resolveZulipAccount({
+      cfg: { channels: { zulip: {} } } as any,
+      accountId: DEFAULT_ACCOUNT_ID,
+    });
+    assert.strictEqual(resolved.allowInsecureHttp, true);
+    assert.strictEqual(resolved.baseUrl, "http://zulip.lan");
+  });
+
+  test("per-account opt-in allows a private LAN host", () => {
+    const resolved = resolveZulipAccount({
+      cfg: {
+        channels: {
+          zulip: {
+            accounts: {
+              work: { url: "https://192.168.1.10", allowInsecureHttp: true },
+            },
+          },
+        },
+      } as any,
+      accountId: "work",
+    });
+    assert.strictEqual(resolved.allowInsecureHttp, true);
+    assert.strictEqual(resolved.baseUrl, "https://192.168.1.10");
+  });
+
+  test("env is not consulted for non-default accounts", () => {
+    process.env.ZULIP_ALLOW_INSECURE_HTTP = "1";
+    const resolved = resolveZulipAccount({
+      cfg: {
+        channels: { zulip: { accounts: { work: { url: "http://zulip.lan" } } } },
+      } as any,
+      accountId: "work",
+    });
+    assert.strictEqual(resolved.allowInsecureHttp, false);
+    assert.strictEqual(resolved.baseUrl, undefined);
+  });
+});

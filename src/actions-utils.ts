@@ -6,7 +6,12 @@ import { readStringParam, readNumberParam, jsonResult } from "openclaw/plugin-sd
 export { readStringParam, readNumberParam, jsonResult };
 import { resolveZulipAccount } from "./zulip/accounts.js";
 import type { ResolvedZulipAccount } from "./zulip/accounts.js";
-import { createZulipClient, normalizeZulipBaseUrl, fetchZulipMemberInfo } from "./zulip/client.js";
+import {
+  createZulipClient,
+  fetchZulipMemberInfo,
+  normalizeZulipBaseUrl,
+  zulipBaseUrlError,
+} from "./zulip/client.js";
 import type { ZulipClient } from "./zulip/client.js";
 
 export const providerId = "zulip";
@@ -38,15 +43,26 @@ export function resolveZulipClient(cfg: OpenClawConfig, accountId?: string | nul
       `Zulip apiKey/email missing for account "${account.accountId}" (set channels.zulip.accounts.${account.accountId}.apiKey/email or ZULIP_API_KEY/ZULIP_EMAIL for default).`,
     );
   }
-  const baseUrl = normalizeZulipBaseUrl(account.baseUrl);
+  const baseUrl = normalizeZulipBaseUrl(account.baseUrl, {
+    allowInsecureHttp: account.allowInsecureHttp,
+  });
   if (!baseUrl) {
     throw new Error(
-      `Zulip url missing for account "${account.accountId}" (set channels.zulip.accounts.${account.accountId}.url or ZULIP_URL for default).`,
+      `Zulip url invalid for account "${account.accountId}": ${
+        zulipBaseUrlError(account.baseUrl, {
+          allowInsecureHttp: account.allowInsecureHttp,
+        }) ?? `set channels.zulip.accounts.${account.accountId}.url or ZULIP_URL for default`
+      }`,
     );
   }
   return {
     account,
-    client: createZulipClient({ baseUrl, apiKey, email }),
+    client: createZulipClient({
+      baseUrl,
+      apiKey,
+      email,
+      allowInsecureHttp: account.allowInsecureHttp,
+    }),
   };
 }
 

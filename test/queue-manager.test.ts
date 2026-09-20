@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { ZulipQueueManager } from "../src/zulip/queue-manager.ts";
+
+// Keep persistence in a temp dir instead of the ~/.openclaw fallback so tests
+// do not litter the live data directory.
+const testDataDir = mkdtempSync(path.join(os.tmpdir(), "zulip-queue-test-"));
 
 const mockRuntime = {
   log: () => {},
@@ -8,6 +15,7 @@ const mockRuntime = {
   exit: (code: number) => {
     throw new Error(`exit ${code}`);
   },
+  paths: { dataDir: testDataDir },
 } as any;
 
 test("ZulipQueueManager: registers a new queue", async () => {

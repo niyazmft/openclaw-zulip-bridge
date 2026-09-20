@@ -42,8 +42,10 @@ The Zulip Bridge plugin requires three credentials to authenticate with the Zuli
 
 **Security hardening:**
 
-- `normalizeZulipBaseUrl()` rejects non-HTTPS protocols and internal/private IP addresses (SSRF protection)
-- `isInternalHost()` blocks localhost, 127.0.0.1, ::1, 0.0.0.0, AWS metadata endpoint, and RFC 1918 private ranges
+- `normalizeZulipBaseUrl()` requires **HTTPS**: a plain `http://` realm is rejected outright, since Zulip authenticates with HTTP Basic and cleartext would expose the bot's email and API key. An operator can override this for a self-hosted server on a trusted network with `allowInsecureHttp: true` (in `channels.zulip`, per-account, or `ZULIP_ALLOW_INSECURE_HTTP=1` for the default account). Enabling it also permits private/internal addresses and logs a startup warning; the setup wizard only accepts plain HTTP once the option is already set
+- `isInternalHost()` blocks localhost, 127.0.0.1, ::1, 0.0.0.0, the AWS metadata endpoint, and RFC 1918 private ranges. This is **hostname/string matching**, not a resolver-level SSRF guard: encoded IP forms (`0x7f000001`, `2130706433`, `[::ffff:127.0.0.1]`) and public DNS names that resolve to private addresses are not caught, and media/attachment downloads follow HTTP redirects
+- The persisted allowlist store is read **only** from `{dataDir}/credentials/`. Any `"*"` entry found in that file is rejected — only static config may authorize everyone
+- The `upload-file` action refuses paths that are, or live under, `openclaw.json`, `credentials/`, `audit/`, `agents/`, `sessions/`, `.env`, `trust.json`, or `honcho-memory.json`, even when such a path sits inside an allowed root
 - Credential resolution is isolated to `getZulipEnvSecret()` which only reads the specific env vars needed
 
 ### Data Access
@@ -53,7 +55,7 @@ The plugin reads the following data from the local filesystem:
 | Data | Path | Purpose | Configurable |
 |---|---|---|---|
 | Session files | `~/.openclaw/sessions/` | Recovery of interrupted messages after gateway restart | `enableSessionRecovery` (default: `false`) |
-| Allowlist store | `{dataDir}/credentials/zulip-{accountId}-allowFrom.json` | Cached DM allowlist from pairing store | N/A (read-only, 30s TTL cache) |
+| Allowlist store | `{dataDir}/credentials/zulip-{accountId}-allowFrom.json` | Cached DM allowlist from pairing store. Only this path is read (no `~/.openclaw` or `/tmp` fallbacks); a `"*"` entry is ignored | N/A (read-only, 30s TTL cache) |
 | Deduplication store | `{dataDir}/zulip-dedupe-{accountId}.json` | Prevents duplicate message processing | N/A (internal) |
 | Queue state | `{dataDir}/zulip-queue-{accountId}.json` | Persists Zulip event queue ID across restarts | N/A (internal) |
 
@@ -74,8 +76,8 @@ All network communication is with the user-configured Zulip server only:
 
 - **No telemetry**: The plugin does not send any telemetry, usage data, or analytics to any third party
 - **No external dependencies**: All API calls go directly to the user's Zulip server
-- **HTTPS only**: Non-HTTPS URLs are rejected by `normalizeZulipBaseUrl()`
-- **SSRF protected**: Internal/private IP addresses are rejected
+- **HTTPS only**: Non-HTTPS URLs are rejected by `normalizeZulipBaseUrl()`, unless the operator sets `allowInsecureHttp` for a trusted network
+- **SSRF limited**: internal/private IP *literals* are rejected by hostname matching; see the hardening notes above for the known gaps
 
 ### Audit Logging
 
@@ -84,7 +86,8 @@ When the monitor is running, security-relevant events are written to a persisten
 - **Location**: `{dataDir}/audit/{accountId}.audit.log`
 - **Format**: JSON lines (one event per line)
 - **Rotation**: Log files are rotated at 1MB; the last 3 rotated files are retained
-- **Events logged**: monitor start/stop, recovery attempts, auth failures, rate limit exceeded
+- **Events logged**: monitor start/stop and rate limit exceeded. The `logAuthFailure`/`logRecoveryAttempt` helpers exist but are not currently called, so `auth_failure`/`recovery_attempt` events are **not** emitted today
+- **Write failures are surfaced**: if the audit log cannot be written (for example on a host without a persistent data dir), the plugin emits a warning instead of silently dropping the event
 
 ### Rate Limiting
 
@@ -97,15 +100,15 @@ The plugin includes a configurable per-sender rate limiter:
 
 ### Dependency Management
 
-- **Runtime dependencies**: The plugin has no runtime npm dependencies. All required modules (`openclaw/plugin-sdk/*`) are provided by the OpenClaw host at runtime.
+- **Runtime dependencies**: `zod` is the only npm runtime dependency (config-schema validation); `openclaw.build.stageRuntimeDependencies` stages it during install. All `openclaw/plugin-sdk/*` modules are provided by the OpenClaw host at runtime and are not npm packages.
 - **Dev dependencies**: Pinned to exact versions to prevent supply-chain attacks via malicious package updates.
-- **Lockfile**: `pnpm-lock.yaml` is committed to the repository for reproducible builds.
+- **Lockfile**: `package-lock.json` is authoritative — CI runs `npm ci` against it. A `pnpm-lock.yaml` also exists in the repository and must be kept in sync (or removed) to avoid drift.
 
 ### Security Best Practices
 
 1. **Use a dedicated bot account**: Create a Zulip bot specifically for this plugin. Do not use a personal account.
 2. **Restrict API key access**: The `ZULIP_API_KEY` environment variable should only be accessible to the OpenClaw gateway process.
-3. **Use HTTPS**: Ensure your Zulip server is accessible over HTTPS. The plugin rejects non-HTTPS URLs.
+3. **Use HTTPS**: Ensure your Zulip server is accessible over HTTPS. Plain `http://` URLs are rejected at configuration time unless you explicitly set `allowInsecureHttp`, which sends the bot's API key unencrypted.
 4. **Enable session recovery cautiously**: The session recovery feature (`enableSessionRecovery`) is opt-in and disabled by default. Only enable it if you understand the implications.
 5. **Set rate limits**: The default `maxMessagesPerMinute` of 60 is reasonable for most use cases. Adjust based on your expected message volume.
 6. **Review audit logs**: Periodically check the audit log at `{dataDir}/audit/` for unexpected events.

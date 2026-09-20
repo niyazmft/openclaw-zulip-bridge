@@ -7,6 +7,7 @@ import {
   fetchZulipMe,
   fetchZulipSubscriptions,
   normalizeZulipBaseUrl,
+  zulipBaseUrlError,
 } from "./client.js";
 import { formatZulipLog, maskPII } from "./monitor-helpers.js";
 import type { MonitorZulipOpts } from "./monitor.js";
@@ -52,14 +53,25 @@ export async function initializeZulipMonitor(params: {
       `Zulip apiKey/email missing for account "${account.accountId}" (set channels.zulip.accounts.${account.accountId}.apiKey/email or ZULIP_API_KEY/ZULIP_EMAIL for default).`,
     );
   }
-  const baseUrl = normalizeZulipBaseUrl(opts.baseUrl ?? account.baseUrl);
+  const baseUrl = normalizeZulipBaseUrl(opts.baseUrl ?? account.baseUrl, {
+    allowInsecureHttp: account.allowInsecureHttp,
+  });
   if (!baseUrl) {
     throw new Error(
-      `Zulip url missing for account "${account.accountId}" (set channels.zulip.accounts.${account.accountId}.url or ZULIP_URL for default).`,
+      `Zulip url invalid for account "${account.accountId}": ${
+        zulipBaseUrlError(opts.baseUrl ?? account.baseUrl, {
+          allowInsecureHttp: account.allowInsecureHttp,
+        }) ?? `set channels.zulip.accounts.${account.accountId}.url or ZULIP_URL for default`
+      }`,
     );
   }
 
-  const client = createZulipClient({ baseUrl, email, apiKey });
+  const client = createZulipClient({
+    baseUrl,
+    email,
+    apiKey,
+    allowInsecureHttp: account.allowInsecureHttp,
+  });
   const botUser = await fetchZulipMe(client);
   const botUserId = botUser.id;
   const botEmail = botUser.email ?? "";

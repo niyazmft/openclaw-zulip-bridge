@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { readStringParam, jsonResult } from "./actions-utils.js";
 import { uploadZulipFile, type ZulipClient } from "./zulip/client.js";
 import { createBotWorkspace } from "./zulip/workspace.js";
+import { resolveZulipDataDir } from "./zulip/data-dir.js";
 import { sendMessageZulip } from "./zulip/send.js";
 import { getZulipRuntime } from "./runtime.js";
 
@@ -43,9 +43,7 @@ export async function handleUploadFileAction(
     ""
   ).trim();
 
-  const dataDir =
-    getZulipRuntime().paths?.dataDir ??
-    path.join(os.homedir(), ".openclaw");
+  const dataDir = resolveZulipDataDir(getZulipRuntime());
 
   const buffer = Buffer.from(bufferB64, "base64");
   const workspace = createBotWorkspace(dataDir);

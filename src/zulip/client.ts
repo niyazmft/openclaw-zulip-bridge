@@ -95,29 +95,96 @@ export function isInternalHost(url: string): boolean {
   }
 }
 
+/** Options controlling base-URL acceptance (operator-set, trusted-network opt-in). */
+export type ZulipBaseUrlOptions = {
+  /**
+   * Operator opt-in for plaintext HTTP and private/internal hosts.
+   *
+   * Off by default: Zulip authenticates with HTTP Basic on every request, so an
+   * `http://` realm would expose the bot's email and API key in cleartext.
+   * Turning it on also relaxes the private-IP (SSRF) ban, because a self-hosted
+   * Zulip on a LAN usually *is* a private address — that is the only reason to
+   * use this. Only enable it on a network you trust.
+   */
+  allowInsecureHttp?: boolean;
+};
+
+export type ZulipBaseUrlProblem =
+  | "missing"
+  | "invalid-protocol"
+  | "insecure-http"
+  | "internal-host";
+
 /**
- * Normalizes a Zulip base URL by trimming whitespace and removing trailing slashes.
- * Security: Only http:// and https:// protocols are allowed to prevent SSRF and protocol smuggling.
- * Also rejects internal/private IP addresses to prevent SSRF to localhost or cloud metadata endpoints.
+ * Classifies a Zulip base URL without throwing.
+ *
+ * Security:
+ *  - HTTPS is required unless the operator opted in (`allowInsecureHttp`).
+ *  - Internal/private IP literals and cloud metadata endpoints are rejected by
+ *    hostname matching unless the operator opted in.
  */
-export function normalizeZulipBaseUrl(raw?: string | null): string | undefined {
+export function inspectZulipBaseUrl(
+  raw?: string | null,
+  opts?: ZulipBaseUrlOptions,
+): { url: string } | { problem: ZulipBaseUrlProblem } {
   const trimmed = raw?.trim();
   if (!trimmed) {
-    return undefined;
+    return { problem: "missing" };
   }
-  // Security check: only allow http or https protocols.
-  if (!/^https?:\/\//i.test(trimmed)) {
-    return undefined;
+  const isHttp = /^http:\/\//i.test(trimmed);
+  const isHttps = /^https:\/\//i.test(trimmed);
+  if (!isHttp && !isHttps) {
+    return { problem: "invalid-protocol" };
   }
-  // Security check: reject internal/private IPs and metadata endpoints.
-  if (isInternalHost(trimmed)) {
-    return undefined;
+  const allowInsecure = opts?.allowInsecureHttp === true;
+  if (isHttp && !allowInsecure) {
+    return { problem: "insecure-http" };
   }
-  return trimmed.replace(/\/+$/, "");
+  if (!allowInsecure && isInternalHost(trimmed)) {
+    return { problem: "internal-host" };
+  }
+  return { url: trimmed.replace(/\/+$/, "") };
 }
 
-function buildZulipApiUrl(baseUrl: string, path: string): string {
-  const normalized = normalizeZulipBaseUrl(baseUrl);
+/**
+ * Normalizes a Zulip base URL by trimming whitespace and removing trailing slashes.
+ * Returns undefined when the URL is unusable — use `zulipBaseUrlError` for the reason.
+ */
+export function normalizeZulipBaseUrl(
+  raw?: string | null,
+  opts?: ZulipBaseUrlOptions,
+): string | undefined {
+  const result = inspectZulipBaseUrl(raw, opts);
+  return "url" in result ? result.url : undefined;
+}
+
+/** Human-readable explanation for a rejected base URL, or undefined when valid. */
+export function zulipBaseUrlError(
+  raw?: string | null,
+  opts?: ZulipBaseUrlOptions,
+): string | undefined {
+  const result = inspectZulipBaseUrl(raw, opts);
+  if ("url" in result) {
+    return undefined;
+  }
+  switch (result.problem) {
+    case "missing":
+      return "Zulip site URL is required.";
+    case "invalid-protocol":
+      return "Zulip site URL must start with http:// or https:// (for example: https://chat.example.com).";
+    case "insecure-http":
+      return 'Zulip site URL uses plain http:// — the bot email and API key would be sent unencrypted. Use https://, or set "allowInsecureHttp": true in channels.zulip if this server is on a trusted network.';
+    case "internal-host":
+      return 'Zulip site URL points at a private/internal address, which is blocked to prevent SSRF. Set "allowInsecureHttp": true in channels.zulip if this self-hosted server is on a trusted network.';
+  }
+}
+
+function buildZulipApiUrl(
+  baseUrl: string,
+  path: string,
+  opts?: ZulipBaseUrlOptions,
+): string {
+  const normalized = normalizeZulipBaseUrl(baseUrl, opts);
   if (!normalized) {
     throw new Error("Zulip baseUrl is required");
   }
@@ -162,8 +229,12 @@ export function createZulipClient(params: {
   email: string;
   apiKey: string;
   fetchImpl?: typeof fetch;
+  /** Operator opt-in for plaintext http / private hosts; see ZulipBaseUrlOptions. */
+  allowInsecureHttp?: boolean;
 }): ZulipClient {
-  const baseUrl = normalizeZulipBaseUrl(params.baseUrl);
+  const baseUrl = normalizeZulipBaseUrl(params.baseUrl, {
+    allowInsecureHttp: params.allowInsecureHttp,
+  });
   if (!baseUrl) {
     throw new Error("Zulip baseUrl is required");
   }
@@ -176,7 +247,9 @@ export function createZulipClient(params: {
   const fetchImpl = params.fetchImpl ?? fetch;
 
   const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
-    const url = buildZulipApiUrl(baseUrl, path);
+    const url = buildZulipApiUrl(baseUrl, path, {
+      allowInsecureHttp: params.allowInsecureHttp,
+    });
     const headers = new Headers(init?.headers);
     headers.set("Authorization", `Basic ${authHeader}`);
     if (init?.body && !headers.has("Content-Type") && typeof init.body === "string") {
@@ -335,17 +408,46 @@ export async function fetchZulipStream(
   };
 }
 
+/**
+ * Default long-poll timeout (seconds) requested at queue registration and
+ * replayed on every `/events` request.
+ */
+export const DEFAULT_LONGPOLL_TIMEOUT_SECS = 90;
+/** Zulip caps `/events` long-polls at 90 seconds. */
+export const MAX_LONGPOLL_TIMEOUT_SECS = 90;
+const MIN_LONGPOLL_TIMEOUT_SECS = 1;
+
+/**
+ * Clamps a server-provided long-poll timeout into the range Zulip accepts.
+ * Falls back to the default when the value is missing or unusable.
+ */
+export function clampLongpollTimeoutSecs(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) {
+    return DEFAULT_LONGPOLL_TIMEOUT_SECS;
+  }
+  return Math.min(
+    MAX_LONGPOLL_TIMEOUT_SECS,
+    Math.max(MIN_LONGPOLL_TIMEOUT_SECS, Math.floor(n)),
+  );
+}
+
 export async function registerZulipQueue(
   client: ZulipClient,
   params: {
     eventTypes?: string[];
     streams?: string[];
   },
-): Promise<{ queueId: string; lastEventId: number }> {
+): Promise<{ queueId: string; lastEventId: number; longpollTimeoutSecs: number }> {
   const body = new URLSearchParams();
   const eventTypes = params.eventTypes ?? ["message"];
   body.set("event_types", JSON.stringify(eventTypes));
-  body.set("event_queue_longpoll_timeout_seconds", "90");
+  // Ask for the `realm` event type so the server actually returns
+  // `event_queue_longpoll_timeout_seconds` in the /register response. Zulip
+  // omits that field unless it is explicitly requested via `fetch_event_types`
+  // (see /api/register-queue); clients must never assume the default.
+  body.set("fetch_event_types", JSON.stringify(["realm"]));
+  body.set("event_queue_longpoll_timeout_seconds", String(DEFAULT_LONGPOLL_TIMEOUT_SECS));
   if (params.streams && params.streams.length > 0 && !params.streams.includes("*")) {
     // Zulip expects legacy array format for narrow filters.
     const narrow = params.streams.map((stream) => ["stream", stream]);
@@ -356,7 +458,11 @@ export async function registerZulipQueue(
   }
 
   const payload = await client.request<
-    ZulipApiResponse & { queue_id?: string; last_event_id?: number }
+    ZulipApiResponse & {
+      queue_id?: string;
+      last_event_id?: number;
+      event_queue_longpoll_timeout_seconds?: number;
+    }
   >("/register", { method: "POST", body: body.toString() });
   assertSuccess(payload, "Zulip /register failed");
   if (!payload.queue_id) {
@@ -365,7 +471,33 @@ export async function registerZulipQueue(
   return {
     queueId: payload.queue_id,
     lastEventId: payload.last_event_id ?? -1,
+    // Zulip's documented contract: clients use the value the server returned at
+    // registration rather than assuming a default (see /api/get-events).
+    longpollTimeoutSecs: clampLongpollTimeoutSecs(
+      payload.event_queue_longpoll_timeout_seconds,
+    ),
   };
+}
+
+/** Extra client-side grace on top of the server-advertised long-poll window. */
+const EVENTS_TIMEOUT_GRACE_MS = 15000;
+
+/**
+ * Resolves the client-side abort budget for a `/events` long-poll.
+ *
+ * `timeout` is NOT a Zulip query parameter; the long-poll window the server
+ * advertises at registration (`event_queue_longpoll_timeout_seconds`) has to be
+ * enforced by the client. We add a small grace period so a well-behaved server
+ * does not race our abort.
+ */
+export function resolveEventsTimeoutMs(params: {
+  timeoutSecs?: number;
+  timeoutMs?: number;
+}): number {
+  if (params.timeoutSecs !== undefined) {
+    return clampLongpollTimeoutSecs(params.timeoutSecs) * 1000 + EVENTS_TIMEOUT_GRACE_MS;
+  }
+  return params.timeoutMs ?? 90000;
 }
 
 async function getZulipEvents(
@@ -374,6 +506,7 @@ async function getZulipEvents(
     queueId: string;
     lastEventId: number;
     timeoutMs?: number;
+    timeoutSecs?: number;
   },
 ): Promise<
   ZulipApiResponse & { events?: Array<{ id: number; type: string; message?: ZulipMessage }> }
@@ -383,9 +516,13 @@ async function getZulipEvents(
     last_event_id: String(params.lastEventId),
     dont_block: "false",
   });
+  // `timeout` is NOT a valid /events query parameter (Zulip documents only
+  // `queue_id`, `last_event_id` and `dont_block`; unknown params are silently
+  // ignored). The long-poll budget is enforced client-side instead: abort a
+  // little after the server-advertised window would have elapsed.
   const controller = new AbortController();
-  const timeoutMs = params.timeoutMs ?? 90000;
-  const timeout = setTimeout(() => controller.abort(), timeoutMs + 15000);
+  const timeoutMs = resolveEventsTimeoutMs(params);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await client.request<
       ZulipApiResponse & { events?: Array<{ id: number; type: string; message?: ZulipMessage }> }
@@ -401,6 +538,8 @@ export async function getZulipEventsWithRetry(
     queueId: string;
     lastEventId: number;
     timeoutMs?: number;
+    /** Explicit `/events` long-poll timeout in seconds (see clampLongpollTimeoutSecs). */
+    timeoutSecs?: number;
     retryBaseDelayMs?: number;
     signal?: AbortSignal;
   },
@@ -412,9 +551,13 @@ export async function getZulipEventsWithRetry(
     last_event_id: String(params.lastEventId),
     dont_block: "false",
   });
+  // `timeout` is NOT a valid /events query parameter (Zulip documents only
+  // `queue_id`, `last_event_id` and `dont_block`; unknown params are silently
+  // ignored). The long-poll budget is enforced client-side instead: abort a
+  // little after the server-advertised window would have elapsed.
   const controller = new AbortController();
-  const timeoutMs = params.timeoutMs ?? 90000;
-  const timeout = setTimeout(() => controller.abort(), timeoutMs + 15000);
+  const timeoutMs = resolveEventsTimeoutMs(params);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   // Wire host-level abort so we exit cleanly within ~90s instead of blocking 105s
   const hostAbort = params.signal;
@@ -534,6 +677,28 @@ export async function uploadZulipFile(
   const isAllowedPath = (candidate: string) =>
     allowedPaths.some((allowed) => candidate.startsWith(allowed));
 
+  // Security: the data dir also holds the gateway config, channel credentials,
+  // session transcripts and the audit log. A prompt-injected agent must not be
+  // able to exfiltrate any of those to Zulip, so refuse them explicitly even
+  // though they sit under an allowed root.
+  const SENSITIVE_FILE_NAMES = new Set([
+    "openclaw.json",
+    ".env",
+    "trust.json",
+    "honcho-memory.json",
+  ]);
+  const SENSITIVE_DIR_NAMES = new Set(["credentials", "audit", "agents", "sessions"]);
+  const isSensitivePath = (candidate: string): boolean => {
+    const rel = path.relative(dataDir, candidate);
+    if (!rel || rel.startsWith("..")) {
+      return false;
+    }
+    const parts = rel.toLowerCase().split(/[\\/]+/);
+    return parts.some(
+      (part) => SENSITIVE_FILE_NAMES.has(part) || SENSITIVE_DIR_NAMES.has(part),
+    );
+  };
+
   // Relative paths (e.g. "haiku.txt" from the agent workspace) resolve
   // against the gateway process CWD, which is rarely meaningful. Try the
   // agent workspace and the data dir first, then the caller's CWD (#268).
@@ -549,6 +714,12 @@ export async function uploadZulipFile(
   let lastRefusal: Error | undefined;
   for (const candidate of candidates) {
     const resolved = path.resolve(candidate);
+    if (isSensitivePath(resolved)) {
+      lastRefusal = new Error(
+        `Refusing to upload sensitive path (config/credentials/sessions): ${filePath}.`,
+      );
+      continue;
+    }
     if (!isAllowedPath(resolved)) {
       lastRefusal = new Error(
         `Refusing to upload file from unauthorized path: ${filePath}. ` +

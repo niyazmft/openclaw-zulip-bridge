@@ -3,7 +3,7 @@ import { applyAccountNameToChannelSection } from "openclaw/plugin-sdk/account-co
 import { type ChannelSetupAdapter, createPatchedAccountSetupAdapter } from "openclaw/plugin-sdk/setup";
 import { createSetupInputPresenceValidator } from "openclaw/plugin-sdk/setup-runtime";
 import { resolveZulipAccount, type ResolvedZulipAccount } from "./zulip/accounts.js";
-import { normalizeZulipBaseUrl } from "./zulip/client.js";
+import { normalizeZulipBaseUrl, zulipBaseUrlError } from "./zulip/client.js";
 
 const channel = "zulip" as const;
 
@@ -21,9 +21,11 @@ export const zulipSetupAdapter: ChannelSetupAdapter = createPatchedAccountSetupA
     defaultAccountOnlyEnvError:
       "ZULIP_API_KEY/ZULIP_EMAIL/ZULIP_URL can only be used for the default account.",
     validate: ({ input }) => {
-      const baseUrl = normalizeZulipBaseUrl(input.httpUrl);
-      if (input.httpUrl && !baseUrl) {
-        return "Zulip site URL must include protocol and host (for example: https://chat.example.com).";
+      if (input.httpUrl) {
+        const problem = zulipBaseUrlError(input.httpUrl);
+        if (problem) {
+          return problem;
+        }
       }
       return null;
     },

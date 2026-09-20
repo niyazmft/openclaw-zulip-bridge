@@ -34,6 +34,8 @@ export type ResolvedZulipAccount = {
   enableSessionRecovery?: boolean;
   maxMessagesPerMinute?: number;
   maxMessageLength?: number;
+  /** Operator opt-in for plaintext http / private hosts (trusted network only). */
+  allowInsecureHttp?: boolean;
 };
 
 function resolveZulipSection(cfg: OpenClawConfig): ZulipConfig | undefined {
@@ -93,7 +95,13 @@ function resolveZulipRequireMention(config: ZulipAccountConfig): boolean | undef
 // manifest metadata (see package.json openclaw.envVars). Dynamic access trips
 // the scanner's hasBroadEnvAccess heuristic and is always flagged.
 function getZulipEnvSecret(
-  name: "ZULIP_API_KEY" | "ZULIP_EMAIL" | "ZULIP_URL" | "ZULIP_SITE" | "ZULIP_REALM",
+  name:
+    | "ZULIP_API_KEY"
+  | "ZULIP_EMAIL"
+  | "ZULIP_URL"
+  | "ZULIP_SITE"
+  | "ZULIP_REALM"
+  | "ZULIP_ALLOW_INSECURE_HTTP",
 ): string | undefined {
   switch (name) {
     case "ZULIP_API_KEY":
@@ -106,9 +114,19 @@ function getZulipEnvSecret(
       return process.env.ZULIP_SITE?.trim();
     case "ZULIP_REALM":
       return process.env.ZULIP_REALM?.trim();
+    case "ZULIP_ALLOW_INSECURE_HTTP":
+      return process.env.ZULIP_ALLOW_INSECURE_HTTP?.trim();
     default:
       return undefined;
   }
+}
+
+/** Parses a permissive boolean env value ("1", "true", "yes", "on"). */
+function parseBooleanFlag(value: string | undefined): boolean | undefined {
+  if (value === undefined || value === "") {
+    return undefined;
+  }
+  return /^(1|true|yes|on)$/i.test(value);
 }
 
 function hasZulipEnvSecrets(): boolean {
@@ -138,6 +156,13 @@ export function resolveZulipAccount(params: {
   const envUrl = allowEnv ? getZulipEnvSecret("ZULIP_URL") : undefined;
   const envSite = allowEnv ? getZulipEnvSecret("ZULIP_SITE") : undefined;
   const envRealm = allowEnv ? getZulipEnvSecret("ZULIP_REALM") : undefined;
+  const envAllowInsecureHttp = allowEnv
+    ? getZulipEnvSecret("ZULIP_ALLOW_INSECURE_HTTP")
+    : undefined;
+  // Env takes precedence for the default account, then config. Non-default
+  // accounts are config-only, matching credential resolution.
+  const allowInsecureHttp =
+    parseBooleanFlag(envAllowInsecureHttp) ?? merged.allowInsecureHttp === true;
   const configApiKey = merged.apiKey?.trim();
   const configEmail = merged.email?.trim();
   const configUrl =
@@ -162,7 +187,7 @@ export function resolveZulipAccount(params: {
     // Default account: Env-first, then config.
     apiKey = envApiKey || configApiKey;
     email = envEmail || configEmail;
-    baseUrl = normalizeZulipBaseUrl(envUrlAny || configUrlTrimmed);
+    baseUrl = normalizeZulipBaseUrl(envUrlAny || configUrlTrimmed, { allowInsecureHttp });
 
     apiKeySource = envApiKey ? "env" : configApiKey ? "config" : "none";
     emailSource = envEmail ? "env" : configEmail ? "config" : "none";
@@ -171,7 +196,7 @@ export function resolveZulipAccount(params: {
     // Non-default accounts: Config-only. No magic env discovery.
     apiKey = configApiKey;
     email = configEmail;
-    baseUrl = normalizeZulipBaseUrl(configUrlTrimmed);
+    baseUrl = normalizeZulipBaseUrl(configUrlTrimmed, { allowInsecureHttp });
 
     apiKeySource = configApiKey ? "config" : "none";
     emailSource = configEmail ? "config" : "none";
@@ -206,6 +231,7 @@ export function resolveZulipAccount(params: {
     enableSessionRecovery: merged.enableSessionRecovery,
     maxMessagesPerMinute: merged.maxMessagesPerMinute,
     maxMessageLength: merged.maxMessageLength,
+    allowInsecureHttp,
   };
 }
 

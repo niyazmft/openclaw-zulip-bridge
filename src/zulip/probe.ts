@@ -1,4 +1,9 @@
-import { normalizeZulipBaseUrl, readZulipError, type ZulipUser } from "./client.js";
+import {
+  normalizeZulipBaseUrl,
+  readZulipError,
+  zulipBaseUrlError,
+  type ZulipUser,
+} from "./client.js";
 
 export type ZulipProbe = {
   ok: boolean;
@@ -17,10 +22,11 @@ export async function probeZulip(
   email: string,
   apiKey: string,
   timeoutMs?: number,
+  opts?: { allowInsecureHttp?: boolean },
 ): Promise<ZulipProbe> {
-  const normalized = normalizeZulipBaseUrl(baseUrl);
+  const normalized = normalizeZulipBaseUrl(baseUrl, opts);
   if (!normalized) {
-    return { ok: false, error: "invalid baseUrl" };
+    return { ok: false, error: zulipBaseUrlError(baseUrl, opts) ?? "invalid baseUrl" };
   }
   const controller = new AbortController();
   const timeout = timeoutMs ? setTimeout(() => controller.abort(), Math.max(timeoutMs, 500)) : null;
