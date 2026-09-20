@@ -66,6 +66,10 @@
             "type": "boolean",
             "description": "Allow a plain http:// Zulip server on a trusted network, and allow private/internal host addresses. Credentials are sent unencrypted; leave off unless you control the network."
           },
+          "sessionArchiveRepair": {
+            "type": "boolean",
+            "description": "Publish deleted-session transcript archives that the host cannot publish because hard links are unavailable (Android/Termux). Unset = automatic (only when a probe shows hard links are broken); true = always; false = never."
+          },
           "email": {
             "type": "string"
           },
@@ -249,6 +253,10 @@
             "type": "boolean",
             "description": "Allow a plain http:// Zulip server on a trusted network, and allow private/internal host addresses. Credentials are sent unencrypted; leave off unless you control the network."
           },
+          "sessionArchiveRepair": {
+            "type": "boolean",
+            "description": "Publish deleted-session transcript archives that the host cannot publish because hard links are unavailable (Android/Termux). Unset = automatic (only when a probe shows hard links are broken); true = always; false = never."
+          },
           "email": {
             "type": "string"
           },
@@ -411,6 +419,11 @@
           "label": "Allow Insecure HTTP (trusted network only)",
           "sensitive": false,
           "description": "Allow a plain http:// Zulip server and private/internal host addresses. Credentials are sent unencrypted; leave off unless you control the network."
+        },
+        "sessionArchiveRepair": {
+          "label": "Session Archive Repair (hard-link workaround)",
+          "sensitive": false,
+          "description": "Publish deleted-session transcript archives that the host cannot publish because hard links are unavailable (Android/Termux). Unset = automatic (only when a probe shows hard links are broken); true = always; false = never."
         },
         "streams": {
           "label": "Zulip Streams",

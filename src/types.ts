@@ -135,6 +135,20 @@ export type ZulipAccountConfig = {
    * `ZULIP_ALLOW_INSECURE_HTTP=1`.
    */
   allowInsecureHttp?: boolean;
+  /**
+   * Work around hosts where hard links are unavailable (Android/Termux).
+   *
+   * OpenClaw publishes a deleted session's transcript archive with an atomic
+   * `fs.link()`. Where hard links are blocked that publish can never succeed,
+   * and the host then fails every session operation — so the bot cannot reply
+   * on any channel. The plugin can publish those archives itself instead.
+   *
+   * - unset (default): automatic — active only when a one-time probe shows hard
+   *   links are unavailable in the data dir, so healthy hosts are never touched
+   * - `true`: always run the repair loop
+   * - `false`: never run it
+   */
+  sessionArchiveRepair?: boolean;
 };
 
 export type ZulipConfig = {
