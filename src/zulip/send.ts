@@ -252,7 +252,15 @@ export async function sendMessageZulip(
         mediaUrl = undefined;
       } else {
         const maxBytes = (cfg.agents?.defaults?.mediaMaxMb ?? 5) * 1024 * 1024;
-        const fetched = await core.channel.media.fetchRemoteMedia({
+        const fetchRemoteMedia = core.channel?.media?.fetchRemoteMedia;
+        if (!fetchRemoteMedia) {
+          // CLI processes have no host runtime and therefore no media fetcher.
+          // Fail with something actionable instead of a TypeError (#285).
+          throw new Error(
+            "Remote media URLs require the OpenClaw gateway runtime. Send a local file path, or run the send through the gateway.",
+          );
+        }
+        const fetched = await fetchRemoteMedia({
           url: mediaUrl,
           maxBytes,
         });
