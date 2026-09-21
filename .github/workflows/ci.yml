@@ -34,3 +34,38 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Enforce pristine working directory
         run: git diff --exit-code || { echo "Working directory is not clean. Lockfile or generated files might be out of sync."; false; }
+
+  compat:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        openclaw: ["2026.7.1", "2026.9.1"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - name: Host compatibility (tier 1) — openclaw@${{ matrix.openclaw }}
+        run: COMPAT_VERSIONS=${{ matrix.openclaw }} pnpm run check:compat
+
+  tier2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - run: pnpm install --frozen-lockfile
+      # check:tier2 copies dist/ + dist-cjs/ into a throwaway workspace, so the
+      # build must run first (the runner fails loudly if the artifacts are absent).
+      - run: pnpm run build
+      - name: Outbound behaviour (tier 2) — local fake Zulip server
+        run: pnpm run check:tier2

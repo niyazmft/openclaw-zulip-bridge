@@ -1,10 +1,19 @@
 import {
   createChatChannelPlugin,
-  deleteAccountFromConfigSection,
-  setAccountEnabledInConfigSection,
   type ChannelAccountSnapshot,
 } from "openclaw/plugin-sdk/channel-core";
-import { DEFAULT_ACCOUNT_ID, normalizeAccountId, formatPairingApproveHint } from "openclaw/plugin-sdk/core";
+// NOTE: `deleteAccountFromConfigSection` / `setAccountEnabledInConfigSection` are
+// NOT exported from `plugin-sdk/channel-core` on any host version — importing them
+// from there yields `undefined` at runtime and breaks the ESM entry outright
+// (SyntaxError: does not provide an export named ...). They live on `plugin-sdk/core`.
+// Guarded by `npm run check:compat`.
+import {
+  DEFAULT_ACCOUNT_ID,
+  deleteAccountFromConfigSection,
+  formatPairingApproveHint,
+  normalizeAccountId,
+  setAccountEnabledInConfigSection,
+} from "openclaw/plugin-sdk/core";
 import { setZulipRuntime } from "./runtime.js";
 import type { ZulipConfig } from "./types.js";
 import { zulipMessageActions } from "./actions.js";
