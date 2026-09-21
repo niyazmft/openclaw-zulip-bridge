@@ -1,5 +1,8 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
-import { applyAccountNameToChannelSection } from "openclaw/plugin-sdk/account-core";
+// NOTE: exported from `plugin-sdk/core` (and `setup`), NOT `account-core`.
+// Importing it from `account-core` yields `undefined` at runtime.
+// Guarded by `npm run check:compat`.
+import { applyAccountNameToChannelSection } from "openclaw/plugin-sdk/core";
 import { type ChannelSetupAdapter, createPatchedAccountSetupAdapter } from "openclaw/plugin-sdk/setup";
 import { createSetupInputPresenceValidator } from "openclaw/plugin-sdk/setup-runtime";
 import { resolveZulipAccount, type ResolvedZulipAccount } from "./zulip/accounts.js";

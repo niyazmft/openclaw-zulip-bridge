@@ -18,7 +18,7 @@ Fixes # (issue)
 
 <!-- Please describe the tests that you ran to verify your changes -->
 
-- [ ] `pnpm run check` passes (bootstrap → typecheck → build → smoke → test → package)
+- [ ] `pnpm run check` passes (bootstrap → typecheck → build → smoke → test → package → clawscan → audit)
 - [ ] Manual testing performed
 - [ ] Added/updated tests
 

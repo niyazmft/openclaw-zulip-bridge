@@ -27,7 +27,9 @@ export default defineChannelPluginEntry({
   },
   registerFull(api) {
     const { logger, runtime } = api;
-    api.registerChannel({ plugin: zulipPlugin });
+    // NOTE: `api.registerChannel({ plugin })` is already called by the
+    // `defineChannelPluginEntry` SDK wrapper before dispatching to registerFull.
+    // Calling it here would double-register the channel (see #293 Tier 1 check).
     setZulipRuntime(runtime);
     logger.info("[zulip] Plugin registration complete.");
   },

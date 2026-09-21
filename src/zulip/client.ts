@@ -182,14 +182,12 @@ export function zulipBaseUrlError(
 function buildZulipApiUrl(
   baseUrl: string,
   path: string,
-  opts?: ZulipBaseUrlOptions,
 ): string {
-  const normalized = normalizeZulipBaseUrl(baseUrl, opts);
-  if (!normalized) {
+  if (!baseUrl) {
     throw new Error("Zulip baseUrl is required");
   }
   const suffix = path.startsWith("/") ? path : `/${path}`;
-  return `${normalized}/api/v1${suffix}`;
+  return `${baseUrl}/api/v1${suffix}`;
 }
 
 function resolveRetryAfterMs(res: Response): number | undefined {
@@ -247,9 +245,7 @@ export function createZulipClient(params: {
   const fetchImpl = params.fetchImpl ?? fetch;
 
   const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
-    const url = buildZulipApiUrl(baseUrl, path, {
-      allowInsecureHttp: params.allowInsecureHttp,
-    });
+    const url = buildZulipApiUrl(baseUrl, path);
     const headers = new Headers(init?.headers);
     headers.set("Authorization", `Basic ${authHeader}`);
     if (init?.body && !headers.has("Content-Type") && typeof init.body === "string") {

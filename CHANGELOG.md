@@ -7,6 +7,17 @@ and this project adheres to [Calendar Versioning](https://calver.org/) in the fo
 
 ## [Unreleased]
 
+### Added
+- **`check:compat` — Tier 1 host-compatibility gate**: loads the built plugin against a real, pinned OpenClaw host in a throwaway workspace and asserts that every `openclaw/plugin-sdk/*` subpath it imports actually resolves and exports what the plugin uses, that both the ESM (`dist/index.js`) and CJS (`dist-cjs/index.cjs`) entries load, and that full registration produces exactly one channel whose `gateway.startAccount` is callable and whose config callbacks run. The existing smoke test collapses every SDK specifier into a single permissive stub, so it is *structurally* incapable of catching subpath or named-export drift — this closes that gap. Requires network access and a ~390 MB host install, so it is deliberately **not** part of `npm run check` and runs as its own CI job.
+- **`check:tier2` — outbound behaviour tests**: drives the real client against a local fake Zulip server (no external network) and verifies the payloads for stream send, private-message send, file upload, reaction, message edit, and typing indicator. Also its own CI job.
+
+### Fixed
+- **SDK imports that no OpenClaw host exports** (found by `check:compat`): `deleteAccountFromConfigSection` and `setAccountEnabledInConfigSection` were imported from `openclaw/plugin-sdk/channel-core`, and `applyAccountNameToChannelSection` from `openclaw/plugin-sdk/account-core` — none of those subpaths export them. All three now import from `openclaw/plugin-sdk/core`.
+- **Duplicate channel registration**: `registerFull` called `api.registerChannel({ plugin: zulipPlugin })` even though the `defineChannelPluginEntry` wrapper already registers the channel, so the host observed two registrations.
+- **`allowInsecureHttp` was discarded on every API call** (`src/zulip/client.ts`): `buildZulipApiUrl()` re-normalized the already-normalized base URL *without* passing the option, so a plain-`http://` self-hosted realm (or a private/LAN address) that `createZulipClient()` had just accepted failed on the next request with `Zulip baseUrl is required`. The redundant re-normalization was removed.
+- **Supported host floor declared as `2026.7.1`**: `openclaw.install.minHostVersion` was `>=2026.7.0` and `openclaw.compat.minGatewayVersion` was `>=2026.6.0` — neither `2026.6.0` nor `2026.7.0` was ever published to npm (both 404), so they named phantom versions and disagreed with each other. Both are now `>=2026.7.1`, matching the versions exercised by the `check:compat` CI matrix (`2026.7.1`, `2026.9.1`), and the README/AGENTS.md prerequisites were raised to match.
+- **Docs corrected**: README, CONTRIBUTING and the PR template described the `npm run check` suite without its `clawscan` and `audit` steps; AGENTS.md did not document `check:compat`/`check:tier2`; and the AGENTS.md `zod` guidance was inverted (it pointed at `openclaw/plugin-sdk/zod`, which hosts removed by 2026.9.x — the plugin correctly uses bare `zod` as a runtime dependency).
+
 ## [2026.9.1] - 2026-09-20
 
 ### Added

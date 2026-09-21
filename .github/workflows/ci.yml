@@ -34,3 +34,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Enforce pristine working directory
         run: git diff --exit-code || { echo "Working directory is not clean. Lockfile or generated files might be out of sync."; false; }
+
+  compat:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        openclaw: ["2026.7.1", "2026.9.1"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - name: Host compatibility (tier 1) — openclaw@${{ matrix.openclaw }}
+        run: COMPAT_VERSIONS=${{ matrix.openclaw }} pnpm run check:compat

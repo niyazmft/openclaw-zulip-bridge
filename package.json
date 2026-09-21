@@ -7,7 +7,7 @@
   "openclaw": {
     "compat": {
       "pluginApi": ">=1.0.0",
-      "minGatewayVersion": ">=2026.6.0"
+      "minGatewayVersion": ">=2026.7.1"
     },
     "extensions": [
       "./index.ts"
@@ -29,7 +29,7 @@
     "install": {
       "localPath": ".",
       "defaultChoice": "clawhub",
-      "minHostVersion": ">=2026.7.0",
+      "minHostVersion": ">=2026.7.1",
       "clawhubSpec": "@niyazmft/openclaw-zulip"
     },
     "build": {
@@ -78,11 +78,13 @@
     "test": "node --test --experimental-strip-types --loader ./test-loader.js test/*.test.ts",
     "check:package": "node scripts/check-package.js",
     "check:smoke": "node --loader ./test/smoke-loader.js scripts/smoke-test-dist.js",
+    "check:compat": "node scripts/check-compat.js",
     "check:bootstrap": "node scripts/check-bootstrap.js",
     "check:clawscan": "node --experimental-strip-types --loader ./scripts/clawscan/loader.js scripts/clawscan/run.mjs",
     "check:gitleaks": "gitleaks git --pre-commit --redact 2>/dev/null || gitleaks detect --source . --redact 2>/dev/null || echo 'gitleaks not installed; skipping (CI runs it)'",
     "check:audit": "npm audit --omit=dev",
-    "check": "pnpm run check:bootstrap && pnpm run typecheck && pnpm run build && pnpm run check:smoke && pnpm run test && pnpm run check:package && pnpm run check:clawscan && pnpm run check:audit"
+    "check": "pnpm run check:bootstrap && pnpm run typecheck && pnpm run build && pnpm run check:smoke && pnpm run test && pnpm run check:package && pnpm run check:clawscan && pnpm run check:audit",
+    "check:tier2": "node scripts/run-tier2-tests.js"
   },
   "devDependencies": {
     "@types/node": "24.12.2",

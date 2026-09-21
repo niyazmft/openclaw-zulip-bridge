@@ -1,5 +1,22 @@
 # AGENTS.md — OpenClaw Zulip Bridge
 
+## Table of Contents
+
+- [Essential Commands](#essential-commands)
+- [Architecture](#architecture)
+- [TypeScript Conventions](#typescript-conventions)
+- [Testing](#testing)
+- [CI](#ci)
+- [Build Artifacts](#build-artifacts)
+- [Plugin Manifest](#plugin-manifest)
+- [Environment](#environment)
+- [Deployment](#deployment)
+- [Security & Permissions](#security--permissions)
+- [SDK Migration Notes](#sdk-migration-notes)
+- [ClawScan Replica](#clawscan-replica-pre-publish-security-gate)
+- [Troubleshooting](#troubleshooting)
+- [Known Issues](#known-issues)
+
 ## Essential Commands
 
 ```bash
@@ -13,16 +30,20 @@ npm run check:package      # Validates version sync, required fields, and npm pa
 npm run check:clawscan     # ClawHub moderation-engine replica (vendored) — scans src/ + dist/ + dist-cjs/ + docs
 npm run check:gitleaks     # Secret detection (skips locally if gitleaks not installed; CI runs it)
 npm run check:audit        # npm audit --omit=dev (production dependency vulnerabilities)
+npm run check:compat       # Tier 1: loads the built plugin against real pinned OpenClaw hosts
+npm run check:tier2        # Tier 2: outbound behaviour tests against a local fake Zulip server
 ```
 
 **Command order matters**: `npm run check` runs steps sequentially. Building must precede smoke tests and package checks.
+
+**`check:compat` and `check:tier2` are deliberately NOT part of `npm run check`** — both download a real `openclaw` host (~390 MB) and need network access, so they run as separate CI jobs.
 
 ## Architecture
 
 - **Entry points**: `index.ts` (plugin) and `setup-entry.ts` (onboarding wizard). Both emit to `dist/`.
 - **Core wiring**: `src/channel.ts` — the single file that glues config, accounts, messaging, security, and monitoring together via `createChatChannelPlugin`.
 - **Host dependency**: `openclaw/plugin-sdk` subpaths are **not npm packages**. They are provided at runtime by the OpenClaw host. Type shims live in `types/openclaw-plugin-sdk.d.ts`; runtime test shims in `test/openclaw-plugin-sdk-shim.js`.
-  - Channel plugins should import from `openclaw/plugin-sdk/channel-core` (not the legacy `openclaw/plugin-sdk/core` umbrella).
+  - Prefer `openclaw/plugin-sdk/channel-core` for channel plugin APIs, but **several helpers exist *only* on `openclaw/plugin-sdk/core`**: `normalizeAccountId`, `deleteAccountFromConfigSection`, `setAccountEnabledInConfigSection`, `formatPairingApproveHint` (`src/channel.ts`) and `applyAccountNameToChannelSection` (`src/setup-core.ts`). Importing those from `channel-core`/`account-core` breaks the ESM entry at link time, and `test/smoke-loader.js` cannot catch it because its stub exports everything — only `npm run check:compat` does.
 - **Monitor lifecycle**: The monitor must be started via `gateway.startAccount` inside the `base` parameter of `createChatChannelPlugin`. Putting `gateway` at the top level of the returned object causes `createChatChannelPlugin` to strip it during destructuring, resulting in the host throwing "Channel zulip does not support runtime start".
   - `gateway.startAccount(ctx)` receives `ctx.setStatus`, `ctx.abortSignal`, `ctx.account`, `ctx.accountId`, `ctx.cfg`, `ctx.runtime`, `ctx.log`.
 - **Bot workspace**: `src/zulip/workspace.ts` provides sandboxed file storage under `data/zulip-workspace/{accountId}/` with path-traversal rejection, automatic cleanup, and optional Zulip upload integration.
@@ -42,11 +63,17 @@ npm run check:audit        # npm audit --omit=dev (production dependency vulnera
 - Uses Node.js built-in test runner (`--test` flag), not Jest/Vitest.
 - Custom loader (`test-loader.js`) remaps `openclaw/plugin-sdk` imports to the shim and resolves `.ts` from `.js` imports.
 - Run a single test: `node --test --experimental-strip-types --loader ./test-loader.js test/policy.test.ts`
-- No test fixtures or external services required.
+- The `npm run test` glob is `test/*.test.ts`, so **`test/tier2/` is excluded by construction** — those tests import built `dist/` artifacts and need a real host in `node_modules` (supplied by `npm run check:tier2`).
+- No external services required: unit tests use in-process SDK shims, and the Tier 2 fake Zulip server is a local HTTP server created per test.
 
 ## CI
 
 CI runs on Node 22, uses `npm ci`, runs `npm run check:bootstrap` followed by `npm run check`, then enforces a clean working directory (`git diff --exit-code`). If check modifies any generated files, CI will fail.
+
+Two further jobs run **outside** that gate, because each installs a real `openclaw` host (~390 MB):
+
+- **`compat`** — `npm run check:compat` across a host matrix (`2026.7.1`, `2026.9.1`). This is the only check that catches `openclaw/plugin-sdk/*` subpath/named-export drift and registration/manifest shape bugs.
+- **`tier2`** — `npm run check:tier2`, the outbound behaviour tests against the local fake Zulip server.
 
 ## Build Artifacts
 
@@ -54,6 +81,21 @@ CI runs on Node 22, uses `npm ci`, runs `npm run check:bootstrap` followed by `n
 
 - The **smoke test** (`scripts/smoke-test-dist.js`) is executed via `test/smoke-loader.js`, which **only** shims `openclaw/plugin-sdk` and deliberately does **not** redirect `.js` imports to `.ts`. This ensures the test exercises actual built artifacts in `dist/`, not source files.
 - The **package check** (`scripts/check-package.js`) verifies version sync between `package.json` and `openclaw.plugin.json`, confirms every file in `package.json` `"files"` exists, and validates that critical artifacts and metadata are included in `npm pack --dry-run` output.
+
+### Tier 2 behaviour tests (outbound)
+
+`npm run check:tier2` runs integration-style tests against a **local fake Zulip server** (no external network). The fake server implements the small Zulip API surface the plugin uses (`/register`, `/events`, `/messages`, `/user_uploads`, reactions, edits, typing). Tests verify:
+
+- `sendZulipStreamMessage` — stream, topic, and content are captured
+- `sendZulipPrivateMessage` — DM recipients and content are captured
+- `uploadZulipFile` — multipart upload is captured
+- `addZulipReaction` — emoji name and message ID are captured
+- `editZulipMessage` — PATCH body and message ID are captured
+- `sendZulipTyping` — typing op and recipients are captured
+
+Why a workspace? The test files import `../dist/src/zulip/client.js`, which in turn imports `openclaw/plugin-sdk/*`. Those subpaths only resolve when `openclaw` is present in `node_modules` — which the repo intentionally does **not** ship. The runner creates a throwaway workspace, installs the pinned host, copies `dist/` and `test/tier2/`, and runs the tests.
+
+**Not included in `npm run check`** — Tier 2 requires downloading `openclaw` (~390 MB) and is therefore run as a separate CI job (`check:tier2`).
 
 ## Plugin Manifest
 
@@ -65,7 +107,7 @@ Dev dependencies must be installed. `.npmrc` sets `include=dev` to prevent npm f
 
 ## Deployment
 
-This plugin targets **any OpenClaw host** running `>=2026.6.0`. It is not limited to a specific device or platform.
+This plugin targets **any OpenClaw host** running `>=2026.7.1`. It is not limited to a specific device or platform.
 
 ### Install via ClawHub (recommended)
 
@@ -98,7 +140,51 @@ rsync -avh openclaw.plugin.json remote:.openclaw/extensions/zulip/
 # Restart the gateway on the remote host
 ```
 
-The plugin requires no external runtime dependencies; the host provides the `openclaw/plugin-sdk/*` modules.
+The host provides the `openclaw/plugin-sdk/*` modules at runtime (they are **not** npm packages). The plugin's only npm runtime dependency is `zod` (config-schema validation), staged during install by `openclaw.build.stageRuntimeDependencies`.
+
+## Security & Permissions
+
+### Destructive Actions
+
+The following actions require **explicit confirmation** (`confirm: true`) to prevent accidental execution by AI agents:
+
+| Action | Confirmation Required | Admin Privilege Required | Description |
+|--------|----------------------|-------------------------|-------------|
+| `delete` | ✅ `confirm: true` | ❌ No | Permanently deletes a Zulip message |
+| `channel-delete` | ✅ `confirm: true` | ✅ Yes | Deletes a Zulip stream/channel |
+| `user-deactivate` | ✅ `confirm: true` | ✅ Yes | Deactivates a Zulip user account |
+| `user-reactivate` | ✅ `confirm: true` | ✅ Yes | Reactivates a Zulip user account |
+| `org-settings-edit` | ✅ `confirm: true` | ✅ Yes | Updates organization settings |
+
+### Admin Actions Gate
+
+Actions marked "Admin Privilege Required" are additionally protected by:
+
+1. **`enableAdminActions: true`** in your Zulip channel config
+2. **The bot account must have Zulip admin privileges** on the server
+
+Without both safeguards, admin actions will throw an error.
+
+### Best Practices
+
+- Use a **least-privilege bot account** (Generic Bot, not Admin Bot)
+- Keep `enableAdminActions: false` unless you explicitly need stream management or user lifecycle operations
+- Restrict `streams` and `allowFrom` to minimize exposure
+
+### Multi-User Data Isolation
+
+| Surface | Isolation | Mechanism |
+|---------|-----------|-----------|
+| DM sessions | ✅ Per-user | Each sender gets their own session key via the host's `dmScope: "per-channel-peer"`. DM session rotation (`dmSessionTurnLimit`) further bounds context lifetime. |
+| Stream/topic sessions | ⚠️ Shared by design | All users in a stream/topic share one session — this is intentional. |
+| Agent memory / workspace | ❌ Host-global | Long-term memory, notes, and workspace files are scoped by the host, not by this plugin. |
+| Tool/credential scope | ❌ Host-global | The agent's tools and credentials are the same regardless of which user is talking. |
+
+**Recommendations for multi-user deployments:**
+
+1. Treat stream sessions as **public context** — never rely on them for private data.
+2. Restrict `allowFrom`/`groupAllowFrom` to trusted users; for strict single-user isolation, allowlist a single address.
+3. Prefer DMs for anything private; the per-user DM session keys ensure DM context never mixes across senders.
 
 ## SDK Migration Notes
 
@@ -110,12 +196,15 @@ Migration complete as of v2026.5.1:
 
 ### 2026.5.x → 2026.6.x / 2026.7.x
 Migration complete as of v2026.7.0:
-- `openclaw/plugin-sdk/core` → `openclaw/plugin-sdk/channel-core` for all channel plugin imports **except**:
-  - `normalizeAccountId` must remain on `openclaw/plugin-sdk/core` (not exported from `channel-core` in host 2026.6.x)
-- `openclaw/plugin-sdk/zod` → do **not** migrate; host 2026.6.x does not bundle `zod` as an npm dependency. Keep importing from `openclaw/plugin-sdk/zod`
+- `openclaw/plugin-sdk/core` → `openclaw/plugin-sdk/channel-core` for channel plugin imports **except** the helpers that exist *only* on `openclaw/plugin-sdk/core`:
+  - `normalizeAccountId`
+  - `deleteAccountFromConfigSection`, `setAccountEnabledInConfigSection`, `formatPairingApproveHint` (`src/channel.ts`)
+  - `applyAccountNameToChannelSection` (`src/setup-core.ts`) — not exported from `account-core` either
+  - Getting these wrong is invisible to `npm run check` (the smoke loader stubs every SDK specifier with `noOp`, so a missing export cannot surface); `npm run check:compat` is what catches it.
+- `openclaw/plugin-sdk/zod` → the subpath existed on hosts `2026.6.x`–`2026.7.x` but was **removed by 2026.9.x**. The plugin uses bare `zod` (declared as a runtime dependency) which is the correct current approach.
 - Keep both root `configSchema` and `channelConfigs` in the manifest. OpenClaw 2026.6.x still validates the root schema at load time
 - Manifest `uiHints` synced with runtime schema for full cold-path label coverage
-- `minGatewayVersion` / `minHostVersion` bumped to `>=2026.6.0`
+- `minGatewayVersion` and `minHostVersion` are both `>=2026.7.1` — the lowest OpenClaw version actually published on npm (both `2026.6.0` and `2026.7.0` are phantom versions; `npm view openclaw@2026.7.0` is a 404)
 
 ## ClawScan Replica (pre-publish security gate)
 
@@ -164,5 +253,13 @@ Migration complete as of v2026.7.0:
 - **Bot stops replying on *every* channel: "Session deletion committed, but N transcript archive file export(s) remain pending in SQLite"**: a host/platform limitation, not a plugin bug. OpenClaw publishes a deleted session's transcript archive with `fs.link()`, and Android/Termux rejects `link()` with `EACCES` even inside app-private storage — so the publish never completes and the host then throws on every session operation (Zulip *and* Telegram, not just the deleted session). The plugin repairs these itself: `sessionArchiveRepair` (unset = automatic, active only when the hard-link probe fails; `true` = always; `false` = off). Note `openclaw sessions cleanup` and `doctor --fix` cannot help here — the former retries the same blocked `link()`, the latter refuses on Android ("Gateway service install not supported on android"). Inspect the backlog with `SELECT COUNT(*) FROM session_transcript_archives WHERE published_at IS NULL` in `{dataDir}/agents/{agentId}/agent/openclaw-agent.sqlite`. Repair logs land in the gateway log as `zulip session archive repair: …`.
 
 - **Agent pasted credentials into chat**: the plugin now blocks outbound messages containing a credential value from the host config (`blockSecretLeaks`, default on) and audit-logs the matching config path (`secret_leak_blocked`). Be aware of the limits: (a) the plugin cannot stop the agent *reading* `~/.openclaw/openclaw.json` — that is host tool policy, so restrict tool access if this matters; (b) a message already sent can only be deleted/edited by the bot within the realm's `message_content_delete_limit_seconds` / `message_content_edit_limit_seconds` — past that, only a realm admin can remove it (we hit exactly this: the bot got `400 The time limit for deleting this message has passed`); (c) deleting a session does **not** destroy its transcript — the host *archives* it into `session_transcript_archives`, so purge the archive row/blob too. Rotation of the exposed credentials is the only real remedy.
+
+## Known Issues
+
+- **Bot Presence (Online Status)**: Zulip's `POST /users/me/presence` endpoint explicitly rejects bot requests — the bot never shows as 🟢 online. This is a platform limitation, not a bug.
+- **Performance: First Message After Startup is Slower**: The first message after startup takes longer because the plugin initializes connections and warms up caches.
+- **Typing indicator TTL exceeded**: The typing indicator auto-stops after 60 seconds if the response takes longer. This is expected behavior.
+- **Legacy Skill Packages**: Old `openclaw skill` packages are deprecated in favor of the current plugin architecture. Migrate any legacy skills to the new plugin format.
+- **DM/Thread Session Conflation After Restart**: After a gateway restart, the agent may occasionally conflate context from different conversations. The OpenClaw host uses a filesystem fallback reader for third-party plugins when the SQLite WAL has not flushed. Mitigation: the plugin sets `MessageThreadId` to senderId for DMs and topic for streams; use `dmSessionTurnLimit` (default 20) to rotate sessions; use `/new` or `/reset` to force a fresh session. The proper fix is upstream.
 
 **Note**: This file is maintained as project documentation and is safe to commit.

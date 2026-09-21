@@ -35,9 +35,40 @@ Thank you for your interest in contributing! This document provides guidelines f
    pnpm run check
    ```
 
-   This runs: bootstrap → typecheck → build → smoke test → unit tests → package check
+   This runs: bootstrap → typecheck → build → smoke test → unit tests → package check → clawscan → audit
+
+> **Note:** `check:compat` (Tier 1 host compatibility) and `check:tier2` (outbound behaviour tests against a fake Zulip server) are **not** part of `pnpm run check`. Both download a real `openclaw` host (~390 MB) and run as separate CI jobs.
 
 > **Note:** A `pre-push` hook is automatically configured on `pnpm install`. It runs the full `pnpm run check` suite before any push, mirroring CI. If you want to bypass it in an emergency, use `git push --no-verify` (not recommended).
+
+### Project Structure
+
+```
+src/
+├── channel.ts            # Plugin entry point & channel config
+├── setup-core.ts         # Interactive setup wizard
+├── setup-surface.ts      # Setup wizard UI
+├── config-schema.ts      # Configuration validation
+├── types.ts              # Type definitions
+├── zulip/
+│   ├── auth.ts           # Authentication utilities
+│   ├── bootstrap.ts      # Monitor initialization
+│   ├── client.ts         # Zulip API client
+│   ├── dedupe-store.ts   # Deduplication store
+│   ├── media-utils.ts    # Media processing
+│   ├── monitor-helpers.ts # Logging helpers
+│   ├── monitor.ts       # Event polling & queue management
+│   ├── policy.ts         # DM/group policy logic
+│   ├── polling.ts       # Event polling
+│   ├── probe.ts          # Connection probing
+│   ├── queue-manager.ts  # Queue persistence
+│   ├── reactions.ts      # Reaction handling
+│   ├── reply-handler.ts  # Response processing
+│   ├── send.ts           # Message sending with security
+│   ├── text-utils.ts     # Text processing
+│   ├── uploads.ts        # Upload handling
+│   └── accounts.ts       # Multi-account config resolution
+```
 
 ---
 
@@ -106,6 +137,9 @@ pnpm test
 
 # Run specific test file
 pnpm test -- test/policy.test.ts
+
+# Tier 2 behaviour tests (fake Zulip server; downloads a real host)
+pnpm run check:tier2
 ```
 
 ### Writing Tests
@@ -113,6 +147,7 @@ pnpm test -- test/policy.test.ts
 - Tests live in the `test/` directory
 - Use the built-in `node:test` and `node:assert` modules
 - Follow the existing test patterns in the project
+- **Outbound behaviour tests live in `test/tier2/`** and are excluded from `pnpm test` (the glob is `test/*.test.ts`) because they import built `dist/` artifacts and need a real host in `node_modules` — the `check:tier2` runner supplies both
 
 ---
 
