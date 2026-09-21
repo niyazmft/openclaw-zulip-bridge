@@ -116,7 +116,7 @@ test("send is refused when the message contains a host credential", async () => 
   } finally {
     globalThis.fetch = realFetch;
     clearZulipRuntime();
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -139,7 +139,7 @@ test("a benign message still sends", async () => {
   } finally {
     globalThis.fetch = realFetch;
     clearZulipRuntime();
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -162,6 +162,6 @@ test("blockSecretLeaks:false disables the guard", async () => {
   } finally {
     globalThis.fetch = realFetch;
     clearZulipRuntime();
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });

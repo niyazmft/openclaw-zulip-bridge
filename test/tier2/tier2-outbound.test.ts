@@ -87,7 +87,7 @@ test("uploadZulipFile captures multipart upload", async () => {
     assert.strictEqual(ups.length, 1);
     assert.ok(ups[0].body.includes("test.txt"));
   });
-  rmSync(tmpDir, { recursive: true, force: true });
+  rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
 test("addZulipReaction captures emoji + messageId", async () => {

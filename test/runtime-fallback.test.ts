@@ -79,7 +79,7 @@ test("readOpenClawConfigFile parses a config and tolerates a missing/invalid one
     fs.writeFileSync(bad, "{ not json");
     assert.deepEqual(readOpenClawConfigFile(bad), {});
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 

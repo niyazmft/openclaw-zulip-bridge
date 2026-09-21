@@ -68,12 +68,21 @@ npm run check:tier2        # Tier 2: outbound behaviour tests against a local fa
 
 ## CI
 
-CI runs on Node 22, uses `npm ci`, runs `npm run check:bootstrap` followed by `npm run check`, then enforces a clean working directory (`git diff --exit-code`). If check modifies any generated files, CI will fail.
+Triggers: pushes to `main`, and all pull requests. `push` is deliberately scoped to `main` — an unscoped `push` together with `pull_request` fires both events for a PR branch and runs every job twice (this was live: 8 checks for 4 jobs). A `concurrency` group with `cancel-in-progress` cancels superseded runs when a PR is pushed repeatedly.
 
-Two further jobs run **outside** that gate, because each installs a real `openclaw` host (~390 MB):
+Three jobs, Node 22 + pnpm 10.32.1:
 
-- **`compat`** — `npm run check:compat` across a host matrix (`2026.7.1`, `2026.9.1`). This is the only check that catches `openclaw/plugin-sdk/*` subpath/named-export drift and registration/manifest shape bugs.
-- **`tier2`** — `npm run check:tier2`, the outbound behaviour tests against the local fake Zulip server.
+| Job | Purpose | Runs |
+|-----|---------|------|
+| `zulip-bridge` | The gate: `pnpm install`, then `pnpm run check` (bootstrap → typecheck → build → smoke → test → package → clawscan → audit), gitleaks, and a pristine-working-directory check (`git diff --exit-code`) | Always |
+| `compat` | Tier 1 host compatibility — the only check that catches `openclaw/plugin-sdk/*` subpath/named-export drift and registration/manifest shape bugs. Matrix `2026.7.1`, `2026.9.1` with `fail-fast: false` so both versions report | Code changes only |
+| `tier2` | Outbound behaviour against the local fake Zulip server | Code changes only |
+
+`compat` and `tier2` both `needs: zulip-bridge`, so a typecheck or unit-test failure does not first spend ~780 MB downloading hosts. They are also skipped when a change touches only documentation (`*.md`, `docs/`, `LICENSE`) — `zulip-bridge` publishes a `code` output computed with a plain `git diff` (no third-party path-filter action) and the heavy jobs gate on it. Both cache `~/.npm`, which is where the throwaway-workspace `npm install openclaw@<version>` lands.
+
+**Never skip `zulip-bridge` for docs-only changes**: ClawScan scans `docs/` and `check:package` asserts that files referenced by `package.json` exist, so a README edit can legitimately fail CI.
+
+**Branch-protection caveat**: a skipped job reports as *skipped*, not *successful*. If `compat`/`tier2` are made required checks, a docs-only PR can be left blocked — mark only `zulip-bridge` as required, or drop the docs-only gating.
 
 ## Build Artifacts
 

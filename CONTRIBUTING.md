@@ -37,7 +37,7 @@ Thank you for your interest in contributing! This document provides guidelines f
 
    This runs: bootstrap → typecheck → build → smoke test → unit tests → package check → clawscan → audit
 
-> **Note:** `check:compat` (Tier 1 host compatibility) and `check:tier2` (outbound behaviour tests against a fake Zulip server) are **not** part of `pnpm run check`. Both download a real `openclaw` host (~390 MB) and run as separate CI jobs.
+> **Note:** `check:compat` (Tier 1 host compatibility) and `check:tier2` (outbound behaviour tests against a fake Zulip server) are **not** part of `pnpm run check`. Both download a real `openclaw` host (~390 MB) and run as separate CI jobs, gated behind the main job and skipped entirely for documentation-only changes.
 
 > **Note:** A `pre-push` hook is automatically configured on `pnpm install`. It runs the full `pnpm run check` suite before any push, mirroring CI. If you want to bypass it in an emergency, use `git push --no-verify` (not recommended).
 

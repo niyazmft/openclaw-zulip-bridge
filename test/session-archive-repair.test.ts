@@ -136,7 +136,7 @@ dbTest("publishes a pending transcript archive the host could not publish", asyn
     assert.equal(typeof updated.published_at, "number");
     assert.equal(updated.last_publish_error, null);
   } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -153,7 +153,7 @@ dbTest("is idempotent: a second run finds nothing pending", async () => {
 
     assert.deepEqual(second, { databases: 1, pending: 0, repaired: 0, skipped: 0 });
   } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -166,7 +166,7 @@ dbTest("ignores databases without the archive table (schema is not ours)", async
     const outcome = await repairPendingSessionArchives({ dataDir });
     assert.deepEqual(outcome, { databases: 1, pending: 0, repaired: 0, skipped: 0 });
   } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -186,7 +186,7 @@ dbTest("skips a row whose blob does not match archive_sha256", async () => {
     assert.equal(outcome.skipped, 1);
     assert.equal(fs.existsSync(path.join(sessionsDir(dataDir), row.archive_name)), false);
   } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -205,7 +205,7 @@ dbTest("skips an archive name that could escape the sessions directory", async (
     assert.equal(outcome.skipped, 1);
     assert.equal(fs.existsSync(path.join(dataDir, "..", "..", "..", "etc", "evil.zst")), false);
   } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -229,7 +229,7 @@ dbTest("never overwrites an existing archive file with different content", async
     assert.equal(outcome.skipped, 1);
     assert.equal(fs.readFileSync(target, "utf8"), "somebody else's data");
   } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -240,7 +240,7 @@ test("tolerates a data dir with no agents (nothing to do, no throw)", async () =
     assert.deepEqual(outcome, { databases: 0, pending: 0, repaired: 0, skipped: 0 });
     assert.deepEqual(listAgentDatabases(dataDir), []);
   } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -254,7 +254,7 @@ test("hardLinksAvailable probes the data dir and caches the answer", () => {
     assert.equal(hardLinksAvailable(dataDir), available, "result must be cached");
     assert.equal(fs.readdirSync(dataDir).some((e) => e.includes("link-probe")), false, "probe files cleaned up");
   } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -281,7 +281,7 @@ dbTest("auto mode stays dormant when hard links work (healthy hosts untouched)",
     check.close();
     assert.equal(row.published_at, null, "auto mode must not touch anything when links work");
   } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -315,6 +315,6 @@ dbTest("mode:false never runs, mode:true repairs and stops on abort", async () =
     check.close();
     assert.equal(typeof row.published_at, "number", "forced mode must repair");
   } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
