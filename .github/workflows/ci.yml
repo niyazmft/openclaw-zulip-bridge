@@ -56,13 +56,13 @@ jobs:
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
       - run: pnpm install --frozen-lockfile
       # `check` already runs check:bootstrap, check:clawscan and check:audit.
       # Running them again as separate steps re-executed three of them twice for
@@ -91,13 +91,13 @@ jobs:
         openclaw: ["2026.7.1", "2026.9.1"]
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
       # check:compat stages the plugin deps and the pinned host into a throwaway
       # workspace via npm; caching ~/.npm avoids re-downloading the ~390 MB host
       # tarball on every run. Key is versioned so it can be bumped if a cached
@@ -119,13 +119,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
       - uses: actions/cache@v4
         with:
           path: ~/.npm
