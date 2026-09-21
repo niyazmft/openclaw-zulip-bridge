@@ -701,6 +701,12 @@ export function getActivityTraceManager(
   return managers.get(accountId ?? DEFAULT_ACCOUNT_ID);
 }
 
+export function unregisterActivityTraceManager(accountId?: string): void {
+  const key = accountId ?? DEFAULT_ACCOUNT_ID;
+  managers.get(key)?.stop();
+  managers.delete(key);
+}
+
 export function clearActivityTraceManagers(): void {
   for (const manager of managers.values()) manager.stop();
   managers.clear();

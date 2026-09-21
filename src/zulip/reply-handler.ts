@@ -7,6 +7,11 @@ import { formatZulipLog, maskPII } from "./monitor-helpers.js";
 import { extractZulipTopicDirective } from "./text-utils.js";
 import { readLatestAssistantTexts } from "./fallback-reader.js";
 import {
+  formatTraceDuration,
+  type ActivityTrace,
+  type ActivityTraceManager,
+} from "./activity-trace.js";
+import {
   isReplyPayloadNonTerminalToolErrorWarning,
   type ReplyPayload,
 } from "openclaw/plugin-sdk/reply-payload";
@@ -18,6 +23,10 @@ function truncateText(text: string, maxLength: number): string {
   const maxContentLength = maxLength - ellipsis.length;
   if (maxContentLength <= 0) return text.slice(0, maxLength);
   return text.slice(0, maxContentLength) + ellipsis;
+}
+
+function isAbortError(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && (err as { name?: unknown }).name === "AbortError");
 }
 
 /**
@@ -46,6 +55,15 @@ export async function dispatchZulipReply(params: {
   logVerboseMessage: (msg: string) => void;
   placeholderMessageIdPromise?: Promise<string | undefined>;
   maxMessageLength?: number;
+  /**
+   * Activity-trace manager for this account (#301). Present only when
+   * `activityTrace` is enabled, so the trace is opt-in and costs nothing when off.
+   */
+  traceManager?: ActivityTraceManager;
+  /** Human label for the work item shown in the trace header. */
+  traceTitle?: string;
+  /** Monitor abort signal, so a cancelled run finalizes its trace. */
+  abortSignal?: AbortSignal;
 }): Promise<unknown> {
   const {
     core,
@@ -69,6 +87,9 @@ export async function dispatchZulipReply(params: {
     logVerboseMessage,
     placeholderMessageIdPromise,
     maxMessageLength,
+    traceManager,
+    traceTitle,
+    abortSignal,
   } = params;
 
   const typingParams = isDM
@@ -318,6 +339,25 @@ export async function dispatchZulipReply(params: {
   let dispatchError: unknown;
   const dispatchStartTime = new Date().toISOString();
   const dispatchStartMs = Date.now();
+
+  // Activity trace (#301): one bot-owned message per work item, posted when the
+  // run starts and finalized on success, error and abort. Started here — the
+  // run boundary — and never awaited: a ~600ms Zulip round-trip must not delay
+  // the agent, and a trace failure must never turn a reply into a failed
+  // dispatch. The target is derived from the same `to`/`topic` pair the reply
+  // uses, so a trace can never land in a different topic than the reply.
+  let trace: ActivityTrace | undefined;
+  if (traceManager) {
+    try {
+      trace = traceManager.start({
+        title: traceTitle ?? (isDM ? "direct message" : topic ?? "work item"),
+        target: { to, topic, accountId: account.accountId },
+        sessionKey: ctxPayload?.SessionKey ?? route?.sessionKey ?? route?.mainSessionKey,
+      });
+    } catch (err) {
+      logVerboseMessage(`zulip activity trace start failed: ${String(err)}`);
+    }
+  }
   const zLogger = core.logging?.getChildLogger?.({ module: "zulip" });
   zLogger?.info?.("zulip dispatch start", {
     accountId: account.accountId,
@@ -431,6 +471,30 @@ export async function dispatchZulipReply(params: {
             }),
           );
         }
+      }
+    }
+    if (trace) {
+      // Finalize on success, error *and* abort — a trace must never be left
+      // permanently "in progress", and a run that produced no reply still shows
+      // in the room that it happened.
+      try {
+        const cancelled = abortSignal?.aborted === true || isAbortError(dispatchError);
+        const status = cancelled ? "cancelled" : dispatchError ? "failed" : "done";
+        const elapsedMs = Date.now() - dispatchStartMs;
+        const elapsed = formatTraceDuration(elapsedMs) ?? `${elapsedMs}ms`;
+        const summary = cancelled
+          ? "run cancelled"
+          : dispatchError
+            ? `run failed after ${elapsed}`
+            : deliveredAny
+              ? `run finished in ${elapsed}`
+              : `run finished in ${elapsed} — no reply sent`;
+        trace.finish({ status, summary });
+        // Best-effort: the final edit lands in the background. Awaiting it would
+        // add a Zulip round-trip to every dispatch.
+        void trace.settle().catch(() => undefined);
+      } catch (err) {
+        logVerboseMessage(`zulip activity trace finish failed: ${String(err)}`);
       }
     }
     markDispatchIdle();
