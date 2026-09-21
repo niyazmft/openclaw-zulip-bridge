@@ -2,9 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve as pathResolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createFakeZulipServer } from "./fake-zulip-server.js";
-import {
+
+// Dynamic import of the built artifact. CI runs `typecheck` BEFORE `build`, so a
+// static `../../dist/...` specifier fails with TS2307 in a fresh checkout (dist/
+// is gitignored). Same approach as test/dist-import.test.ts.
+const repoRoot = pathResolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const {
   createZulipClient,
   sendZulipStreamMessage,
   sendZulipPrivateMessage,
@@ -12,7 +18,7 @@ import {
   addZulipReaction,
   editZulipMessage,
   sendZulipTyping,
-} from "../../dist/src/zulip/client.js";
+} = await import(pathToFileURL(join(repoRoot, "dist/src/zulip/client.js")).href);
 
 async function startFake(): Promise<ReturnType<typeof createFakeZulipServer>> {
   const fake = createFakeZulipServer();

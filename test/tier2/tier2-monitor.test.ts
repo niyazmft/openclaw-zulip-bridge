@@ -1,7 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { dirname, join, resolve as pathResolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createFakeZulipServer } from "./fake-zulip-server.js";
-import { monitorZulipProvider } from "../../dist/src/zulip/monitor.js";
+
+// NB: this file is deliberately NOT wired into `npm run check:tier2`.
+// monitorZulipProvider needs host-runtime mocks (e.g.
+// core.channel.commands.shouldHandleTextCommands) that this harness does not
+// provide, so it is kept as a starting point rather than a passing test.
+// Dynamic import keeps CI's pre-build `typecheck` from requiring dist/.
+const repoRoot = pathResolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const { monitorZulipProvider } = await import(
+  pathToFileURL(join(repoRoot, "dist/src/zulip/monitor.js")).href,
+);
 
 async function startFake(): Promise<ReturnType<typeof createFakeZulipServer>> {
   const fake = createFakeZulipServer();
