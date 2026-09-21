@@ -18,6 +18,10 @@ jobs:
   zulip-bridge:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      # "true" when anything other than documentation changed. Consumed by the
+      # compat/tier2 jobs to skip ~390 MB host downloads for docs-only PRs.
+      code: ${{ steps.filter.outputs.code }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,6 +29,33 @@ jobs:
           # (<head>^..<head>); a shallow clone breaks it with
           # "ambiguous argument ... unknown revision".
           fetch-depth: 0
+      # NOTE: documentation changes must still run THIS job — ClawScan scans
+      # docs/ and check:package asserts files referenced by package.json exist,
+      # so a README edit can legitimately fail CI. Only the behavioural jobs are
+      # skipped below.
+      - id: filter
+        name: Detect non-documentation changes
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "base commit unavailable — assuming code changed"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "$base" HEAD)"
+          if [ -z "$changed" ]; then
+            echo "no files changed"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed files:"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -qvE '\.md$|^docs/|^LICENSE$'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -45,6 +76,11 @@ jobs:
         run: git diff --exit-code || { echo "Working directory is not clean. Lockfile or generated files might be out of sync."; false; }
 
   compat:
+    # Wait for the fast job: there is no point spending 2 × ~390 MB on host
+    # downloads when typecheck, the unit tests or the security gate already
+    # failed. Skipped entirely for docs-only changes.
+    needs: zulip-bridge
+    if: needs.zulip-bridge.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -76,6 +112,9 @@ jobs:
         run: COMPAT_VERSIONS=${{ matrix.openclaw }} pnpm run check:compat
 
   tier2:
+    # See the compat job above for why this depends on zulip-bridge.
+    needs: zulip-bridge
+    if: needs.zulip-bridge.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
