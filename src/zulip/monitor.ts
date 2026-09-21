@@ -215,7 +215,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     const activityTraceConfig = resolveActivityTraceConfig(activityTraceInput);
     if (activityTraceConfig.enabled) {
       activityTraceManager = new ActivityTraceManager({
-        io: createZulipTraceIo(client),
+        io: createZulipTraceIo(client, { cfg, log: logger ?? undefined }),
         config: activityTraceInput,
         log: logger
           ? {

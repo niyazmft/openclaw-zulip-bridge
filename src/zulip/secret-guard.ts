@@ -106,3 +106,27 @@ export function describeLeakedSecrets(hits: KnownSecret[]): string {
   const names = hits.map((hit) => hit.name).join(", ");
   return `${hits.length} credential value(s) from the host config (${names})`;
 }
+
+/**
+ * Replaces every known credential value in `text` with a marker.
+ *
+ * Defence in depth for paths that do not pass through `sendMessageZulip` —
+ * notably `editZulipMessage`, which the activity trace uses for in-place edits.
+ * Redacting keeps the write useful; blocking would leave the trace stale.
+ */
+export function redactSecrets(
+  text: string,
+  secrets: KnownSecret[],
+): { text: string; redacted: number } {
+  if (!text || secrets.length === 0) {
+    return { text, redacted: 0 };
+  }
+  let result = text;
+  let redacted = 0;
+  for (const secret of secrets) {
+    if (!secret.value || !result.includes(secret.value)) continue;
+    result = result.split(secret.value).join("[redacted]");
+    redacted += 1;
+  }
+  return { text: result, redacted };
+}

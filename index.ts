@@ -1,6 +1,7 @@
 import { defineChannelPluginEntry } from "openclaw/plugin-sdk/channel-core";
 import { zulipPlugin } from "./src/channel.js";
 import { setZulipRuntime } from "./src/runtime.js";
+import { registerToolCallTraceHooks } from "./src/zulip/tool-trace.js";
 export { zulipPlugin } from "./src/channel.js";
 export { setZulipRuntime } from "./src/runtime.js";
 
@@ -31,6 +32,18 @@ export default defineChannelPluginEntry({
     // `defineChannelPluginEntry` SDK wrapper before dispatching to registerFull.
     // Calling it here would double-register the channel (see #293 Tier 1 check).
     setZulipRuntime(runtime);
+
+    // Mode A (#302): `after_tool_call` checkpoints for the activity trace.
+    // Idempotent and feature-detected — the host calls registerFull twice and
+    // also in tool-discovery mode, and older/other runtimes may not expose the
+    // hook surface at all. Failure degrades to the #301 run-boundary trace.
+    registerToolCallTraceHooks(api, {
+      log: {
+        info: (message, meta) => logger.info?.(message, meta),
+        warn: (message, meta) => logger.warn?.(message, meta),
+      },
+    });
+
     logger.info("[zulip] Plugin registration complete.");
   },
 });

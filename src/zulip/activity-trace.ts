@@ -26,6 +26,8 @@
 
 import { editZulipMessage, type ZulipClient } from "./client.js";
 import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/core";
+import { getZulipRuntime } from "../runtime.js";
+import { collectKnownSecrets, redactSecrets } from "./secret-guard.js";
 import { sendMessageZulip } from "./send.js";
 
 export type TraceStepStatus = "running" | "done" | "failed" | "note";
@@ -667,17 +669,38 @@ export class ActivityTrace {
 }
 
 /** Default write path: `send.ts` for the post, `client.ts` for the edits. */
-export function createZulipTraceIo(client: ZulipClient): TraceIo {
+export function createZulipTraceIo(
+  client: ZulipClient,
+  opts: { cfg?: unknown; log?: TraceLogger } = {},
+): TraceIo {
+  // Edits go straight through `editZulipMessage`, which — unlike
+  // `sendMessageZulip` — has no secret guard. A tool error or command line in a
+  // trace step must never be the one place a host credential reaches Zulip, so
+  // both writes are redacted here as defence in depth.
+  const sanitize = (content: string): string => {
+    if (!content) return content;
+    try {
+      const cfg = opts.cfg ?? getZulipRuntime().config.current();
+      const { text, redacted } = redactSecrets(content, collectKnownSecrets(cfg));
+      if (redacted > 0) {
+        opts.log?.warn?.("zulip activity trace redacted credentials", { redacted });
+      }
+      return text;
+    } catch {
+      return content;
+    }
+  };
+
   return {
     post: async (target, content) => {
-      const result = await sendMessageZulip(target.to, content, {
+      const result = await sendMessageZulip(target.to, sanitize(content), {
         accountId: target.accountId,
         topic: target.topic,
       });
       const messageId = result?.messageId;
       return messageId && messageId !== "unknown" ? messageId : undefined;
     },
-    edit: (messageId, content) => editZulipMessage(client, { messageId, content }),
+    edit: (messageId, content) => editZulipMessage(client, { messageId, content: sanitize(content) }),
   };
 }
 
@@ -699,6 +722,27 @@ export function getActivityTraceManager(
   accountId?: string,
 ): ActivityTraceManager | undefined {
   return managers.get(accountId ?? DEFAULT_ACCOUNT_ID);
+}
+
+/**
+ * Resolves the live trace for an agent run, across every registered account.
+ *
+ * Hooks (#302) carry `runId`/`sessionKey` — the *agent run*, not the room — so
+ * attribution is done here. Returns `undefined` when nothing matches; callers
+ * must drop unattributable hooks rather than guess a topic.
+ */
+export function findActivityTrace(
+  sessionKey?: string,
+  runId?: string,
+): ActivityTrace | undefined {
+  if (!sessionKey && !runId) return undefined;
+  for (const manager of managers.values()) {
+    const byRun = manager.findByRunId(runId);
+    if (byRun) return byRun;
+    const bySession = manager.findBySessionKey(sessionKey);
+    if (bySession) return bySession;
+  }
+  return undefined;
 }
 
 export function unregisterActivityTraceManager(accountId?: string): void {
