@@ -55,6 +55,9 @@ const ZulipAccountSchema = z.object({
   allowInsecureHttp: z.boolean().optional(),
   sessionArchiveRepair: z.boolean().optional(),
   blockSecretLeaks: z.boolean().optional(),
+  activityTrace: z.boolean().optional(),
+  traceCoalesceMs: z.number().int().min(0).max(60_000).optional(),
+  traceMaxRate: z.number().min(0.1).max(50).optional(),
 });
 
 const ZulipConfigSchema = buildCatchallMultiAccountChannelSchema(
