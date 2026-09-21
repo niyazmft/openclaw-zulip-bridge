@@ -1,12 +1,23 @@
 name: ci
 
 on:
+  # Restrict push to the default branch. Without this, a push to a branch that
+  # already has an open PR fires BOTH `push` and `pull_request`, so every job
+  # runs twice (observed on #304: 8 checks for 4 jobs).
   push:
+    branches: [main]
   pull_request:
+
+# Cancel superseded runs for the same ref — a rapid series of pushes to one PR
+# should not queue up N full CI runs.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   zulip-bridge:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -17,17 +28,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
       - uses: pnpm/action-setup@v4
         with:
           version: 10.32.1
       - run: pnpm install --frozen-lockfile
-      - name: Verify bootstrap
-        run: pnpm run check:bootstrap
+      # `check` already runs check:bootstrap, check:clawscan and check:audit.
+      # Running them again as separate steps re-executed three of them twice for
+      # no additional signal.
       - run: pnpm run check
-      - name: ClawScan replica (ClawHub moderation engine)
-        run: pnpm run check:clawscan
-      - name: npm audit (production deps)
-        run: pnpm run check:audit
       - name: gitleaks (secret detection)
         uses: gitleaks/gitleaks-action@v2
         env:
@@ -37,7 +46,11 @@ jobs:
 
   compat:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
+      # Report every host version even if one fails — a cancelled sibling hides
+      # whether the other version regressed.
+      fail-fast: false
       matrix:
         openclaw: ["2026.7.1", "2026.9.1"]
     steps:
@@ -45,9 +58,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
       - uses: pnpm/action-setup@v4
         with:
           version: 10.32.1
+      # check:compat stages the plugin deps and the pinned host into a throwaway
+      # workspace via npm; caching ~/.npm avoids re-downloading the ~390 MB host
+      # tarball on every run. Key is versioned so it can be bumped if a cached
+      # entry is ever written incomplete.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-openclaw-v1-${{ matrix.openclaw }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
       - name: Host compatibility (tier 1) — openclaw@${{ matrix.openclaw }}
@@ -55,17 +77,23 @@ jobs:
 
   tier2:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
       - uses: pnpm/action-setup@v4
         with:
           version: 10.32.1
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-openclaw-v1-tier2
       - run: pnpm install --frozen-lockfile
       # check:tier2 copies dist/ + dist-cjs/ into a throwaway workspace, so the
-      # build must run first (the runner fails loudly if the artifacts are absent).
+      # build must run first (the runner fails loudly if artifacts are absent).
       - run: pnpm run build
       - name: Outbound behaviour (tier 2) — local fake Zulip server
         run: pnpm run check:tier2
