@@ -37,6 +37,18 @@ export const zulipChannelConfigUiHints = {
     label: "Block Credential Leaks (recommended)",
     help: "Refuse to send a Zulip message containing a credential value from the host config, so an agent cannot paste secrets into chat. Names only where the credential came from, never its value. Default: enabled.",
   },
+  activityTrace: {
+    label: "Activity trace (progressive status message)",
+    help: "Post one dedicated bot-owned status message per work item and edit it in place as the agent works, so the topic shows progress instead of only the final reply. Status detail edits the trace; actionable results stay separate messages. Adds outbound writes (~600ms per Zulip edit). Default: disabled.",
+  },
+  traceCoalesceMs: {
+    label: "Trace coalescing window (ms)",
+    help: "Bursty trace updates inside this window collapse into a single message edit. Zulip edits are ~600ms round-trips. Clamped to 0-60000. Default: 400.",
+  },
+  traceMaxRate: {
+    label: "Trace max edits per second",
+    help: "Hard ceiling on trace edits per second, in addition to the coalescing window, so no configuration can flood the Zulip API. Clamped to 0.1-50. Default: 2.",
+  },
   streams: {
     label: "Zulip Streams",
     help: "Optional list of stream names the bot should monitor. Use [\"*\"] or omit depending on your routing design.",

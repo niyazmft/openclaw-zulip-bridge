@@ -9,6 +9,11 @@
   "channels": [
     "zulip"
   ],
+  "contracts": {
+    "tools": [
+      "zulip_progress"
+    ]
+  },
   "setup": {
     "providers": [
       {
@@ -73,6 +78,22 @@
           "blockSecretLeaks": {
             "type": "boolean",
             "description": "Refuse to send a Zulip message that contains a credential value from the host config, so an agent cannot paste secrets into chat. Default: enabled."
+          },
+          "activityTrace": {
+            "type": "boolean",
+            "description": "Post one dedicated bot-owned status message per work item and edit it in place as the agent works, so the topic shows progress instead of only the final reply. Status detail edits the trace; actionable results stay separate messages. Default: disabled."
+          },
+          "traceCoalesceMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 60000,
+            "description": "Bursty trace updates inside this window (ms) collapse into a single message edit. Clamped to 0-60000. Default: 400."
+          },
+          "traceMaxRate": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 50,
+            "description": "Hard ceiling on trace edits per second, in addition to the coalescing window. Clamped to 0.1-50. Default: 2."
           },
           "email": {
             "type": "string"
@@ -265,6 +286,22 @@
             "type": "boolean",
             "description": "Refuse to send a Zulip message that contains a credential value from the host config, so an agent cannot paste secrets into chat. Default: enabled."
           },
+          "activityTrace": {
+            "type": "boolean",
+            "description": "Post one dedicated bot-owned status message per work item and edit it in place as the agent works, so the topic shows progress instead of only the final reply. Status detail edits the trace; actionable results stay separate messages. Default: disabled."
+          },
+          "traceCoalesceMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 60000,
+            "description": "Bursty trace updates inside this window (ms) collapse into a single message edit. Clamped to 0-60000. Default: 400."
+          },
+          "traceMaxRate": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 50,
+            "description": "Hard ceiling on trace edits per second, in addition to the coalescing window. Clamped to 0.1-50. Default: 2."
+          },
           "email": {
             "type": "string"
           },
@@ -437,6 +474,21 @@
           "label": "Block Credential Leaks (recommended)",
           "sensitive": false,
           "description": "Refuse to send a Zulip message that contains a credential value from the host config, so an agent cannot paste secrets into chat. Default: enabled."
+        },
+        "activityTrace": {
+          "label": "Activity trace (progressive status message)",
+          "sensitive": false,
+          "description": "Post one dedicated bot-owned status message per work item and edit it in place as the agent works, so the topic shows progress instead of only the final reply. Status detail edits the trace; actionable results stay separate messages. Adds outbound writes (~600ms per Zulip edit). Default: disabled."
+        },
+        "traceCoalesceMs": {
+          "label": "Trace coalescing window (ms)",
+          "sensitive": false,
+          "description": "Bursty trace updates inside this window collapse into a single message edit. Zulip edits are ~600ms round-trips. Clamped to 0-60000. Default: 400."
+        },
+        "traceMaxRate": {
+          "label": "Trace max edits per second",
+          "sensitive": false,
+          "description": "Hard ceiling on trace edits per second, in addition to the coalescing window, so no configuration can flood the Zulip API. Clamped to 0.1-50. Default: 2."
         },
         "streams": {
           "label": "Zulip Streams",

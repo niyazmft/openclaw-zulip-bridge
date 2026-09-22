@@ -160,6 +160,36 @@ export type ZulipAccountConfig = {
    * host's tool policy); it stops the plugin from transmitting it.
    */
   blockSecretLeaks?: boolean;
+  /**
+   * Progressive activity trace (epic #293).
+   *
+   * When enabled, the plugin posts **one** dedicated bot-owned status message
+   * per work item and edits it in place as steps resolve, so the topic shows
+   * what the agent is doing instead of only the final reply. Status detail
+   * edits the trace; actionable results remain separate messages.
+   *
+   * Off by default: the feature adds outbound writes (~600ms Zulip round-trips).
+   */
+  activityTrace?: boolean;
+  /**
+   * Coalescing window in milliseconds for trace edits.
+   *
+   * Bursty updates within this window collapse into a single PATCH. Zulip
+   * round-trips are ~600ms, so editing per step would make the topic a
+   * metronome. Clamped to 0–60000.
+   *
+   * Default: 400.
+   */
+  traceCoalesceMs?: number;
+  /**
+   * Hard ceiling on trace edits per second.
+   *
+   * Enforced in addition to the coalescing window, so no configuration can
+   * flood the Zulip API. Clamped to 0.1–50.
+   *
+   * Default: 2.
+   */
+  traceMaxRate?: number;
 };
 
 export type ZulipConfig = {

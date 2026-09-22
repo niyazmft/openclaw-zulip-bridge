@@ -48,6 +48,13 @@ import { addReactionSafe, removeReactionSafe } from "./reactions.js";
 import { initializeZulipMonitor } from "./bootstrap.js";
 import { pollOnce } from "./polling.js";
 import { dispatchZulipReply } from "./reply-handler.js";
+import {
+  ActivityTraceManager,
+  createZulipTraceIo,
+  registerActivityTraceManager,
+  resolveActivityTraceConfig,
+  unregisterActivityTraceManager,
+} from "./activity-trace.js";
 import { AuditLogger } from "./audit-logger.js";
 import { resolveZulipDataDir } from "./data-dir.js";
 
@@ -93,6 +100,10 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
 
   // Platform workaround (see ./session-archive-repair.ts). Stopped in `finally`.
   let stopSessionArchiveRepair: (() => void) | undefined;
+
+  // Progressive activity trace (epic #293). Opt-in; stopped/unregistered in `finally`.
+  let activityTraceManager: ActivityTraceManager | undefined;
+  let activityTraceAccountId: string | undefined;
 
   // Assert health immediately so the host health-monitor doesn't kill us during initialization
   opts.statusSink?.({
@@ -191,6 +202,36 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       signal: opts.abortSignal,
       logger: logger ?? undefined,
     });
+
+    // Activity trace (#301): one live, in-place-edited status message per work
+    // item. The manager is per account because it needs this account's Zulip
+    // client; reply-handler starts/finishes a trace per dispatch, and mode A
+    // (#302) attributes tool hooks to it through the registry.
+    const activityTraceInput = {
+      activityTrace: accountSection.activityTrace ?? account.config.activityTrace,
+      traceCoalesceMs: accountSection.traceCoalesceMs ?? account.config.traceCoalesceMs,
+      traceMaxRate: accountSection.traceMaxRate ?? account.config.traceMaxRate,
+    };
+    const activityTraceConfig = resolveActivityTraceConfig(activityTraceInput);
+    if (activityTraceConfig.enabled) {
+      activityTraceManager = new ActivityTraceManager({
+        io: createZulipTraceIo(client, { cfg, log: logger ?? undefined }),
+        config: activityTraceInput,
+        log: logger
+          ? {
+              info: (message, meta) => logger.info?.(message, meta),
+              warn: (message, meta) => logger.warn?.(message, meta),
+            }
+          : undefined,
+      });
+      activityTraceAccountId = account.accountId;
+      registerActivityTraceManager(account.accountId, activityTraceManager);
+      logger?.info?.("zulip activity trace enabled", {
+        accountId: account.accountId,
+        coalesceMs: activityTraceConfig.timing.coalesceMs,
+        maxRatePerSec: activityTraceConfig.timing.maxRatePerSec,
+      });
+    }
 
     // Pre-compute the fallback for groupAllowFrom, but defer disk read until needed.
     // This avoids disk I/O for messages where sender is already authorized by static config.
@@ -722,6 +763,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         logVerboseMessage,
         placeholderMessageIdPromise: placeholderPromise,
         maxMessageLength: account.maxMessageLength ?? 20000,
+        traceManager: activityTraceManager,
+        traceTitle: preview,
+        abortSignal: opts.abortSignal,
       });
 
       if (reactionsEnabled) {
@@ -965,6 +1009,11 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     throw err;
   } finally {
     stopSessionArchiveRepair?.();
+    if (activityTraceAccountId) {
+      unregisterActivityTraceManager(activityTraceAccountId);
+      activityTraceAccountId = undefined;
+      activityTraceManager = undefined;
+    }
     logger?.info?.("zulip monitor stopped", {
       accountId: opts.accountId,
       reason: opts.abortSignal?.aborted ? "aborted" : "finished",
