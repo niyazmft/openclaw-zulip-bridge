@@ -75,6 +75,15 @@ export type ZulipMessage = {
    * when the original session was lost due to gateway restart.
    */
   _recoverySessionKey?: string;
+  /**
+   * Internal: this message was synthesised from a reaction trigger (#297),
+   * not received from Zulip. The message handler uses it to skip the
+   * "did a human address the bot?" gates (mention/onchar) while still applying
+   * every policy, allowlist and rate-limit decision to the reacting user.
+   */
+  _reactionTrigger?: boolean;
+  _reactionEmoji?: string;
+  _reactionUserId?: string;
 };
 
 /**
@@ -1115,8 +1124,7 @@ export async function fetchZulipMessages(
     topic?: string;
     limit?: number;
   },
-): Promise<ZulipMessage[]> {
-  const limit = Math.min(Math.max(1, params.limit ?? 50), 1000);
+): Promise<ZulipMessage[]> {  const limit = Math.min(Math.max(1, params.limit ?? 50), 1000);
   const narrow = [{ operator: "stream", operand: params.stream } as Record<string, unknown>];
   if (params.topic) {
     narrow.push({ operator: "topic", operand: params.topic });
@@ -1132,6 +1140,26 @@ export async function fetchZulipMessages(
   );
   assertSuccess(payload, "Zulip /messages failed");
   return payload.messages ?? [];
+}
+
+/**
+ * Fetches a single message by id.
+ *
+ * Used by the reaction triggers (#297) to learn which stream/topic a reacted
+ * message belongs to and who authored it, without keeping an outbound-message
+ * index in memory.
+ */
+export async function fetchZulipMessage(
+  client: ZulipClient,
+  messageId: string | number,
+): Promise<ZulipMessage | undefined> {
+  const id = String(messageId).trim();
+  if (!id) return undefined;
+  const payload = await client.request<ZulipApiResponse & { message?: ZulipMessage }>(
+    `/messages/${encodeURIComponent(id)}`,
+  );
+  assertSuccess(payload, "Zulip /messages/{id} failed");
+  return payload.message;
 }
 
 export async function searchZulipMessages(
