@@ -190,6 +190,24 @@ export type ZulipAccountConfig = {
    * Default: 2.
    */
   traceMaxRate?: number;
+  /**
+   * History-aware context (#294).
+   *
+   * `"off"` (default) — never harvest. `"on-demand"` — only when the inbound
+   * text looks like a "do we know this?" question. `"always"` — every inbound
+   * stream message carries the bounded history block.
+   *
+   * Each harvest is one extra Zulip round-trip (~600ms) on the reply path and
+   * consumes context budget, which is why on-demand is the recommended mode.
+   * Streams/topics only; DMs keep their own session continuity.
+   */
+  historyContext?: "off" | "on-demand" | "always";
+  /** Max earlier messages injected as history context (default 8, clamp 1–50). */
+  historyMaxMessages?: number;
+  /** How far back history is considered (default 72 hours, clamp 1–8760). */
+  historyWindowHours?: number;
+  /** Hard cap on the rendered history block in characters (default 4000, clamp 200–20000). */
+  historyMaxChars?: number;
 };
 
 export type ZulipConfig = {

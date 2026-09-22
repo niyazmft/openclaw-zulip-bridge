@@ -52,6 +52,7 @@ npm run check:tier2        # Tier 2: outbound behaviour tests against a local fa
 - **Audit logging**: `src/zulip/audit-logger.ts` writes persistent JSON-line audit events to `{dataDir}/audit/{accountId}.audit.log` with 1MB rotation.
 - **Rate limiting**: Configurable per-sender rate limit via `maxMessagesPerMinute` (default: `60`, `0` disables). Sliding 60-second window.
 - **Activity trace**: `src/zulip/activity-trace.ts` (primitive), `src/zulip/tool-trace.ts` (mode A hooks), `src/zulip/progress-tool.ts` (mode B tool). Opt-in via `activityTrace`. See [Activity Trace](#activity-trace).
+- **History-aware context**: `src/zulip/history-context.ts` harvests a bounded slice of the current stream/topic into the agent's prompt. Opt-in via `historyContext` (`"off"` default, `"on-demand"`, `"always"`). Bounded by `historyMaxMessages` (8) / `historyWindowHours` (72) / `historyMaxChars` (4000), wrapped in a 2s timeout, and log-and-drop on failure so a harvest can never delay or fail a dispatch. It appends to the agent-facing `Body` only (commands keep `CommandBody`/`RawBody`), applies to streams/topics only (DMs keep per-user session continuity + isolation), and reuses `fetchZulipMessages` — no new network path.
 - **Security docs**: See `SECURITY.md` for full security policy covering credential handling, data access, and network communication.
 
 ## Activity Trace

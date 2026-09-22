@@ -95,6 +95,29 @@
             "maximum": 50,
             "description": "Hard ceiling on trace edits per second, in addition to the coalescing window. Clamped to 0.1-50. Default: 2."
           },
+          "historyContext": {
+            "type": "string",
+            "enum": ["off", "on-demand", "always"],
+            "description": "Harvest bounded past stream/topic history into the agent's context so it can answer 'have we seen this before?' with real evidence. off (default), on-demand (only for such questions), or always. Each harvest costs one Zulip round-trip and context budget."
+          },
+          "historyMaxMessages": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Maximum number of earlier messages injected as history context. Clamped to 1-50. Default: 8."
+          },
+          "historyWindowHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8760,
+            "description": "Only messages newer than this are considered for history context. Clamped to 1-8760. Default: 72."
+          },
+          "historyMaxChars": {
+            "type": "integer",
+            "minimum": 200,
+            "maximum": 20000,
+            "description": "Hard cap on the rendered history block in characters. Clamped to 200-20000. Default: 4000."
+          },
           "email": {
             "type": "string"
           },
@@ -302,6 +325,29 @@
             "maximum": 50,
             "description": "Hard ceiling on trace edits per second, in addition to the coalescing window. Clamped to 0.1-50. Default: 2."
           },
+          "historyContext": {
+            "type": "string",
+            "enum": ["off", "on-demand", "always"],
+            "description": "Harvest bounded past stream/topic history into the agent's context so it can answer 'have we seen this before?' with real evidence. off (default), on-demand (only for such questions), or always. Each harvest costs one Zulip round-trip and context budget."
+          },
+          "historyMaxMessages": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Maximum number of earlier messages injected as history context. Clamped to 1-50. Default: 8."
+          },
+          "historyWindowHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8760,
+            "description": "Only messages newer than this are considered for history context. Clamped to 1-8760. Default: 72."
+          },
+          "historyMaxChars": {
+            "type": "integer",
+            "minimum": 200,
+            "maximum": 20000,
+            "description": "Hard cap on the rendered history block in characters. Clamped to 200-20000. Default: 4000."
+          },
           "email": {
             "type": "string"
           },
@@ -489,6 +535,26 @@
           "label": "Trace max edits per second",
           "sensitive": false,
           "description": "Hard ceiling on trace edits per second, in addition to the coalescing window, so no configuration can flood the Zulip API. Clamped to 0.1-50. Default: 2."
+        },
+        "historyContext": {
+          "label": "History-aware context",
+          "sensitive": false,
+          "description": "Harvest bounded past stream/topic history into the agent's context so it can answer 'have we seen this before?' with real evidence. off (default), on-demand (only when the message looks like such a question), or always. Each harvest costs one Zulip round-trip and context budget."
+        },
+        "historyMaxMessages": {
+          "label": "History max messages",
+          "sensitive": false,
+          "description": "Maximum number of earlier messages injected as history context. Clamped to 1-50. Default: 8."
+        },
+        "historyWindowHours": {
+          "label": "History window (hours)",
+          "sensitive": false,
+          "description": "Only messages newer than this are considered for history context. Clamped to 1-8760. Default: 72."
+        },
+        "historyMaxChars": {
+          "label": "History max characters",
+          "sensitive": false,
+          "description": "Hard cap on the rendered history block, in characters, so a busy topic cannot blow up the context window. Clamped to 200-20000. Default: 4000."
         },
         "streams": {
           "label": "Zulip Streams",

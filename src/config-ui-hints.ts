@@ -49,6 +49,22 @@ export const zulipChannelConfigUiHints = {
     label: "Trace max edits per second",
     help: "Hard ceiling on trace edits per second, in addition to the coalescing window, so no configuration can flood the Zulip API. Clamped to 0.1-50. Default: 2.",
   },
+  historyContext: {
+    label: "History-aware context",
+    help: 'Harvest bounded past stream/topic history into the agent\'s context so it can answer "have we seen this before?" with real evidence. "off" (default), "on-demand" (only when the message looks like such a question), or "always" (every stream message). Each harvest costs one Zulip round-trip and context budget.',
+  },
+  historyMaxMessages: {
+    label: "History max messages",
+    help: "Maximum number of earlier messages injected as history context. Clamped to 1-50. Default: 8.",
+  },
+  historyWindowHours: {
+    label: "History window (hours)",
+    help: "Only messages newer than this are considered for history context. Clamped to 1-8760. Default: 72.",
+  },
+  historyMaxChars: {
+    label: "History max characters",
+    help: "Hard cap on the rendered history block, in characters, so a busy topic cannot blow up the context window. Clamped to 200-20000. Default: 4000.",
+  },
   streams: {
     label: "Zulip Streams",
     help: "Optional list of stream names the bot should monitor. Use [\"*\"] or omit depending on your routing design.",
