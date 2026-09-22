@@ -25,6 +25,7 @@ High-performance OpenClaw channel plugin for Zulip streams and private messages 
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Progressive Activity Trace](#progressive-activity-trace)
+- [History-aware Context](#history-aware-context)
 - [Verification](#verification)
 - [Attaching Local Files](#attaching-local-files)
 - [Troubleshooting](#troubleshooting)
@@ -58,6 +59,7 @@ openclaw channels allow-from zulip <your-email>
 - **Reactions & Typing Indicators**: Optional reaction-based status indicators and typing indicators
 - **File Attachments**: Upload generated files via `upload-file` action or reference sandboxed local paths
 - **Progressive Activity Trace**: An optional, in-place-updated status message that shows work in the topic while the agent runs (opt-in)
+- **History-aware Context**: Optionally harvest bounded past stream/topic history into the agent's context so it can answer "have we seen this before?" with real evidence from the topic
 - **Persistent Event Polling**: Automatically resumes from where it left off using locally-persisted queue metadata
 - **Durable Deduplication**: Persistent deduplication store prevents duplicate message processing
 - **Bot Workspace**: Sandboxed file storage under `data/zulip-workspace/`
@@ -155,6 +157,10 @@ Edit `~/.openclaw/openclaw.json`:
 | `activityTrace` | boolean | `false` | Post one live, in-place-edited status message per work item |
 | `traceCoalesceMs` | number | `400` | Coalescing window for trace edits (ms) |
 | `traceMaxRate` | number | `2` | Hard ceiling on trace edits per second |
+| `historyContext` | `"off"` \| `"on-demand"` \| `"always"` | `"off"` | Harvest bounded past stream/topic history into context |
+| `historyMaxMessages` | number | `8` | Max earlier messages injected as history |
+| `historyWindowHours` | number | `72` | How far back history is considered |
+| `historyMaxChars` | number | `4000` | Hard cap on the rendered history block |
 
 #### Environment Variables
 
@@ -262,6 +268,40 @@ normal outbound secret guard.
 
 `activityTrace` defaults to **off**: the feature adds outbound writes, so it ships opt-in. With it
 off, behaviour is identical to a build without it.
+
+## History-aware Context
+
+The plugin's only durable record of a topic is Zulip itself, but by default the agent sees just the
+current message plus whatever survived in its own runtime memory — so "have we seen this error
+before?" gets answered from vibes rather than the team's actual history.
+
+With `historyContext` enabled, the bridge harvests a **bounded** slice of the current stream/topic
+and adds it to the agent's prompt as evidence:
+
+```
+[Zulip history — 3 earlier message(s) in #main / deploys]
+- Dana (3d ago): same 502 on the auth service, it was the connection pool limit
+- Bot (3d ago): raised max_connections to 50 in commit 4f2c1ab
+- Niyaz (1h ago): it is back after the config revert
+[end history]
+```
+
+- **`off` (default)** — never harvest.
+- **`on-demand`** — only when the message looks like a "do we know this?" question (the intent
+  patterns are deliberately narrow). Recommended: a harvest is one extra Zulip round-trip (~600ms)
+  on the reply path and costs context budget.
+- **`always`** — every inbound stream message carries the block.
+
+**Bounded on every axis.** `historyMaxMessages` (8), `historyWindowHours` (72) and
+`historyMaxChars` (4000) cap the block, and the selection keeps the *newest* lines, so a topic with
+months of history can never blow up the context window.
+
+**Best-effort.** A slow or failing harvest is logged and dropped — it can never fail a dispatch —
+and it is wrapped in a 2s timeout so a retrying API call cannot stall a reply.
+
+**Streams/topics only.** This applies to stream messages: DMs keep their per-user session continuity
+and strict isolation, so harvesting them would add privacy surface for little gain. The block is
+appended to the agent-facing prompt only; commands are unaffected.
 
 ## Troubleshooting
 

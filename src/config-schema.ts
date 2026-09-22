@@ -58,6 +58,10 @@ const ZulipAccountSchema = z.object({
   activityTrace: z.boolean().optional(),
   traceCoalesceMs: z.number().int().min(0).max(60_000).optional(),
   traceMaxRate: z.number().min(0.1).max(50).optional(),
+  historyContext: z.enum(["off", "on-demand", "always"]).optional(),
+  historyMaxMessages: z.number().int().min(1).max(50).optional(),
+  historyWindowHours: z.number().int().min(1).max(8760).optional(),
+  historyMaxChars: z.number().int().min(200).max(20_000).optional(),
 });
 
 const ZulipConfigSchema = buildCatchallMultiAccountChannelSchema(

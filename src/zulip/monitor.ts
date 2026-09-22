@@ -49,6 +49,11 @@ import { initializeZulipMonitor } from "./bootstrap.js";
 import { pollOnce } from "./polling.js";
 import { dispatchZulipReply } from "./reply-handler.js";
 import {
+  harvestTopicHistory,
+  resolveHistoryContextConfig,
+  shouldHarvestHistory,
+} from "./history-context.js";
+import {
   ActivityTraceManager,
   createZulipTraceIo,
   registerActivityTraceManager,
@@ -232,6 +237,17 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         maxRatePerSec: activityTraceConfig.timing.maxRatePerSec,
       });
     }
+
+    // History-aware context (#294): bounded past stream/topic history harvested
+    // into the agent's prompt so it can answer "have we seen this before?" with
+    // evidence. Opt-in; streams/topics only (DMs keep their own session
+    // continuity and strict per-user isolation).
+    const historyContextConfig = resolveHistoryContextConfig({
+      historyContext: accountSection.historyContext ?? account.config.historyContext,
+      historyMaxMessages: accountSection.historyMaxMessages ?? account.config.historyMaxMessages,
+      historyWindowHours: accountSection.historyWindowHours ?? account.config.historyWindowHours,
+      historyMaxChars: accountSection.historyMaxChars ?? account.config.historyMaxChars,
+    });
 
     // Pre-compute the fallback for groupAllowFrom, but defer disk read until needed.
     // This avoids disk I/O for messages where sender is already authorized by static config.
@@ -604,6 +620,39 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         sender: { name: senderName, id: senderId },
       });
 
+      // History harvest (#294) is appended to the agent-facing Body only, so
+      // commands (CommandBody/RawBody) stay exactly the sender's text. Best
+      // effort: a slow or failing harvest must never delay or fail dispatch.
+      let agentBody = body;
+      if (
+        historyContextConfig.mode !== "off" &&
+        kind !== "dm" &&
+        shouldHarvestHistory(historyContextConfig.mode, bodyText)
+      ) {
+        const historyBlock = await harvestTopicHistory({
+          client,
+          stream: streamName || String(streamId),
+          topic,
+          config: historyContextConfig,
+          currentMessageId: messageId,
+          log: (harvestLog) =>
+            logger?.info?.(harvestLog, {
+              accountId: account.accountId,
+              streamId,
+              topic,
+            }),
+        });
+        if (historyBlock) {
+          agentBody = `${body}\n\n${historyBlock}`;
+          logger?.info?.("zulip history context attached", {
+            accountId: account.accountId,
+            messageId,
+            chars: historyBlock.length,
+            mode: historyContextConfig.mode,
+          });
+        }
+      }
+
       const to = kind === "dm" ? `user:${senderId}` : `stream:${streamName || streamId}:${topic}`;
 
       // UX: Optionally send a "Thinking..." placeholder message immediately so users see activity.
@@ -633,7 +682,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         : Promise.resolve(undefined);
 
       const ctxPayload = core.channel.reply.finalizeInboundContext({
-        Body: body,
+        Body: agentBody,
         RawBody: bodyText,
         CommandBody: bodyText,
         From: kind === "dm" ? `zulip:${senderId}` : `zulip:channel:${channelId}`,
