@@ -27,6 +27,7 @@ High-performance OpenClaw channel plugin for Zulip streams and private messages 
 - [Progressive Activity Trace](#progressive-activity-trace)
 - [History-aware Context](#history-aware-context)
 - [Actionable Refs](#actionable-refs)
+- [In-Channel Action Triggers](#in-channel-action-triggers)
 - [Verification](#verification)
 - [Attaching Local Files](#attaching-local-files)
 - [Troubleshooting](#troubleshooting)
@@ -62,6 +63,7 @@ openclaw channels allow-from zulip <your-email>
 - **Progressive Activity Trace**: An optional, in-place-updated status message that shows work in the topic while the agent runs (opt-in)
 - **History-aware Context**: Optionally harvest bounded past stream/topic history into the agent's context so it can answer "have we seen this before?" with real evidence from the topic
 - **Actionable Refs**: Optionally let the agent emit `[[zulip_ref: …]]` markers that the plugin **validates** against the GitHub API and renders as clickable links (opt-in)
+- **In-Channel Action Triggers**: Optionally let a reaction on the bot's own message act as "go" — the configured instruction is dispatched as a turn in the same stream/topic, so work happens in the room (opt-in)
 - **Persistent Event Polling**: Automatically resumes from where it left off using locally-persisted queue metadata
 - **Durable Deduplication**: Persistent deduplication store prevents duplicate message processing
 - **Bot Workspace**: Sandboxed file storage under `data/zulip-workspace/`
@@ -164,6 +166,8 @@ Edit `~/.openclaw/openclaw.json`:
 | `historyWindowHours` | number | `72` | How far back history is considered |
 | `historyMaxChars` | number | `4000` | Hard cap on the rendered history block |
 | `renderRefs` | boolean | `false` | Validate `[[zulip_ref: …]]` markers and render them as links |
+| `reactionTriggers` | object | — | Emoji → instruction map; a reaction then dispatches that instruction in-thread |
+| `reactionTriggerAnyMessage` | boolean | `false` | Allow triggers on messages the bot did not author |
 
 #### Environment Variables
 
@@ -349,6 +353,49 @@ Safety properties worth knowing:
   break or stall a send.
 
 `renderRefs` defaults to **off**, because it changes how agent prose is interpreted.
+
+## In-Channel Action Triggers
+
+The bridge is otherwise read/send only: a human can reply, but cannot say "go" from inside the topic
+and have the agent act there. With `reactionTriggers`, a **reaction becomes an action**:
+
+```json
+{
+  "channels": {
+    "zulip": {
+      "reactionTriggers": {
+        "+1": "Proceed with the proposed step.",
+        "check": "Ship it and open the PR."
+      }
+    }
+  }
+}
+```
+
+When an authorised user reacts 👍 on the bot's own message in a monitored stream, the mapped
+instruction is dispatched as a normal turn for **that same stream/topic session** — so the agent
+acts where the discussion already is, and its reply (and activity trace) land in the same topic.
+
+**A reaction is a trigger, not an authorisation bypass.** The synthetic turn carries the reacting
+human as its sender, so every existing decision is made about *them*: `dmPolicy`/`groupPolicy`, the
+static and persisted allowlists, the control-command gate and the per-sender rate limit all still
+apply. A stranger's reaction does nothing.
+
+Safety rules:
+
+- **Only the bot's own messages are actionable by default.** A reaction is an approval of the agent's
+  proposal; reacting to someone else's message should not make the agent act on it. Set
+  `reactionTriggerAnyMessage: true` deliberately if you want that.
+- **Streams only**, and only streams this account monitors.
+- **Fired once per (message, emoji, user)** — repeated taps, reaction toggles and replayed events use
+  the existing on-disk dedupe store, so a restart cannot re-trigger work.
+- **Audited**: each dispatch writes a `reaction_trigger` audit event.
+- **Off by default.** With no `reactionTriggers` map, no trigger emoji is recognised and the
+  `reaction` event type is not even requested from Zulip.
+
+What this deliberately is **not**: it does not launch arbitrary named workflows or scripts. The
+trigger is an instruction to the agent that is already in this conversation, so its blast radius is
+the same as someone typing that sentence.
 
 ## Troubleshooting
 

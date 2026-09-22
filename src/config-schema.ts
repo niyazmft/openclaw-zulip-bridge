@@ -63,6 +63,8 @@ const ZulipAccountSchema = z.object({
   historyWindowHours: z.number().int().min(1).max(8760).optional(),
   historyMaxChars: z.number().int().min(200).max(20_000).optional(),
   renderRefs: z.boolean().optional(),
+  reactionTriggers: z.record(z.string(), z.string().max(500)).optional(),
+  reactionTriggerAnyMessage: z.boolean().optional(),
 });
 
 const ZulipConfigSchema = buildCatchallMultiAccountChannelSchema(

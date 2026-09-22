@@ -13,6 +13,7 @@ import { getGlobalHookRunner } from "openclaw/plugin-sdk/plugin-runtime";
 import { getZulipRuntime } from "../runtime.js";
 import {
   editZulipMessage,
+  fetchZulipMessage,
   registerZulipQueue,
   updateZulipMessageFlag,
   type ZulipMessage,
@@ -53,6 +54,14 @@ import {
   resolveHistoryContextConfig,
   shouldHarvestHistory,
 } from "./history-context.js";
+import {
+  buildReactionTriggerMessage,
+  isEligibleTargetMessage,
+  matchReactionTrigger,
+  reactionDedupeKey,
+  resolveReactionTriggerConfig,
+  type ZulipReactionEvent,
+} from "./reaction-triggers.js";
 import {
   ActivityTraceManager,
   createZulipTraceIo,
@@ -249,6 +258,15 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       historyMaxChars: accountSection.historyMaxChars ?? account.config.historyMaxChars,
     });
 
+    // In-channel action triggers (#297): a configured reaction on the bot's own
+    // message becomes an explicit turn for the same stream/topic session. Off
+    // unless an emoji → instruction map is configured.
+    const reactionTriggerConfig = resolveReactionTriggerConfig({
+      reactionTriggers: accountSection.reactionTriggers ?? account.config.reactionTriggers,
+      reactionTriggerAnyMessage:
+        accountSection.reactionTriggerAnyMessage ?? account.config.reactionTriggerAnyMessage,
+    });
+
     // Pre-compute the fallback for groupAllowFrom, but defer disk read until needed.
     // This avoids disk I/O for messages where sender is already authorized by static config.
     const configGroupAllowFromFallback = configGroupAllowFrom.length > 0 ? configGroupAllowFrom : configAllowFrom;
@@ -342,7 +360,18 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         topic: topic ? maskPII(topic) : undefined,
       });
 
-      const dedupeKey = `${account.accountId}:${messageId}`;
+      // A reaction trigger (#297) is deduped per (message, emoji, user) rather
+      // than per message id: the reacted message may itself already be in the
+      // store (when triggering on a human's message), and repeated taps or
+      // replayed events must fire exactly once.
+      const isReactionTrigger = message._reactionTrigger === true;
+      const dedupeKey = isReactionTrigger
+        ? reactionDedupeKey(account.accountId, {
+            messageId,
+            emoji: message._reactionEmoji ?? "",
+            userId: message._reactionUserId ?? "",
+          })
+        : `${account.accountId}:${messageId}`;
       if (await dedupeStore.check(dedupeKey)) {
         logger?.info?.("zulip inbound dedupe hit", {
           accountId: account.accountId,
@@ -443,7 +472,10 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         groupAllowedForCommands,
         effectiveGroupAllowFromLength: effectiveGroupAllowFrom.length,
         shouldRequireMention,
-        wasMentioned,
+        // A reaction is an explicit human signal, so it satisfies the mention
+        // requirement. Every authorisation decision still applies to the
+        // reacting user (see the synthetic message builder).
+        wasMentioned: wasMentioned || isReactionTrigger,
         isControlCommand,
         commandAuthorized,
         oncharTriggered,
@@ -506,7 +538,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         return;
       }
 
-      if (oncharEnabled && !oncharTriggered && !wasMentioned && !isControlCommand) {
+      if (!isReactionTrigger && oncharEnabled && !oncharTriggered && !wasMentioned && !isControlCommand) {
         return;
       }
 
@@ -905,7 +937,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       runtime: core,
       registerFn: async () => {
         return await registerZulipQueue(client, {
-          eventTypes: ["message"],
+          // Ask for reaction events only when a trigger is actually configured:
+          // an unconfigured account should not pay for the extra event type.
+          eventTypes: reactionTriggerConfig.enabled ? ["message", "reaction"] : ["message"],
           streams,
         });
       },
@@ -965,6 +999,88 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       }
     };
 
+    /**
+     * In-channel action trigger (#297).
+     *
+     * A configured reaction on the bot's own message becomes an explicit turn
+     * for that stream/topic session. This function only resolves *which*
+     * conversation is being triggered; every authorisation, policy and
+     * rate-limit decision is made by the normal message path, about the human
+     * who reacted, so a reaction can never be an authorisation bypass.
+     */
+    const handleReaction = async (event: ZulipReactionEvent): Promise<void> => {
+      const matched = matchReactionTrigger(event, reactionTriggerConfig);
+      if (!matched) return;
+
+      try {
+        const target = await fetchZulipMessage(client, matched.messageId);
+        if (
+          !isEligibleTargetMessage(target, {
+            anyMessage: reactionTriggerConfig.anyMessage,
+            botUserId,
+            botEmail,
+          }) ||
+          !target
+        ) {
+          logger?.info?.("zulip reaction trigger ignored: ineligible target message", {
+            accountId: account.accountId,
+            messageId: matched.messageId,
+            emoji: matched.emoji,
+          });
+          return;
+        }
+
+        const streamName =
+          typeof target.display_recipient === "string" ? target.display_recipient.trim() : "";
+        if (!streamName) {
+          logger?.info?.("zulip reaction trigger ignored: no stream name", {
+            accountId: account.accountId,
+            messageId: matched.messageId,
+          });
+          return;
+        }
+        // Only streams this account is configured to watch.
+        if (!streams.includes("*") && !streams.includes(streamName)) {
+          logger?.info?.("zulip reaction trigger ignored: stream not monitored", {
+            accountId: account.accountId,
+            streamName,
+          });
+          return;
+        }
+
+        const topic = target.subject?.trim() || DEFAULT_TOPIC;
+        logger?.info?.("zulip reaction trigger fired", {
+          accountId: account.accountId,
+          messageId: matched.messageId,
+          emoji: matched.emoji,
+          senderId: maskPII(matched.userEmail ?? matched.userId),
+          stream: maskPII(streamName),
+          topic,
+        });
+        void auditLogger.log({
+          ts: new Date().toISOString(),
+          event: "reaction_trigger",
+          accountId: account.accountId,
+          direction: "inbound",
+          messageId: matched.messageId,
+          emoji: matched.emoji,
+          sender: maskPII(matched.userEmail ?? matched.userId),
+        });
+
+        // Dispatched through the normal message path: policy, allowlists and
+        // the per-sender rate limit all apply to `matched.userId`.
+        await handleMessage(
+          buildReactionTriggerMessage({ target, matched, streamName, topic }),
+        );
+      } catch (err) {
+        logger?.error?.("zulip reaction trigger failed", {
+          accountId: account.accountId,
+          messageId: matched.messageId,
+          error: String(err),
+        });
+      }
+    };
+
     // Session recovery: scan recent DMs for messages with stale 👀 reactions
     // (no ✅/⚠️, no response) and re-dispatch them with a fresh session key.
     // Only runs when explicitly enabled by the user.
@@ -1017,6 +1133,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           idleLogState,
           resetPollBackoff,
           processMessage,
+          processReaction: reactionTriggerConfig.enabled ? handleReaction : undefined,
         });
         pollBackoffMs = result.pollBackoffMs;
         idleBackoffMs = result.idleBackoffMs;

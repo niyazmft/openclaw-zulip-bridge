@@ -221,6 +221,29 @@ export type ZulipAccountConfig = {
    * limit) and never sends host credentials. Default: false.
    */
   renderRefs?: boolean;
+  /**
+   * In-channel action triggers (#297).
+   *
+   * Maps a reaction emoji (normalised name, e.g. `+1` or `check`) to an
+   * instruction. When an authorised user reacts with that emoji on the bot's
+   * own message in a monitored stream, the instruction is dispatched as an
+   * explicit turn for the same stream/topic session — so the team can say "go"
+   * from inside the room and the work stays with the discussion.
+   *
+   * Absent (default) disables the feature: no trigger emoji is recognised and
+   * the `reaction` event type is not even requested from Zulip. A reaction is
+   * only a trigger, never an authorisation bypass — the reacting user is still
+   * subject to the allowlists, policies and rate limit.
+   */
+  reactionTriggers?: Record<string, string>;
+  /**
+   * Allow reaction triggers on messages the bot did not author.
+   *
+   * Default `false`: a reaction is an approval of the *agent's* proposal, so
+   * reacting to someone else's message must not be a way to make the agent act
+   * on it. Only enable this deliberately.
+   */
+  reactionTriggerAnyMessage?: boolean;
 };
 
 export type ZulipConfig = {

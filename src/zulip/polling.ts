@@ -1,5 +1,6 @@
 import type { PluginRuntime } from "openclaw/plugin-sdk/channel-core";
 import type { ZulipMessage } from "./client.js";
+import type { ZulipReactionEvent } from "./reaction-triggers.js";
 import {
   DEFAULT_LONGPOLL_TIMEOUT_SECS,
   getZulipEventsWithRetry,
@@ -98,6 +99,12 @@ export async function pollOnce(params: {
   idleLogState: IdlePollState;
   resetPollBackoff: () => void;
   processMessage: (message: ZulipMessage) => Promise<void>;
+  /**
+   * Optional handler for `reaction` events (#297). Omitted when no reaction
+   * triggers are configured, in which case reaction events are ignored (their
+   * ids are still tracked so the queue advances).
+   */
+  processReaction?: (event: ZulipReactionEvent) => Promise<void>;
 }): Promise<{ pollBackoffMs: number; idleBackoffMs: number; shouldContinue: boolean }> {
   const {
     client,
@@ -107,6 +114,7 @@ export async function pollOnce(params: {
     opts,
     resetPollBackoff,
     processMessage,
+    processReaction,
     idleLogState,
   } = params;
   let { pollBackoffMs, idleBackoffMs } = params;
@@ -220,6 +228,19 @@ export async function pollOnce(params: {
             processMessage(event.message).catch((err) => {
               core.error?.(
                 formatZulipLog("zulip message processing error", {
+                  accountId,
+                  error: String(err),
+                }),
+              );
+            }),
+          );
+        } else if (event.type === "reaction" && processReaction) {
+          // Reaction triggers (#297) are dispatched the same way: never block
+          // the poll loop, and never let a handler failure kill the monitor.
+          processing.push(
+            processReaction(event as ZulipReactionEvent).catch((err) => {
+              core.error?.(
+                formatZulipLog("zulip reaction processing error", {
                   accountId,
                   error: String(err),
                 }),

@@ -69,6 +69,14 @@ export const zulipChannelConfigUiHints = {
     label: "Actionable refs (validated links)",
     help: "Let the agent emit [[zulip_ref: <github url> | <label>]] markers; the plugin validates each ref against the GitHub API and renders it as a clickable link. Unconfirmed refs render as plain text and the reply still sends. Validation is unauthenticated (public refs only, GitHub's 60 req/hour/IP limit) and sends no credentials. Default: disabled.",
   },
+  reactionTriggers: {
+    label: "Reaction triggers (emoji → instruction)",
+    help: 'Map a reaction emoji to an instruction, e.g. {"+1": "Proceed with the proposed step."}. When an authorised user reacts with that emoji on the bot\'s own message in a monitored stream, the instruction is dispatched as a turn for the same stream/topic session, so someone can say "go" from inside the room. A reaction is only a trigger — the reacting user is still subject to the allowlists, policies and rate limit. Absent: disabled.',
+  },
+  reactionTriggerAnyMessage: {
+    label: "Reaction triggers on any message",
+    help: "Allow reaction triggers on messages the bot did not author. Default: disabled, because a reaction is an approval of the agent's proposal — reacting to someone else's message should not make the agent act on it.",
+  },
   streams: {
     label: "Zulip Streams",
     help: "Optional list of stream names the bot should monitor. Use [\"*\"] or omit depending on your routing design.",
