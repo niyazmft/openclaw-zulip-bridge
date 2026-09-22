@@ -26,6 +26,7 @@ High-performance OpenClaw channel plugin for Zulip streams and private messages 
 - [Configuration](#configuration)
 - [Progressive Activity Trace](#progressive-activity-trace)
 - [History-aware Context](#history-aware-context)
+- [Actionable Refs](#actionable-refs)
 - [Verification](#verification)
 - [Attaching Local Files](#attaching-local-files)
 - [Troubleshooting](#troubleshooting)
@@ -60,6 +61,7 @@ openclaw channels allow-from zulip <your-email>
 - **File Attachments**: Upload generated files via `upload-file` action or reference sandboxed local paths
 - **Progressive Activity Trace**: An optional, in-place-updated status message that shows work in the topic while the agent runs (opt-in)
 - **History-aware Context**: Optionally harvest bounded past stream/topic history into the agent's context so it can answer "have we seen this before?" with real evidence from the topic
+- **Actionable Refs**: Optionally let the agent emit `[[zulip_ref: …]]` markers that the plugin **validates** against the GitHub API and renders as clickable links (opt-in)
 - **Persistent Event Polling**: Automatically resumes from where it left off using locally-persisted queue metadata
 - **Durable Deduplication**: Persistent deduplication store prevents duplicate message processing
 - **Bot Workspace**: Sandboxed file storage under `data/zulip-workspace/`
@@ -161,6 +163,7 @@ Edit `~/.openclaw/openclaw.json`:
 | `historyMaxMessages` | number | `8` | Max earlier messages injected as history |
 | `historyWindowHours` | number | `72` | How far back history is considered |
 | `historyMaxChars` | number | `4000` | Hard cap on the rendered history block |
+| `renderRefs` | boolean | `false` | Validate `[[zulip_ref: …]]` markers and render them as links |
 
 #### Environment Variables
 
@@ -302,6 +305,50 @@ and it is wrapped in a 2s timeout so a retrying API call cannot stall a reply.
 **Streams/topics only.** This applies to stream messages: DMs keep their per-user session continuity
 and strict isolation, so harvesting them would add privacy surface for little gain. The block is
 appended to the agent-facing prompt only; commands are unaffected.
+
+## Actionable Refs
+
+"I opened a PR" is readable but not *actionable*. With `renderRefs: true`, the agent can emit a
+structured marker and the plugin turns it into a validated, clickable link:
+
+```
+Shipped it in [[zulip_ref: https://github.com/owner/repo/pull/128 | PR #128]] — CI is
+[[zulip_ref: https://github.com/owner/repo/actions/runs/12345 | green]].
+```
+
+becomes
+
+```
+Shipped it in [PR #128](https://github.com/owner/repo/pull/128) — CI is [green](https://github.com/owner/repo/actions/runs/12345).
+```
+
+**Validation is real, not cosmetic.** Each ref is checked against the GitHub API before it is
+rendered as a link, so the reply is evidence rather than a claim:
+
+| Ref | Validated as |
+|---|---|
+| `github.com/<owner>/<repo>/pull/<n>` | a pull request |
+| `github.com/<owner>/<repo>/issues/<n>` | an issue |
+| `github.com/<owner>/<repo>/commit/<sha>` | a commit |
+| `github.com/<owner>/<repo>/actions/runs/<id>` | an Actions run |
+
+Anything that cannot be confirmed — a malformed URL, a 404, a rate limit, a timeout, a network
+error — renders as plain text (in backticks, so it is not auto-linked) and **the reply still
+sends**. A label is optional; without one, the plugin derives one (`owner/repo#128`).
+
+Safety properties worth knowing:
+
+- **Only `https://github.com/...` refs are handled.** Anything else (including internal/private
+  hosts and lookalike domains like `github.com.evil.com`) is rejected *before any network request*,
+  and the API origin is a hardcoded `https://api.github.com` — there is no configurable host that
+  could be widened into an SSRF primitive.
+- **No credentials are sent.** Validation is unauthenticated, so private refs simply 404 and degrade
+  to plain text. GitHub allows 60 such requests/hour/IP; outcomes are cached for 10 minutes and at
+  most 3 refs per message are validated, so a busy topic cannot exhaust that budget.
+- **Best effort.** Rendering never throws and is bounded by a 1.5s timeout per message, so it cannot
+  break or stall a send.
+
+`renderRefs` defaults to **off**, because it changes how agent prose is interpreted.
 
 ## Troubleshooting
 

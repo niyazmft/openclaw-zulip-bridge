@@ -65,6 +65,10 @@ export const zulipChannelConfigUiHints = {
     label: "History max characters",
     help: "Hard cap on the rendered history block, in characters, so a busy topic cannot blow up the context window. Clamped to 200-20000. Default: 4000.",
   },
+  renderRefs: {
+    label: "Actionable refs (validated links)",
+    help: "Let the agent emit [[zulip_ref: <github url> | <label>]] markers; the plugin validates each ref against the GitHub API and renders it as a clickable link. Unconfirmed refs render as plain text and the reply still sends. Validation is unauthenticated (public refs only, GitHub's 60 req/hour/IP limit) and sends no credentials. Default: disabled.",
+  },
   streams: {
     label: "Zulip Streams",
     help: "Optional list of stream names the bot should monitor. Use [\"*\"] or omit depending on your routing design.",

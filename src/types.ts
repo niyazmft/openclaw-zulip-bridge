@@ -208,6 +208,19 @@ export type ZulipAccountConfig = {
   historyWindowHours?: number;
   /** Hard cap on the rendered history block in characters (default 4000, clamp 200–20000). */
   historyMaxChars?: number;
+  /**
+   * Actionable refs in replies (#295).
+   *
+   * When enabled, the agent can emit `[[zulip_ref: <github url> | <label>]]`
+   * markers and the plugin validates each ref against the GitHub API and
+   * renders it as a clickable link. A ref that cannot be confirmed — wrong
+   * shape, 404, rate limit, timeout — renders as plain text instead, and the
+   * reply still sends.
+   *
+   * Validation is unauthenticated (public refs only, GitHub's 60 req/hour/IP
+   * limit) and never sends host credentials. Default: false.
+   */
+  renderRefs?: boolean;
 };
 
 export type ZulipConfig = {

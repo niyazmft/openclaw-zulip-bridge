@@ -11,6 +11,7 @@ import {
   type ActivityTrace,
   type ActivityTraceManager,
 } from "./activity-trace.js";
+import { renderZulipRefs } from "./refs.js";
 import {
   isReplyPayloadNonTerminalToolErrorWarning,
   type ReplyPayload,
@@ -214,7 +215,13 @@ export async function dispatchZulipReply(params: {
           }
           const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
           const rawText = core.channel.text.convertMarkdownTables(payload.text ?? "", tableMode);
-          const { text: extractedText, topic: topicOverride } = extractZulipTopicDirective(rawText);
+          // Refs (#295) are rendered before chunking so a `[[zulip_ref: …]]`
+          // marker can never be split across two Zulip messages.
+          const renderedText = await renderZulipRefs(rawText, {
+            enabled: account.config.renderRefs === true,
+            log: (refLog, meta) => zLogger?.info?.(refLog, meta),
+          });
+          const { text: extractedText, topic: topicOverride } = extractZulipTopicDirective(renderedText);
           const text =
             maxMessageLength != null && maxMessageLength > 0
               ? truncateText(extractedText, maxMessageLength)
@@ -426,7 +433,12 @@ export async function dispatchZulipReply(params: {
                 textLen: text.length,
               });
               const { text: cleanText, topic: topicOverride } =
-                extractZulipTopicDirective(text);
+                extractZulipTopicDirective(
+                  await renderZulipRefs(text, {
+                    enabled: account.config.renderRefs === true,
+                    log: (refLog, meta) => zLogger?.info?.(refLog, meta),
+                  }),
+                );
               const resolvedTopic = topicOverride
                 ? topicOverride.slice(0, 60)
                 : topic;
