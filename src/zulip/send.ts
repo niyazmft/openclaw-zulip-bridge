@@ -21,6 +21,7 @@ import {
   type ZulipClient,
 } from "./client.js";
 import { maskPII } from "./monitor-helpers.js";
+import { renderZulipRefs } from "./refs.js";
 
 export type ZulipSendOpts = {
   apiKey?: string;
@@ -327,6 +328,18 @@ export async function sendMessageZulip(
       accountId: account.accountId,
     });
     message = core.channel.text.convertMarkdownTables(message, tableMode);
+  }
+
+  // Actionable refs (#295): validate `[[zulip_ref: …]]` markers and render them
+  // as links only when the ref really exists. This is the safety net for every
+  // send path (CLI, fallback auto-send, activity-trace posts); replies also run
+  // it before chunking so a marker can never be split across messages. Best
+  // effort: an unconfirmed ref becomes plain text and the send proceeds.
+  if (message && account.config.renderRefs === true) {
+    message = await renderZulipRefs(message, {
+      enabled: true,
+      log: (refLog, meta) => zulipLogger?.info?.(refLog, meta),
+    });
   }
 
   if (!message) {
