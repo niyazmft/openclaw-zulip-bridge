@@ -79,6 +79,25 @@
             "type": "boolean",
             "description": "Refuse to send a Zulip message that contains a credential value from the host config, so an agent cannot paste secrets into chat. Default: enabled."
           },
+          "dmSessionTurnLimit": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Maximum inbound conversation turns in a single Zulip DM session before starting a fresh session. Prevents one long or broken conversation from bloating context for future replies. 0 disables rotation. Default: 20."
+          },
+          "enableSessionRecovery": {
+            "type": "boolean",
+            "description": "On startup, scan recent DMs for messages interrupted by a gateway restart and re-dispatch them. Default: disabled (opt-in)."
+          },
+          "maxMessagesPerMinute": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Maximum inbound messages per minute from a single sender, as a sliding 60-second window. 0 disables rate limiting. Default: 60."
+          },
+          "maxMessageLength": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Maximum total length of a single outbound message in characters, applied before chunking. Longer content is truncated with a marker. 0 disables truncation. Default: 20000."
+          },
           "activityTrace": {
             "type": "boolean",
             "description": "Post one dedicated bot-owned status message per work item and edit it in place as the agent works, so the topic shows progress instead of only the final reply. Status detail edits the trace; actionable results stay separate messages. Default: disabled."
@@ -312,6 +331,25 @@
           "blockSecretLeaks": {
             "type": "boolean",
             "description": "Refuse to send a Zulip message that contains a credential value from the host config, so an agent cannot paste secrets into chat. Default: enabled."
+          },
+          "dmSessionTurnLimit": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Maximum inbound conversation turns in a single Zulip DM session before starting a fresh session. Prevents one long or broken conversation from bloating context for future replies. 0 disables rotation. Default: 20."
+          },
+          "enableSessionRecovery": {
+            "type": "boolean",
+            "description": "On startup, scan recent DMs for messages interrupted by a gateway restart and re-dispatch them. Default: disabled (opt-in)."
+          },
+          "maxMessagesPerMinute": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Maximum inbound messages per minute from a single sender, as a sliding 60-second window. 0 disables rate limiting. Default: 60."
+          },
+          "maxMessageLength": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Maximum total length of a single outbound message in characters, applied before chunking. Longer content is truncated with a marker. 0 disables truncation. Default: 20000."
           },
           "activityTrace": {
             "type": "boolean",
