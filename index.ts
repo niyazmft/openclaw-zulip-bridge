@@ -2,6 +2,7 @@ import { defineChannelPluginEntry } from "openclaw/plugin-sdk/channel-core";
 import { zulipPlugin } from "./src/channel.js";
 import { setZulipRuntime } from "./src/runtime.js";
 import { registerToolCallTraceHooks } from "./src/zulip/tool-trace.js";
+import { registerZulipProgressTool } from "./src/zulip/progress-tool.js";
 export { zulipPlugin } from "./src/channel.js";
 export { setZulipRuntime } from "./src/runtime.js";
 
@@ -38,6 +39,17 @@ export default defineChannelPluginEntry({
     // also in tool-discovery mode, and older/other runtimes may not expose the
     // hook surface at all. Failure degrades to the #301 run-boundary trace.
     registerToolCallTraceHooks(api, {
+      log: {
+        info: (message, meta) => logger.info?.(message, meta),
+        warn: (message, meta) => logger.warn?.(message, meta),
+      },
+    });
+
+    // Mode B (#303): the agent-facing `zulip_progress` narration tool. The
+    // message tool's action vocabulary is closed and core-owned, so a
+    // plugin-owned verb requires `api.registerTool` (declared via
+    // `contracts.tools` in openclaw.plugin.json).
+    registerZulipProgressTool(api, {
       log: {
         info: (message, meta) => logger.info?.(message, meta),
         warn: (message, meta) => logger.warn?.(message, meta),

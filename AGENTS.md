@@ -4,6 +4,7 @@
 
 - [Essential Commands](#essential-commands)
 - [Architecture](#architecture)
+- [Activity Trace](#activity-trace)
 - [TypeScript Conventions](#typescript-conventions)
 - [Testing](#testing)
 - [CI](#ci)
@@ -50,7 +51,48 @@ npm run check:tier2        # Tier 2: outbound behaviour tests against a local fa
 - **Session recovery**: `src/zulip/recovery.ts` recovers interrupted messages after gateway restart. Opt-in via `enableSessionRecovery: true` (default: `false`).
 - **Audit logging**: `src/zulip/audit-logger.ts` writes persistent JSON-line audit events to `{dataDir}/audit/{accountId}.audit.log` with 1MB rotation.
 - **Rate limiting**: Configurable per-sender rate limit via `maxMessagesPerMinute` (default: `60`, `0` disables). Sliding 60-second window.
+- **Activity trace**: `src/zulip/activity-trace.ts` (primitive), `src/zulip/tool-trace.ts` (mode A hooks), `src/zulip/progress-tool.ts` (mode B tool). Opt-in via `activityTrace`. See [Activity Trace](#activity-trace).
 - **Security docs**: See `SECURITY.md` for full security policy covering credential handling, data access, and network communication.
+
+## Activity Trace
+
+Epic #293. When `activityTrace: true`, the plugin keeps **one dedicated bot-owned status message
+per work item** and edits it in place as the run progresses, instead of the room seeing only the
+final reply (or nothing at all when a run produces no reply).
+
+- **The rule**: *status detail edits the trace; actionable results are posted as new messages.* The
+  trace layer only ever edits its own message; agent replies stay separate.
+- **Module split**: `activity-trace.ts` is the primitive (`TraceState`, stable step ids, coalescer,
+  renderer, registry). `tool-trace.ts` is mode A. `progress-tool.ts` is mode B. `reply-handler.ts`
+  owns the run boundary (start on dispatch, finish on success/error/abort).
+- **Mode A — plugin-driven**: registers the host's `after_tool_call` hook with
+  `{ matcher: ["exec"], timeoutMs: 2000, registrationId }`, falling back to simpler options and never
+  registering without a matcher. **Never register `before_tool_call`** — it is a *fail-closed* gate, so
+  a slow handler there blocks the agent's own tool call. The handler is synchronous (no I/O) and hands
+  off to the coalescer. Hook payloads identify the *agent run* (`sessionKey`/`runId`), never the room,
+  so attribution is done through `findActivityTrace()`; unattributable hooks are **dropped**, never
+  guessed. Registration is idempotent with its own guard plus a stable `registrationId` (openclaw#86241
+  documents N-fold delivery from handler stacking across hot reloads).
+- **Mode B — agent-driven**: the `zulip_progress` tool lets the agent narrate intent mode A cannot
+  infer. **Surface decision**: the `message` tool's action vocabulary is a deliberately *closed,
+  core-owned* list (`src/channels/plugins/message-action-names.ts`: "Plugins add names through a core
+  PR; runtime registration is intentionally unsupported") and the message-tool schema is built from
+  that list, so the channel action adapter **cannot** carry a new verb. `api.registerTool` is the
+  supported plugin surface for a plugin-owned tool and requires `contracts.tools: ["zulip_progress"]`
+  in `openclaw.plugin.json`. Correlation comes from the per-run `OpenClawPluginToolContext.sessionKey`.
+  No active trace is a no-op, never an error.
+- **Write path**: posts go through `sendMessageZulip` (secret guard + media/SSRF hardening inherited);
+  edits go through `editZulipMessage`. **Trace edits bypass `sendMessageZulip`'s secret guard**, so
+  `createZulipTraceIo` redacts known host credentials (`redactSecrets` in `secret-guard.ts`) for both.
+- **Coalescing is non-negotiable**: `traceCoalesceMs` (default `400`) plus a hard `traceMaxRate`
+  ceiling (default `2`/sec) because Zulip edits are ~600ms round-trips. An unchanged render spends no
+  PATCH at all.
+- **Failure policy**: a failed post drops the trace; a failed edit is logged and dropped. Never a retry
+  loop (cf. the #287 poll spin loop), never a user-visible error, never on the agent's critical path —
+  the final edit is not awaited. A dead trace must not fail a dispatch or suppress a reply.
+- **Knobs**: `activityTrace` (default `false`), `traceCoalesceMs` (400), `traceMaxRate` (2) — in the
+  runtime schema, `config-ui-hints.ts`, and **both** manifest schemas + `uiHints`. With the flag off,
+  behaviour is identical to a build without the feature.
 
 ## TypeScript Conventions
 
@@ -149,7 +191,7 @@ rsync -avh openclaw.plugin.json remote:.openclaw/extensions/zulip/
 # Restart the gateway on the remote host
 ```
 
-The host provides the `openclaw/plugin-sdk/*` modules at runtime (they are **not** npm packages). The plugin's only npm runtime dependency is `zod` (config-schema validation), staged during install by `openclaw.build.stageRuntimeDependencies`.
+The host provides the `openclaw/plugin-sdk/*` modules at runtime (they are **not** npm packages). The plugin's npm runtime dependencies are `zod` (config-schema validation) and `typebox` (the `zulip_progress` tool schema, pinned to the host's own version so the schema objects are identical), staged during install by `openclaw.build.stageRuntimeDependencies`.
 
 ## Security & Permissions
 

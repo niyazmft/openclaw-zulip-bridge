@@ -24,6 +24,7 @@ High-performance OpenClaw channel plugin for Zulip streams and private messages 
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [Progressive Activity Trace](#progressive-activity-trace)
 - [Verification](#verification)
 - [Attaching Local Files](#attaching-local-files)
 - [Troubleshooting](#troubleshooting)
@@ -56,6 +57,7 @@ openclaw channels allow-from zulip <your-email>
 - **DMs with Pairing**: Private messages with per-user session isolation and traffic policy controls
 - **Reactions & Typing Indicators**: Optional reaction-based status indicators and typing indicators
 - **File Attachments**: Upload generated files via `upload-file` action or reference sandboxed local paths
+- **Progressive Activity Trace**: An optional, in-place-updated status message that shows work in the topic while the agent runs (opt-in)
 - **Persistent Event Polling**: Automatically resumes from where it left off using locally-persisted queue metadata
 - **Durable Deduplication**: Persistent deduplication store prevents duplicate message processing
 - **Bot Workspace**: Sandboxed file storage under `data/zulip-workspace/`
@@ -150,6 +152,9 @@ Edit `~/.openclaw/openclaw.json`:
 | `enableSessionRecovery` | boolean | `false` | Recover interrupted messages |
 | `sessionArchiveRepair` | boolean | `auto` | Repair stuck session archives |
 | `blockSecretLeaks` | boolean | `true` | Block messages containing credentials |
+| `activityTrace` | boolean | `false` | Post one live, in-place-edited status message per work item |
+| `traceCoalesceMs` | number | `400` | Coalescing window for trace edits (ms) |
+| `traceMaxRate` | number | `2` | Hard ceiling on trace edits per second |
 
 #### Environment Variables
 
@@ -204,6 +209,59 @@ Or reference sandboxed local paths in the `media` field:
 ```
 
 Files are staged in the bot workspace (`data/zulip-workspace/{accountId}/`) with path-traversal rejection.
+
+## Progressive Activity Trace
+
+By default the room only sees the agent's **final reply**, so a run that takes a while (or ends
+without a reply at all) is invisible. With `activityTrace: true`, the plugin keeps **one
+dedicated bot-owned status message per work item** and edits it in place as the run progresses:
+
+```
+zulip-bot · **Working** — fix the failing auth test
+          - ✅ $ git status --short (0.2s)
+          - ✅ $ npm test (12s)
+          - 💬 switching to a rebase instead of a merge
+          - ⏳ $ git push
+```
+
+When the run ends, the block collapses to one compact line (`✅ **Done** — run finished in 18s`).
+The message is never deleted, so the topic keeps an audit trail (Zulip also keeps its own edit
+history).
+
+### The rule
+
+**Status detail edits the trace. Actionable results are posted as new messages.** That keeps the
+topic readable while still producing a durable record, instead of one message per tool call.
+
+### Two trigger modes
+
+| Mode | Source | Notes |
+|------|--------|-------|
+| **A — plugin-driven** | The host's `after_tool_call` hook, filtered to `exec` | Automatic; no agent cooperation needed. Best-effort per runtime/harness. |
+| **B — agent-driven** | The `zulip_progress` tool | Lets the agent narrate intent the plugin cannot infer ("about to ask a clarifying question", "switching approach"). No-op when no trace is active. |
+
+Mode A never registers `before_tool_call` (it is a fail-closed gate that could block the agent's own
+tool call). Mode B is unaffected when the host's tool profile strips plugin tools — the run-boundary
+trace still appears.
+
+### Coalescing and rate limits
+
+Zulip edits are ~600ms round-trips, so the trace is a status board, not a metronome:
+
+- `traceCoalesceMs` (default `400`) collapses bursty updates into a single edit.
+- `traceMaxRate` (default `2`) is a hard ceiling on edits per second, in addition to coalescing.
+- An unchanged render never spends an edit at all.
+
+### Failure policy
+
+Tracing is **best-effort and never blocking**. A failed post drops that trace; a failed edit is
+logged and dropped — there is no retry loop (unbounded retries against Zulip are how you flood the
+gateway log) and no user-visible error. A dead trace can never turn a successful reply into a failed
+dispatch. Trace writes are also credential-redacted, because trace edits do not pass through the
+normal outbound secret guard.
+
+`activityTrace` defaults to **off**: the feature adds outbound writes, so it ships opt-in. With it
+off, behaviour is identical to a build without it.
 
 ## Troubleshooting
 
