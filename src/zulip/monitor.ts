@@ -932,16 +932,17 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
     };
 
     const streams = account.streams ?? ["*"];
+    // Ask for reaction events only when a trigger is actually configured: an
+    // unconfigured account should not pay for the extra event type. The queue
+    // manager re-registers when this set changes, so enabling triggers later
+    // cannot be silently ignored by a persisted queue (#297).
+    const eventTypes = reactionTriggerConfig.enabled ? ["message", "reaction"] : ["message"];
     const queueManager = new ZulipQueueManager({
       accountId: account.accountId,
       runtime: core,
+      desiredEventTypes: eventTypes,
       registerFn: async () => {
-        return await registerZulipQueue(client, {
-          // Ask for reaction events only when a trigger is actually configured:
-          // an unconfigured account should not pay for the extra event type.
-          eventTypes: reactionTriggerConfig.enabled ? ["message", "reaction"] : ["message"],
-          streams,
-        });
+        return await registerZulipQueue(client, { eventTypes, streams });
       },
     });
 

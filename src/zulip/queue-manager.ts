@@ -15,6 +15,20 @@ export type QueueMetadata = {
    * plugin versions; callers fall back to the default.
    */
   longpollTimeoutSecs?: number;
+  /**
+   * The `event_types` this queue was registered with.
+   *
+   * Reusing a persisted queue is only safe while the requested event types are
+   * unchanged: `/register` fixes them for the queue's whole lifetime, so a
+   * config change that needs a new event type receives **nothing** for it until
+   * a fresh registration happens. Undefined means metadata written by an older
+   * plugin version, which only ever asked for `message`.
+   *
+   * Found in the field: enabling `reactionTriggers` (#297) needs `reaction`
+   * events, but a five-day-old persisted queue kept being reused across
+   * restarts, so reactions were never delivered and the feature looked broken.
+   */
+  eventTypes?: string[];
 };
 
 export type QueueRegisterCallback = () => Promise<{
@@ -27,12 +41,19 @@ export type QueueManagerOpts = {
   accountId: string;
   runtime: PluginRuntime;
   registerFn: QueueRegisterCallback;
+  /**
+   * Event types the caller wants. A persisted queue is only reused while these
+   * match what it was registered with; otherwise a fresh queue is registered.
+   * Defaults to `["message"]` (the historical behaviour).
+   */
+  desiredEventTypes?: string[];
 };
 
 export class ZulipQueueManager {
   private accountId: string;
   private runtime: PluginRuntime;
   private registerFn: QueueRegisterCallback;
+  private desiredEventTypes: string[];
   private currentQueue: QueueMetadata | null = null;
   private registrationPromise: Promise<QueueMetadata> | null = null;
   private persistenceDirChecked = false;
@@ -41,6 +62,7 @@ export class ZulipQueueManager {
     this.accountId = opts.accountId;
     this.runtime = opts.runtime;
     this.registerFn = opts.registerFn;
+    this.desiredEventTypes = [...(opts.desiredEventTypes ?? ["message"])];
   }
 
   getQueue(): QueueMetadata | null {
@@ -73,7 +95,7 @@ export class ZulipQueueManager {
     // Try loading from persistence first
     try {
       const persisted = await this.loadMetadata();
-      if (persisted) {
+      if (persisted && this.canReuseQueue(persisted)) {
         this.runtime.log?.(
           formatZulipLog("zulip queue loaded", {
             accountId: this.accountId,
@@ -82,6 +104,16 @@ export class ZulipQueueManager {
           }),
         );
         return persisted;
+      }
+      if (persisted) {
+        // A reused queue would receive none of the newly needed events.
+        this.runtime.log?.(
+          formatZulipLog("zulip queue event types changed; registering a fresh queue", {
+            accountId: this.accountId,
+            persisted: (persisted.eventTypes ?? ["message"]).join(","),
+            desired: this.desiredEventTypes.join(","),
+          }),
+        );
       }
     } catch (err) {
       this.runtime.error?.(
@@ -110,6 +142,7 @@ export class ZulipQueueManager {
           lastEventId: queue.lastEventId,
           registeredAt: Date.now(),
           longpollTimeoutSecs: queue.longpollTimeoutSecs,
+          eventTypes: [...this.desiredEventTypes],
         };
         await this.saveMetadata(metadata);
         this.runtime.log?.(
@@ -144,6 +177,20 @@ export class ZulipQueueManager {
       }
     }
     throw new Error("Registration failed");
+  }
+
+  /**
+   * A persisted queue may only be reused while it was registered for exactly
+   * the event types we want now. Metadata without `eventTypes` predates that
+   * field and only ever asked for `message`.
+   */
+  private canReuseQueue(persisted: QueueMetadata): boolean {
+    const persistedTypes = [...(persisted.eventTypes ?? ["message"])].sort();
+    const desiredTypes = [...this.desiredEventTypes].sort();
+    return (
+      persistedTypes.length === desiredTypes.length &&
+      persistedTypes.every((type, index) => type === desiredTypes[index])
+    );
   }
 
   async markQueueExpired(): Promise<void> {

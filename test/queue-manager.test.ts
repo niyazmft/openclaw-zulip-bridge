@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ZulipQueueManager } from "../src/zulip/queue-manager.ts";
@@ -193,4 +193,132 @@ test("ZulipQueueManager: markQueueExpired clears persistence even if not loaded 
   assert.equal(registerCalled, 1);
 
   await manager3.markQueueExpired();
+});
+
+// ── Event-type awareness (#297 regression) ──────────────────────────────────
+// `/register` fixes `event_types` for a queue's whole lifetime, and the manager
+// reuses a persisted queue across restarts. Without comparing the requested
+// event types, enabling a feature that needs a new event type (e.g.
+// `reactionTriggers` needing `reaction`) silently receives nothing.
+
+/** Same file the manager persists to (see `getPersistencePath`). */
+function queuePath(accountId: string): string {
+  const safeAccountId = accountId.replace(/[^a-z0-9]/gi, "_");
+  return path.join(testDataDir, `zulip_queue_${safeAccountId}.json`);
+}
+
+test("ZulipQueueManager: records the event types it registered with", async () => {
+  const accountId = "test-account-eventtypes-" + Date.now();
+  const manager = new ZulipQueueManager({
+    accountId,
+    runtime: mockRuntime,
+    registerFn: async () => ({ queueId: "q_et", lastEventId: 5 }),
+    desiredEventTypes: ["message", "reaction"],
+  });
+
+  await manager.ensureQueue();
+  const persisted = JSON.parse(readFileSync(queuePath(accountId), "utf8"));
+  assert.deepEqual(persisted.eventTypes, ["message", "reaction"]);
+
+  await manager.markQueueExpired();
+});
+
+test("ZulipQueueManager: reuses a persisted queue when the event types match", async () => {
+  const accountId = "test-account-reuse-ets-" + Date.now();
+  let registered = 0;
+  const registerFn = async () => {
+    registered++;
+    return { queueId: "q_reuse" + registered, lastEventId: 10 };
+  };
+
+  const first = new ZulipQueueManager({
+    accountId,
+    runtime: mockRuntime,
+    registerFn,
+    desiredEventTypes: ["message", "reaction"],
+  });
+  await first.ensureQueue();
+  assert.equal(registered, 1);
+
+  // Order must not matter.
+  const second = new ZulipQueueManager({
+    accountId,
+    runtime: mockRuntime,
+    registerFn,
+    desiredEventTypes: ["reaction", "message"],
+  });
+  const queue = await second.ensureQueue();
+  assert.equal(queue.queueId, "q_reuse1");
+  assert.equal(registered, 1, "matching event types must reuse the persisted queue");
+
+  await second.markQueueExpired();
+});
+
+test("ZulipQueueManager: re-registers when a newly needed event type is missing (#297)", async () => {
+  const accountId = "test-account-et-upgrade-" + Date.now();
+  let registered = 0;
+  const registerFn = async () => {
+    registered++;
+    return { queueId: "q_gen" + registered, lastEventId: 1 };
+  };
+
+  // Before: no reaction triggers configured, so only `message` was requested.
+  const before = new ZulipQueueManager({
+    accountId,
+    runtime: mockRuntime,
+    registerFn,
+    desiredEventTypes: ["message"],
+  });
+  await before.ensureQueue();
+  assert.equal(registered, 1);
+
+  // After enabling `reactionTriggers`: the persisted queue can never deliver
+  // reaction events, so it must NOT be reused.
+  const after = new ZulipQueueManager({
+    accountId,
+    runtime: mockRuntime,
+    registerFn,
+    desiredEventTypes: ["message", "reaction"],
+  });
+  const queue = await after.ensureQueue();
+  assert.equal(queue.queueId, "q_gen2");
+  assert.equal(registered, 2);
+  assert.match(queuePath(accountId), /zulip_queue_test_account_et_upgrade_/);
+
+  await after.markQueueExpired();
+});
+
+test("ZulipQueueManager: legacy metadata without eventTypes counts as message-only", async () => {
+  const accountId = "test-account-et-legacy-" + Date.now();
+  writeFileSync(
+    queuePath(accountId),
+    JSON.stringify({ queueId: "q_legacy", lastEventId: 42, registeredAt: Date.now() }),
+  );
+  let registered = 0;
+  const registerFn = async () => {
+    registered++;
+    return { queueId: "q_new" + registered, lastEventId: 1 };
+  };
+
+  // Still only `message` wanted → the legacy queue remains valid (no churn on upgrade).
+  const same = new ZulipQueueManager({
+    accountId,
+    runtime: mockRuntime,
+    registerFn,
+    desiredEventTypes: ["message"],
+  });
+  assert.equal((await same.ensureQueue()).queueId, "q_legacy");
+  assert.equal(registered, 0);
+
+  // Reactions wanted → the legacy queue cannot serve it, so re-register.
+  const more = new ZulipQueueManager({
+    accountId,
+    runtime: mockRuntime,
+    registerFn,
+    desiredEventTypes: ["message", "reaction"],
+  });
+  assert.equal((await more.ensureQueue()).queueId, "q_new1");
+  assert.equal(registered, 1);
+
+  await more.markQueueExpired();
 });
