@@ -204,7 +204,7 @@ export function resolveActivityTraceConfig(config?: TraceConfigInput): {
   };
 }
 
-type TimerHandle = { unref?: () => void };
+type TimerHandle = ReturnType<typeof setTimeout>;
 
 export type TraceScheduler = {
   now: () => number;
@@ -214,13 +214,8 @@ export type TraceScheduler = {
 
 const defaultScheduler: TraceScheduler = {
   now: () => Date.now(),
-  setTimeout: (fn, ms) => {
-    const handle = globalThis.setTimeout(fn, ms);
-    return handle as unknown as TimerHandle;
-  },
-  clearTimeout: (handle) => {
-    globalThis.clearTimeout(handle as unknown as ReturnType<typeof setTimeout>);
-  },
+  setTimeout: (fn, ms) => globalThis.setTimeout(fn, ms),
+  clearTimeout: (handle) => globalThis.clearTimeout(handle),
 };
 
 type TraceRecord = {
@@ -531,8 +526,10 @@ export class ActivityTraceManager {
       record.timer = undefined;
       void this.flush(record);
     }, delayMs);
-    // Never keep the process alive just because a trace is pending.
-    record.timer?.unref?.();
+    // Deliberately NOT `unref()`'d: an unreferenced timer lets the event loop
+    // drain while a caller is still awaiting the flush, which node:test reports
+    // as "Promise resolution is still pending" and cancels. Timers are cleared
+    // on `stop()`, so a shutdown never waits on a pending trace edit.
   }
 
   private async flush(record: TraceRecord): Promise<void> {
