@@ -73,7 +73,7 @@ import {
   unregisterActivityTraceManager,
 } from "./activity-trace.js";
 import { AuditLogger } from "./audit-logger.js";
-import { resolveZulipDataDir } from "./data-dir.js";
+import { resolveZulipDataDir, resolveZulipStatePath } from "./data-dir.js";
 
 export type MonitorZulipOpts = {
   apiKey?: string;
@@ -234,6 +234,27 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       activityTraceManager = new ActivityTraceManager({
         io: createZulipTraceIo(client, { cfg, log: logger ?? undefined }),
         config: activityTraceInput,
+        // Remember in-flight traces so a run killed by a restart (deploy, OOM,
+        // crash) does not leave its status line frozen at "Working" forever.
+        persistPath: resolveZulipStatePath(core, `zulip_traces_${account.accountId}.json`),
+        // A recovery edit can legitimately fail (Zulip stops letting the bot
+        // edit its own message after `message_content_edit_limit_seconds`), and
+        // logs do not surface on every host — so record it where it will be seen.
+        onRecoveryError: ({ messageId, error }) => {
+          logger?.warn?.("zulip activity trace recovery edit failed", {
+            accountId: account.accountId,
+            messageId,
+            error,
+          });
+          void auditLogger.log({
+            ts: new Date().toISOString(),
+            event: "activity_trace_recovery_failed",
+            accountId: account.accountId,
+            direction: "outbound",
+            messageId,
+            error,
+          });
+        },
         log: logger
           ? {
               info: (message, meta) => logger.info?.(message, meta),
@@ -243,6 +264,25 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       });
       activityTraceAccountId = account.accountId;
       registerActivityTraceManager(account.accountId, activityTraceManager);
+      // Close out anything the previous process left mid-flight (best-effort).
+      void activityTraceManager
+        .recoverInterruptedTraces()
+        .then((recovered) => {
+          if (recovered <= 0) return;
+          logger?.warn?.("zulip activity traces left mid-flight by a restart were closed out", {
+            accountId: account.accountId,
+            recovered,
+          });
+          // Logs do not surface on every host (see AGENTS.md); the audit file does.
+          void auditLogger.log({
+            ts: new Date().toISOString(),
+            event: "activity_trace_recovered",
+            accountId: account.accountId,
+            direction: "outbound",
+            count: String(recovered),
+          });
+        })
+        .catch(() => undefined);
       logger?.info?.("zulip activity trace enabled", {
         accountId: account.accountId,
         coalesceMs: activityTraceConfig.timing.coalesceMs,

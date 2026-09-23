@@ -97,6 +97,16 @@ final reply (or nothing at all when a run produces no reply).
 - **Knobs**: `activityTrace` (default `false`), `traceCoalesceMs` (400), `traceMaxRate` (2) — in the
   runtime schema, `config-ui-hints.ts`, and **both** manifest schemas + `uiHints`. With the flag off,
   behaviour is identical to a build without the feature.
+- **Restart recovery**: in-flight traces are persisted to
+  `{dataDir}/zulip_traces_{accountId}.json` (message id + target + title + createdAt), and
+  `recoverInterruptedTraces()` runs at monitor start to collapse anything a previous process left
+  mid-run to `⚪ **Cancelled** — run interrupted by a gateway restart` (audited as
+  `activity_trace_recovered`). This exists because **only the process that created a trace can
+  finalize it**: a deploy, OOM or crash mid-run otherwise left `**Working** — …` frozen in the topic
+  forever — the one case where "no trace is left permanently in progress" did not hold (hit live on
+  y6 when a deploy landed during a run). `stop()` persists rather than clears, so a graceful
+  shutdown is covered too, and a failed recovery edit is logged while the file is still cleared so it
+  cannot repeat on every start.
 
 ## TypeScript Conventions
 

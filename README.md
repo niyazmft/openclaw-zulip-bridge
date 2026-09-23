@@ -239,7 +239,9 @@ zulip-bot · **Working** — fix the failing auth test
 
 When the run ends, the block collapses to one compact line (`✅ **Done** — run finished in 18s`).
 The message is never deleted, so the topic keeps an audit trail (Zulip also keeps its own edit
-history).
+history). If the gateway restarts mid-run (deploy, crash, OOM), the next start closes that trace out
+as `⚪ **Cancelled** — run interrupted by a gateway restart`, so a topic never keeps a stale
+"Working" line.
 
 ### The rule
 
