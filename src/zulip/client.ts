@@ -84,6 +84,12 @@ export type ZulipMessage = {
   _reactionTrigger?: boolean;
   _reactionEmoji?: string;
   _reactionUserId?: string;
+  /**
+   * Internal: the instruction carried by the trigger, kept out of the
+   * agent-facing envelope so the user-visible trace title can be rendered
+   * cleanly instead of echoing `[Zulip reaction] …` into the room.
+   */
+  _reactionInstruction?: string;
 };
 
 /**

@@ -29,6 +29,7 @@ import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/core";
 import { getZulipRuntime } from "../runtime.js";
 import { collectKnownSecrets, redactSecrets } from "./secret-guard.js";
 import { sendMessageZulip } from "./send.js";
+import fs from "node:fs/promises";
 
 export type TraceStepStatus = "running" | "done" | "failed" | "note";
 
@@ -71,6 +72,13 @@ export type TraceState = {
 export type TraceIo = {
   post: (target: TraceTarget, content: string) => Promise<string | undefined>;
   edit: (messageId: string, content: string) => Promise<void>;
+};
+/** What `persistPath` holds for a trace that is still running (see `recoverInterruptedTraces`). */
+export type PersistedTrace = {
+  messageId: string;
+  target: TraceTarget;
+  title: string;
+  createdAt: number;
 };
 
 export type TraceLogger = {
@@ -218,8 +226,7 @@ const defaultScheduler: TraceScheduler = {
   clearTimeout: (handle) => globalThis.clearTimeout(handle),
 };
 
-type TraceRecord = {
-  state: TraceState;
+type TraceRecord = {  state: TraceState;
   ready: Promise<string | undefined>;
   /** True until the initial post settles — the post is a write too. */
   posting: boolean;
@@ -240,6 +247,27 @@ export type ActivityTraceManagerOpts = {
   scheduler?: TraceScheduler;
   /** Called when a trace is dropped because its post failed. */
   onDrop?: (state: TraceState, error: unknown) => void;
+  /**
+   * File used to remember in-flight traces across restarts.
+   *
+   * A trace can only be finalized by the process that created it, so a run
+   * killed mid-flight (deploy, OOM, crash) otherwise leaves `**Working** — …`
+   * frozen in the topic forever — the one case where "no trace is left
+   * permanently in progress" does not hold. With a path set, in-flight traces
+   * are written here and `recoverInterruptedTraces()` closes them out on the
+   * next start.
+   */
+  persistPath?: string;
+  /**
+   * Called when a recovery edit fails, so the failure can be surfaced.
+   *
+   * Zulip only lets the bot edit its own message for a limited time
+   * (`message_content_edit_limit_seconds`), so a trace discovered long after
+   * the crash cannot be fixed — and plugin logs do not reach the host log on
+   * every host, so silently logging it means nobody ever learns why a status
+   * line is stuck.
+   */
+  onRecoveryError?: (info: { messageId: string; error: string }) => void;
 };
 
 /**
@@ -254,6 +282,8 @@ export class ActivityTraceManager {
   private readonly timing: TraceTiming;
   private readonly scheduler: TraceScheduler;
   private readonly onDrop?: ActivityTraceManagerOpts["onDrop"];
+  private readonly persistPath?: string;
+  private readonly onRecoveryError?: ActivityTraceManagerOpts["onRecoveryError"];
   private readonly records = new Map<string, TraceRecord>();
   private counter = 0;
 
@@ -263,6 +293,92 @@ export class ActivityTraceManager {
     this.timing = resolveTraceTiming(opts.config);
     this.scheduler = opts.scheduler ?? defaultScheduler;
     this.onDrop = opts.onDrop;
+    this.persistPath = opts.persistPath;
+    this.onRecoveryError = opts.onRecoveryError;
+  }
+
+  /**
+   * Closes out traces a previous process left mid-flight.
+   *
+   * Best-effort and idempotent: each remembered message is edited to a
+   * cancelled summary line, then the record file is removed. Never throws — a
+   * recovery edit that fails (message deleted, network down) is logged and the
+   * file still gets cleared so this cannot repeat forever.
+   */
+  async recoverInterruptedTraces(): Promise<number> {
+    if (!this.persistPath) return 0;
+    let entries: PersistedTrace[] = [];
+    try {
+      const raw = await fs.readFile(this.persistPath, "utf8");
+      const parsed = JSON.parse(raw);
+      entries = Array.isArray(parsed) ? (parsed as PersistedTrace[]) : [];
+    } catch {
+      // No file (or unreadable) means nothing was in flight.
+      return 0;
+    }
+
+    let recovered = 0;
+    for (const entry of entries) {
+      const messageId = entry?.messageId;
+      if (!messageId) continue;
+      try {
+        await this.io.edit(
+          String(messageId),
+          renderTraceContent({
+            id: `recovered-${messageId}`,
+            title: entry.title ?? "work item",
+            target: entry.target ?? { to: "" },
+            status: "cancelled",
+            summary: "run interrupted by a gateway restart",
+            steps: [],
+            createdAt: entry.createdAt ?? this.scheduler.now(),
+            updatedAt: this.scheduler.now(),
+            finishedAt: this.scheduler.now(),
+          }),
+        );
+        recovered += 1;
+      } catch (err) {
+        // Surfaced, not just logged: see `onRecoveryError`.
+        this.log?.warn?.("zulip activity trace recovery edit failed", {
+          messageId: String(messageId),
+          error: String(err),
+        });
+        this.onRecoveryError?.({ messageId: String(messageId), error: String(err) });
+      }
+    }
+
+    try {
+      await fs.unlink(this.persistPath);
+    } catch {
+      // Already gone / not permitted: nothing more to do.
+    }
+    if (recovered > 0) {
+      this.log?.info?.("zulip activity traces recovered after restart", { recovered });
+    }
+    return recovered;
+  }
+
+  /**
+   * Writes the in-flight traces (those with a posted message and a running
+   * status). Finished and dropped traces are therefore *excluded*, which is what
+   * removes them from the file — so recovery only ever touches stale ones.
+   */
+  private persistPending(): void {
+    if (!this.persistPath) return;
+    const pending: PersistedTrace[] = [];
+    for (const record of this.records.values()) {
+      const { state } = record;
+      if (record.dead || state.status !== "running" || !state.messageId) continue;
+      pending.push({
+        messageId: state.messageId,
+        target: state.target,
+        title: state.title,
+        createdAt: state.createdAt,
+      });
+    }
+    void fs.writeFile(this.persistPath, JSON.stringify(pending), "utf8").catch((err) => {
+      this.log?.warn?.("zulip activity trace persist failed", { error: String(err) });
+    });
   }
 
   get timingConfig(): TraceTiming {
@@ -323,6 +439,9 @@ export class ActivityTraceManager {
           return undefined;
         }
         state.messageId = messageId;
+        // Remember it: if this process dies before `finish`, the next start
+        // closes the message out instead of leaving it saying "Working".
+        this.persistPending();
         // Steps may have arrived while the post was in flight.
         if (record.dirty) this.scheduleFlush(record);
         else this.resolveSettle(record);
@@ -426,6 +545,8 @@ export class ActivityTraceManager {
     record.state.status = opts.status;
     record.state.summary = opts.summary;
     record.state.finishedAt = this.scheduler.now();
+    // Dropped from the persisted set (it is no longer "running").
+    this.persistPending();
     this.markDirty(record);
   }
 
@@ -443,6 +564,10 @@ export class ActivityTraceManager {
 
   /** Clears timers and forgets every trace (monitor shutdown / tests). */
   stop(): void {
+    // Persist *before* clearing: a graceful shutdown also leaves in-flight
+    // traces unfinalized, and the next start should close them out rather than
+    // leaving them frozen. The file is deliberately not deleted here.
+    this.persistPending();
     for (const record of this.records.values()) {
       if (record.timer) {
         this.scheduler.clearTimeout(record.timer);

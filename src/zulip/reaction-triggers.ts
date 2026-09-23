@@ -181,6 +181,7 @@ export function buildReactionTriggerMessage(params: {
     _reactionTrigger: true,
     _reactionEmoji: matched.emoji,
     _reactionUserId: matched.userId,
+    _reactionInstruction: matched.instruction,
   } as ZulipMessage;
 }
 
@@ -190,4 +191,29 @@ export function reactionDedupeKey(
   parts: { messageId: string; emoji: string; userId: string },
 ): string {
   return `reaction:${accountId}:${parts.messageId}:${parts.emoji}:${parts.userId}`;
+}
+
+/**
+ * Monitored streams the bot is not subscribed to.
+ *
+ * Zulip only delivers `reaction` events for messages in streams the user is
+ * **subscribed** to, while `message` events arrive anyway when the queue was
+ * registered with `all_public_streams`. The mismatch makes reaction triggers
+ * fail silently, so the missing set is surfaced at startup.
+ *
+ * `"*"` cannot be enumerated, so it returns `[]` and the caller reports the
+ * subscribed list instead of pretending it checked.
+ */
+export function findUnsubscribedStreams(params: {
+  monitored: string[];
+  subscribed: string[];
+}): string[] {
+  if (params.monitored.includes("*")) return [];
+  const subscribed = new Set(
+    params.subscribed.map((name) => name.trim().toLowerCase()).filter(Boolean),
+  );
+  return params.monitored.filter((name) => {
+    const trimmed = name.trim();
+    return Boolean(trimmed) && !subscribed.has(trimmed.toLowerCase());
+  });
 }

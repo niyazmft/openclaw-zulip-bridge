@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildReactionTriggerMessage,
+  findUnsubscribedStreams,
   isEligibleTargetMessage,
   matchReactionTrigger,
   reactionDedupeKey,
@@ -174,6 +175,11 @@ test("buildReactionTriggerMessage: carries the reacting human and the instructio
   assert.equal(message._reactionTrigger, true);
   assert.equal(message._reactionEmoji, "+1");
   assert.equal(message._reactionUserId, "9");
+  assert.equal(
+    message._reactionInstruction,
+    "Proceed with the proposed step.",
+    "the instruction is kept separately so the user-visible trace title stays clean",
+  );
 
   assert.match(message.content ?? "", /Niyaz reacted with :\+1:/);
   assert.match(message.content ?? "", /#main \/ deploys/);
@@ -207,4 +213,39 @@ test("reactionDedupeKey: one dispatch per message, emoji and user", () => {
   assert.notEqual(key, reactionDedupeKey("other", base));
   // Never collides with the plain inbound message key for the same message.
   assert.notEqual(key, `default:1001`);
+});
+
+// ── Subscription check (#297 field finding) ─────────────────────────────────
+// Zulip delivers `reaction` events only for streams the bot is *subscribed* to,
+// while `message` events arrive anyway via all_public_streams — so an
+// unsubscribed stream means the trigger silently never fires.
+
+test("findUnsubscribedStreams: reports monitored streams the bot is not in", () => {
+  assert.deepEqual(
+    findUnsubscribedStreams({ monitored: ["general", "reports", "dev"], subscribed: ["general", "dev"] }),
+    ["reports"],
+  );
+  assert.deepEqual(
+    findUnsubscribedStreams({ monitored: ["general"], subscribed: ["general"] }),
+    [],
+  );
+  assert.deepEqual(
+    findUnsubscribedStreams({ monitored: ["general", "dev"], subscribed: [] }),
+    ["general", "dev"],
+  );
+});
+
+test("findUnsubscribedStreams: matching is case- and whitespace-insensitive", () => {
+  assert.deepEqual(
+    findUnsubscribedStreams({ monitored: [" General "], subscribed: ["general"] }),
+    [],
+  );
+  assert.deepEqual(
+    findUnsubscribedStreams({ monitored: ["general"], subscribed: ["GENERAL"] }),
+    [],
+  );
+});
+
+test("findUnsubscribedStreams: '*' cannot be enumerated, so it never claims a miss", () => {
+  assert.deepEqual(findUnsubscribedStreams({ monitored: ["*"], subscribed: [] }), []);
 });

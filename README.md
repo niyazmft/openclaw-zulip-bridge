@@ -239,7 +239,9 @@ zulip-bot · **Working** — fix the failing auth test
 
 When the run ends, the block collapses to one compact line (`✅ **Done** — run finished in 18s`).
 The message is never deleted, so the topic keeps an audit trail (Zulip also keeps its own edit
-history).
+history). If the gateway restarts mid-run (deploy, crash, OOM), the next start closes that trace out
+as `⚪ **Cancelled** — run interrupted by a gateway restart`, so a topic never keeps a stale
+"Working" line.
 
 ### The rule
 
@@ -386,6 +388,12 @@ Safety rules:
 - **Only the bot's own messages are actionable by default.** A reaction is an approval of the agent's
   proposal; reacting to someone else's message should not make the agent act on it. Set
   `reactionTriggerAnyMessage: true` deliberately if you want that.
+- **The bot must be subscribed to the stream.** Zulip delivers `reaction` events only to
+  *subscribers* of the stream, while `message` events arrive anyway (the queue uses
+  `all_public_streams`) — so an unsubscribed stream fails **silently**: the trigger simply never fires.
+  The plugin checks at startup and warns with the streams you are missing (or, with `streams: ["*"]`,
+  prints the subscribed list so you can compare). To fix it, subscribe the bot in Zulip's
+  stream settings, or `POST /api/v1/users/me/subscriptions`.
 - **Streams only**, and only streams this account monitors.
 - **Fired once per (message, emoji, user)** — repeated taps, reaction toggles and replayed events use
   the existing on-disk dedupe store, so a restart cannot re-trigger work.
@@ -396,6 +404,30 @@ Safety rules:
 What this deliberately is **not**: it does not launch arbitrary named workflows or scripts. The
 trigger is an instruction to the agent that is already in this conversation, so its blast radius is
 the same as someone typing that sentence.
+
+**Emoji names** are the Zulip API names, not glyphs: 👍 is `+1`, ✅ is `check`, 👀 is `eyes`.
+
+### Reaction trigger does nothing
+
+Work through these in order — the plugin logs (or audit-logs) each stage:
+
+1. **Is the bot subscribed to that stream?** This is the most common cause, and it is silent by
+   nature. Check the startup warning ("will not fire in monitored streams the bot is not subscribed
+   to") or `GET /api/v1/users/me/subscriptions`.
+2. **Is the emoji in `reactionTriggers`?** The map is keyed by the Zulip emoji name (`+1`, `check`, …).
+3. **Did the trigger fire?** A fired trigger writes a `reaction_trigger` event to
+   `{dataDir}/audit/{accountId}.audit.log`, so the audit log tells you whether the plugin saw it.
+4. **Was the reaction on the bot's own message?** A reaction on someone else's message is ignored
+   unless `reactionTriggerAnyMessage: true`.
+5. **Could the reacting user's email be resolved?** The plugin resolves it from `user_id` (the event
+   carries no user object) and drops the trigger with a warning if that fails, so a broken sender
+   never reaches the allowlist as an un-authorizable numeric id.
+
+**If you cannot see any of that**: plugin child-logger output does not necessarily reach the host
+log — on Termux the gateway log contained **zero** plugin lines while the host's own lines were all
+present. Use the audit log (`{dataDir}/audit/{accountId}.audit.log`, which records
+`reaction_trigger` and `reaction_trigger_subscription_gap`) and the Zulip API for verification
+instead of assuming the plugin is silent.
 
 ## Troubleshooting
 

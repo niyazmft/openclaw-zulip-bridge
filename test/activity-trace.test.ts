@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import {
   ActivityTraceManager,
@@ -424,4 +427,103 @@ test("steps are capped so a chatty run cannot grow the block unbounded", async (
   assert.ok(steps.length <= 20, `expected <=20 steps, got ${steps.length}`);
   assert.equal(steps[steps.length - 1].id, "s39");
   manager.stop();
+});
+
+// ── Restart recovery ────────────────────────────────────────────────────────
+// A trace can only be finalized by the process that created it, so a run killed
+// mid-flight used to leave `**Working** — …` frozen in the topic forever.
+
+const persistDir = mkdtempSync(path.join(os.tmpdir(), "zulip-trace-persist-"));
+const persistPath = (name: string) => path.join(persistDir, `${name}.json`);
+const waitForWrite = () => new Promise((resolve) => setTimeout(resolve, 25));
+
+test("persistPending: a running trace is remembered, a finished one is not", async () => {
+  const file = persistPath("running");
+  const { io } = makeIo();
+  const manager = new ActivityTraceManager({ io, config: { traceCoalesceMs: 5 }, persistPath: file });
+
+  const trace = manager.start({ title: "issue #42", target: TARGET, id: "t1" });
+  await trace.settle();
+  await waitForWrite();
+  const during = JSON.parse(readFileSync(file, "utf8"));
+  assert.equal(during.length, 1);
+  assert.equal(during[0].messageId, "msg-1");
+  assert.equal(during[0].title, "issue #42");
+
+  trace.finish({ status: "done", summary: "all good" });
+  await trace.settle();
+  await waitForWrite();
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), []);
+  manager.stop();
+});
+
+test("stop: in-flight traces stay on disk so the next start can close them", async () => {
+  const file = persistPath("stop");
+  const { io } = makeIo();
+  const manager = new ActivityTraceManager({ io, config: { traceCoalesceMs: 5 }, persistPath: file });
+  const trace = manager.start({ title: "killed run", target: TARGET, id: "t1" });
+  await trace.settle();
+
+  manager.stop();
+  await waitForWrite();
+  const after = JSON.parse(readFileSync(file, "utf8"));
+  assert.equal(after.length, 1, "a graceful shutdown must not silently lose the pending trace");
+});
+
+test("recoverInterruptedTraces: collapses a trace left running by a previous process", async () => {
+  const file = persistPath("recover");
+  writeFileSync(
+    file,
+    JSON.stringify([
+      { messageId: "msg-7", target: TARGET, title: "issue #42", createdAt: 1 },
+      { messageId: "msg-8", target: TARGET, title: "issue #43", createdAt: 2 },
+    ]),
+  );
+  const { io, edits } = makeIo();
+  const manager = new ActivityTraceManager({ io, config: { traceCoalesceMs: 5 }, persistPath: file });
+
+  const recovered = await manager.recoverInterruptedTraces();
+  assert.equal(recovered, 2);
+  assert.equal(edits.length, 2);
+  assert.equal(edits[0].messageId, "msg-7");
+  assert.equal(edits[0].content, "⚪ **Cancelled** — run interrupted by a gateway restart");
+  assert.equal(edits[1].messageId, "msg-8");
+  assert.equal(existsSync(file), false, "the record file is cleared so this cannot repeat forever");
+});
+
+test("recoverInterruptedTraces: no file means nothing was in flight", async () => {
+  const { io, edits } = makeIo();
+  const manager = new ActivityTraceManager({
+    io,
+    config: { traceCoalesceMs: 5 },
+    persistPath: persistPath("absent"),
+  });
+  assert.equal(await manager.recoverInterruptedTraces(), 0);
+  assert.equal(edits.length, 0);
+});
+
+test("recoverInterruptedTraces: a failed edit is logged and the file is still cleared", async () => {
+  const file = persistPath("recover-fail");
+  writeFileSync(file, JSON.stringify([{ messageId: "msg-9", target: TARGET, title: "gone", createdAt: 1 }]));
+  const warnings: string[] = [];
+  const failures: Array<{ messageId: string; error: string }> = [];
+  const manager = new ActivityTraceManager({
+    io: {
+      post: async () => "msg-1",
+      edit: async () => {
+        throw new Error("message was deleted");
+      },
+    },
+    config: { traceCoalesceMs: 5 },
+    persistPath: file,
+    log: { warn: (message) => warnings.push(message) },
+    onRecoveryError: (info) => failures.push(info),
+  });
+
+  assert.equal(await manager.recoverInterruptedTraces(), 0);
+  assert.deepEqual(warnings, ["zulip activity trace recovery edit failed"]);
+  // Zulip only allows editing for a limited time, so a failure here is normal
+  // and must be surfaced (logs do not reach the host log on every host).
+  assert.deepEqual(failures, [{ messageId: "msg-9", error: "Error: message was deleted" }]);
+  assert.equal(existsSync(file), false);
 });
