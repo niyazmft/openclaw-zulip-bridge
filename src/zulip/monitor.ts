@@ -14,6 +14,8 @@ import { getZulipRuntime } from "../runtime.js";
 import {
   editZulipMessage,
   fetchZulipMessage,
+  fetchZulipSubscriptions,
+  fetchZulipUser,
   registerZulipQueue,
   updateZulipMessageFlag,
   type ZulipMessage,
@@ -56,6 +58,7 @@ import {
 } from "./history-context.js";
 import {
   buildReactionTriggerMessage,
+  findUnsubscribedStreams,
   isEligibleTargetMessage,
   matchReactionTrigger,
   reactionDedupeKey,
@@ -631,7 +634,14 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         lastTopicCache,
       });
 
-      const preview = bodyText.replace(/\s+/g, " ").slice(0, 160);
+      // A reaction-trigger turn's body is an internal envelope, and the trace
+      // line is user-visible: title it with the emoji + instruction rather than
+      // echoing `[Zulip reaction] …` into the topic (seen in a field test).
+      const preview = isReactionTrigger
+        ? `reaction :${message._reactionEmoji ?? "?"}: — ${message._reactionInstruction ?? "triggered"}`
+            .replace(/\s+/g, " ")
+            .slice(0, 160)
+        : bodyText.replace(/\s+/g, " ").slice(0, 160);
       const inboundLabel =
         kind === "dm"
           ? `Zulip DM from ${senderName}`
@@ -946,6 +956,53 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       },
     });
 
+    // Reaction triggers (#297) only work where Zulip actually delivers reaction
+    // events: to *subscribers* of the stream. `message` events arrive even for
+    // unsubscribed streams (the queue uses `all_public_streams`), so the gap is
+    // invisible — the trigger simply never fires, with nothing in the logs.
+    // Report it once at startup, at warn level (plugin info logs do not surface
+    // on every host; that is how this went unnoticed in the field).
+    if (reactionTriggerConfig.enabled) {
+      try {
+        const subscriptions = await fetchZulipSubscriptions(client);
+        const subscribed = subscriptions.map((s) => s.name ?? "").filter(Boolean);
+        const missing = findUnsubscribedStreams({ monitored: streams, subscribed });
+        if (missing.length > 0) {
+          // Warn *and* audit: plugin child-logger output does not reach the host
+          // log on every host (verified on Termux: zero plugin lines in the
+          // gateway log), and the audit file is what actually survives.
+          logger?.warn?.(
+            "zulip reaction triggers will not fire in monitored streams the bot is not subscribed to",
+            { accountId: account.accountId, missing: missing.join(", "), subscribed: subscribed.join(", ") || "(none)" },
+          );
+          void auditLogger.log({
+            ts: new Date().toISOString(),
+            event: "reaction_trigger_subscription_gap",
+            accountId: account.accountId,
+            direction: "inbound",
+            missing: missing.join(", "),
+            subscribed: subscribed.join(", "),
+          });
+        } else if (streams.includes("*")) {
+          // "*" cannot be verified: state the requirement and the current list.
+          logger?.warn?.(
+            "zulip reaction triggers: Zulip delivers reaction events only for streams the bot is subscribed to; monitoring '*' cannot be verified",
+            { accountId: account.accountId, subscribed: subscribed.join(", ") || "(none)" },
+          );
+        } else {
+          logger?.info?.("zulip reaction triggers: bot is subscribed to every monitored stream", {
+            accountId: account.accountId,
+            streams: streams.join(", "),
+          });
+        }
+      } catch (err) {
+        logger?.warn?.("zulip reaction trigger subscription check failed", {
+          accountId: account.accountId,
+          error: String(err),
+        });
+      }
+    }
+
     let pollBackoffMs = 0;
     // Idle backoff + log throttle state for the heartbeat-only path (see polling.ts).
     let idleBackoffMs = 0;
@@ -1014,7 +1071,34 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       if (!matched) return;
 
       try {
-        const target = await fetchZulipMessage(client, matched.messageId);
+        // The live reaction event carries `user_id` only — there is no `user`
+        // object, so no email (verified against the Zulip API). Allowlists are
+        // written against emails, and `handleMessage` derives its sender from
+        // `sender_email`, so the email must be resolved here. Without this the
+        // synthetic turn carried a numeric id, every email-based allowlist
+        // rejected it, and the drop was invisible.
+        const resolved = { ...matched };
+        if (!resolved.userEmail) {
+          const user = await fetchZulipUser(client, resolved.userId).catch(() => undefined);
+          resolved.userEmail = user?.email?.trim() || undefined;
+          resolved.userName = resolved.userName ?? (user?.full_name?.trim() || undefined);
+        }
+        if (!resolved.userEmail) {
+          // Fail closed *and say so*: dispatching without an authorizable sender
+          // would only produce a silent policy drop.
+          logger?.warn?.(
+            "zulip reaction trigger dropped: could not resolve the reacting user's email",
+            {
+              accountId: account.accountId,
+              messageId: resolved.messageId,
+              emoji: resolved.emoji,
+              userId: resolved.userId,
+            },
+          );
+          return;
+        }
+
+        const target = await fetchZulipMessage(client, resolved.messageId);
         if (
           !isEligibleTargetMessage(target, {
             anyMessage: reactionTriggerConfig.anyMessage,
@@ -1025,8 +1109,8 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         ) {
           logger?.info?.("zulip reaction trigger ignored: ineligible target message", {
             accountId: account.accountId,
-            messageId: matched.messageId,
-            emoji: matched.emoji,
+            messageId: resolved.messageId,
+            emoji: resolved.emoji,
           });
           return;
         }
@@ -1036,7 +1120,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         if (!streamName) {
           logger?.info?.("zulip reaction trigger ignored: no stream name", {
             accountId: account.accountId,
-            messageId: matched.messageId,
+            messageId: resolved.messageId,
           });
           return;
         }
@@ -1052,9 +1136,9 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         const topic = target.subject?.trim() || DEFAULT_TOPIC;
         logger?.info?.("zulip reaction trigger fired", {
           accountId: account.accountId,
-          messageId: matched.messageId,
-          emoji: matched.emoji,
-          senderId: maskPII(matched.userEmail ?? matched.userId),
+          messageId: resolved.messageId,
+          emoji: resolved.emoji,
+          senderId: maskPII(resolved.userEmail),
           stream: maskPII(streamName),
           topic,
         });
@@ -1063,15 +1147,15 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           event: "reaction_trigger",
           accountId: account.accountId,
           direction: "inbound",
-          messageId: matched.messageId,
-          emoji: matched.emoji,
-          sender: maskPII(matched.userEmail ?? matched.userId),
+          messageId: resolved.messageId,
+          emoji: resolved.emoji,
+          sender: maskPII(resolved.userEmail),
         });
 
         // Dispatched through the normal message path: policy, allowlists and
-        // the per-sender rate limit all apply to `matched.userId`.
+        // the per-sender rate limit all apply to `resolved.userEmail`.
         await handleMessage(
-          buildReactionTriggerMessage({ target, matched, streamName, topic }),
+          buildReactionTriggerMessage({ target, matched: resolved, streamName, topic }),
         );
       } catch (err) {
         logger?.error?.("zulip reaction trigger failed", {
