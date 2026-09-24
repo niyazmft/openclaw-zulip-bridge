@@ -168,6 +168,8 @@ Edit `~/.openclaw/openclaw.json`:
 | `renderRefs` | boolean | `false` | Validate `[[zulip_ref: …]]` markers and render them as links |
 | `reactionTriggers` | object | — | Emoji → instruction map; a reaction then dispatches that instruction in-thread |
 | `reactionTriggerAnyMessage` | boolean | `false` | Allow triggers on messages the bot did not author |
+| `queueMode` | `"off"` \| `"followup"` | `"off"` | Hold a message arriving mid-run until that session's active run finishes |
+| `queueCap` | number | `20` | Max messages waiting behind a run (past it, dispatch immediately) |
 
 #### Environment Variables
 
@@ -428,6 +430,41 @@ log — on Termux the gateway log contained **zero** plugin lines while the host
 present. Use the audit log (`{dataDir}/audit/{accountId}.audit.log`, which records
 `reaction_trigger` and `reaction_trigger_subscription_gap`) and the Zulip API for verification
 instead of assuming the plugin is silent.
+
+### Two People in One Topic
+
+A Zulip topic is **one conversation**: everyone in it shares one session, so the bot works one request
+at a time there. What happens to a second request that arrives mid-run is the host's decision, and
+the default is not friendly to a shared room — `steer` pushes the new message *into* the running
+turn, so teammate B can redirect teammate A's work.
+
+The host can be configured to wait instead (`messages.queue.mode: "followup"`), but:
+
+- the per-channel form (`messages.queue.byChannel.zulip`) is rejected — `byChannel` accepts only
+  *known/bundled* channel ids, and Zulip is a third-party plugin channel (`Unrecognized key:
+  "zulip"`);
+- there is no global mode that affects only Zulip, and changing `messages.queue.mode` would also
+  change your other channels (e.g. Telegram).
+
+So the plugin queues for itself, Zulip-only:
+
+```json
+{ "channels": { "zulip": { "queueMode": "followup", "queueCap": 20 } } }
+```
+
+- A message arriving while a run is active for that topic (or DM) **waits its turn** instead of
+  being steered into it. Separate topics are unaffected — they are separate sessions, so they still
+  run in parallel.
+- The waiting message is marked with a **⏳ reaction** (`reactions.onQueued`, default `hourglass`),
+  because Zulip has no "queued input" surface. 👀 still means received and ✅ still means finished.
+- `queueCap` bounds the wait; past it a message is dispatched **immediately rather than dropped**.
+- Each transition is **audit-logged** as `message_queued` / `message_dequeued` (with the message id and
+  how many were waiting). The ⏳ is transient — it disappears the moment the turn starts — and plugin
+  logs do not surface on every host, so the audit file is the durable proof that the queue engaged.
+- Default **`"off"`**, so nothing changes unless you ask for it — and other channels are never
+  affected.
+
+For genuinely parallel work use separate topics; for private work use DMs (per-user sessions).
 
 ## Troubleshooting
 

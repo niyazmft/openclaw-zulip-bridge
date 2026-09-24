@@ -65,6 +65,7 @@ import {
   resolveReactionTriggerConfig,
   type ZulipReactionEvent,
 } from "./reaction-triggers.js";
+import { SessionDispatchQueue, resolveSessionQueueConfig } from "./session-queue.js";
 import {
   ActivityTraceManager,
   createZulipTraceIo,
@@ -308,6 +309,23 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       reactionTriggers: accountSection.reactionTriggers ?? account.config.reactionTriggers,
       reactionTriggerAnyMessage:
         accountSection.reactionTriggerAnyMessage ?? account.config.reactionTriggerAnyMessage,
+    });
+
+    // Zulip-only `followup` (#297 follow-up): the host's per-channel queue
+    // override rejects a third-party channel id (`messages.queue.byChannel.zulip`
+    // → "Unrecognized key"), and a per-message override is not exposed to channel
+    // plugins — so when a run is already active for a session, the plugin holds
+    // the next message instead of handing it to the host, which is what stops a
+    // second person's message steering the first person's work. Off by default,
+    // so nothing changes for existing installs or other channels.
+    const sessionQueueConfig = resolveSessionQueueConfig({
+      queueMode: accountSection.queueMode ?? account.config.queueMode,
+      queueCap: accountSection.queueCap ?? account.config.queueCap,
+    });
+    const queueWaitingReaction = normalizeZulipEmojiName(reactionConfig.onQueued ?? "hourglass");
+    const sessionDispatchQueue = new SessionDispatchQueue({
+      config: sessionQueueConfig,
+      log: (message, meta) => logger?.info?.(message, meta),
     });
 
     // Pre-compute the fallback for groupAllowFrom, but defer disk read until needed.
@@ -871,33 +889,86 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         accountId: account.accountId,
       });
 
-      const dispatchError = await dispatchZulipReply({
-        core,
-        cfg,
-        account,
-        route,
-        client,
-        ctxPayload,
-        isDM,
-        senderId,
-        senderNumericId: Number(message.sender_id),
-        streamId,
-        topic,
-        messageId,
-        botUsername,
-        onModelSelected,
-        prefixOptions,
-        tableMode,
-        textLimit,
-        to,
-        statusSink: opts.statusSink,
-        logVerboseMessage,
-        placeholderMessageIdPromise: placeholderPromise,
-        maxMessageLength: account.maxMessageLength ?? 20000,
-        traceManager: activityTraceManager,
-        traceTitle: preview,
-        abortSignal: opts.abortSignal,
-      });
+      // One run at a time per session when `queueMode: "followup"`: a message
+      // arriving mid-run waits its turn (and is marked ⏳ while it waits) rather
+      // than being steered into the running turn. With the default `off` this is
+      // a pass-through — `run` just calls the task.
+      const dispatchError = await sessionDispatchQueue.run(
+        sessionKey,
+        () =>
+          dispatchZulipReply({
+            core,
+            cfg,
+            account,
+            route,
+            client,
+            ctxPayload,
+            isDM,
+            senderId,
+            senderNumericId: Number(message.sender_id),
+            streamId,
+            topic,
+            messageId,
+            botUsername,
+            onModelSelected,
+            prefixOptions,
+            tableMode,
+            textLimit,
+            to,
+            statusSink: opts.statusSink,
+            logVerboseMessage,
+            placeholderMessageIdPromise: placeholderPromise,
+            maxMessageLength: account.maxMessageLength ?? 20000,
+            traceManager: activityTraceManager,
+            traceTitle: preview,
+            abortSignal: opts.abortSignal,
+          }),
+        {
+          onQueued: () => {
+            logger?.info?.("zulip message queued behind an active run", {
+              accountId: account.accountId,
+              messageId,
+              sessionKey: maskPII(sessionKey),
+            });
+            // Logs do not surface on every host (see AGENTS.md) and the ⏳ that
+            // makes the wait visible is removed the moment the turn starts — so
+            // the audit file is the only durable proof that the queue engaged.
+            void auditLogger.log({
+              ts: new Date().toISOString(),
+              event: "message_queued",
+              accountId: account.accountId,
+              direction: "inbound",
+              messageId,
+              sessionKey: maskPII(sessionKey),
+              waiting: String(sessionDispatchQueue.waitingCount(sessionKey)),
+            });
+            void addReactionSafe({
+              client,
+              messageId,
+              emojiName: queueWaitingReaction,
+              reactionsEnabled,
+              logVerbose: logVerboseMessage,
+            });
+          },
+          onDequeued: () => {
+            void auditLogger.log({
+              ts: new Date().toISOString(),
+              event: "message_dequeued",
+              accountId: account.accountId,
+              direction: "inbound",
+              messageId,
+              sessionKey: maskPII(sessionKey),
+            });
+            void removeReactionSafe({
+              client,
+              messageId,
+              emojiName: queueWaitingReaction,
+              reactionsEnabled,
+              logVerbose: logVerboseMessage,
+            });
+          },
+        },
+      );
 
       if (reactionsEnabled) {
         if (reactionClearOnFinish) {
