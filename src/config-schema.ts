@@ -38,6 +38,7 @@ const ZulipAccountSchema = z.object({
       onStart: z.string().optional(),
       onSuccess: z.string().optional(),
       onError: z.string().optional(),
+      onQueued: z.string().optional(),
     })
     .optional(),
   textChunkLimit: z.number().int().positive().optional(),
@@ -65,6 +66,8 @@ const ZulipAccountSchema = z.object({
   renderRefs: z.boolean().optional(),
   reactionTriggers: z.record(z.string(), z.string().max(500)).optional(),
   reactionTriggerAnyMessage: z.boolean().optional(),
+  queueMode: z.enum(["off", "followup"]).optional(),
+  queueCap: z.number().int().min(1).max(500).optional(),
 });
 
 const ZulipConfigSchema = buildCatchallMultiAccountChannelSchema(

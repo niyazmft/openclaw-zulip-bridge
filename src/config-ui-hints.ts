@@ -77,6 +77,14 @@ export const zulipChannelConfigUiHints = {
     label: "Reaction triggers on any message",
     help: "Allow reaction triggers on messages the bot did not author. Default: disabled, because a reaction is an approval of the agent's proposal — reacting to someone else's message should not make the agent act on it.",
   },
+  queueMode: {
+    label: "Queue mode (per-session)",
+    help: '"off" (default): a message arriving mid-run is handed to the host, which steers it into the running turn. "followup": the plugin holds it until the active run for that stream/topic (or DM) finishes, so a second person cannot redirect the first person\'s work. The waiting message is marked with reactions.onQueued (default hourglass). Zulip-only; other channels are unaffected.',
+  },
+  queueCap: {
+    label: "Queue capacity (messages)",
+    help: "Max messages waiting behind an active run for one session. Past it a message is dispatched immediately rather than dropped. Clamped 1-500. Default: 20.",
+  },
   streams: {
     label: "Zulip Streams",
     help: "Optional list of stream names the bot should monitor. Use [\"*\"] or omit depending on your routing design.",

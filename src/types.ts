@@ -53,6 +53,11 @@ export type ZulipAccountConfig = {
     onStart?: string;
     onSuccess?: string;
     onError?: string;
+    /**
+     * Reaction applied to a message while it waits behind an active run
+     * (`queueMode: "followup"`). Default: `hourglass`.
+     */
+    onQueued?: string;
   };
   /** Outbound text chunk size (chars). Default: 4000. */
   textChunkLimit?: number;
@@ -244,6 +249,28 @@ export type ZulipAccountConfig = {
    * on it. Only enable this deliberately.
    */
   reactionTriggerAnyMessage?: boolean;
+  /**
+   * Per-session dispatch queue (#297 follow-up).
+   *
+   * `"off"` (default) — current behaviour: a message that arrives mid-run is
+   * handed to the host, which steers it into the running turn (its default).
+   *
+   * `"followup"` — when a run is already active for this stream/topic (or DM),
+   * the plugin holds the next message until that run finishes, so a second
+   * person's message cannot redirect the first person's work. This is the
+   * Zulip-only equivalent of the host's `messages.queue.mode: "followup"`:
+   * the host's per-channel override rejects third-party channel ids, and a
+   * per-message override is not exposed to channel plugins, so the plugin
+   * queues before handing the message over. The waiting message is marked with
+   * `reactions.onQueued` (default ⏳) so the wait is visible in Zulip.
+   */
+  queueMode?: "off" | "followup";
+  /**
+   * Max messages waiting behind an active run for one session (default 20,
+   * clamp 1–500). Past the cap a message is dispatched **immediately** rather
+   * than dropped — degrading to the host's behaviour for that one message.
+   */
+  queueCap?: number;
 };
 
 export type ZulipConfig = {
