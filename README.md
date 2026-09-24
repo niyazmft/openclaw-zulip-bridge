@@ -47,8 +47,8 @@ openclaw channels add
 # → Select "Zulip (plugin)" → enter API key, email, URL → route to agent
 
 # 4. Approve yourself for DMs (dmPolicy defaults to "pairing")
-#    Send a DM to your bot first, then copy the pairing code and run:
-openclaw channels allow-from zulip <your-email>
+#    DM the bot first; it replies with a pairing code and the exact approval
+#    command to run on your host
 
 # 5. Test
 #    Send a DM to your bot or mention it in a stream
@@ -64,10 +64,11 @@ openclaw channels allow-from zulip <your-email>
 - **History-aware Context**: Optionally harvest bounded past stream/topic history into the agent's context so it can answer "have we seen this before?" with real evidence from the topic
 - **Actionable Refs**: Optionally let the agent emit `[[zulip_ref: …]]` markers that the plugin **validates** against the GitHub API and renders as clickable links (opt-in)
 - **In-Channel Action Triggers**: Optionally let a reaction on the bot's own message act as "go" — the configured instruction is dispatched as a turn in the same stream/topic, so work happens in the room (opt-in)
+- **Per-Session Queue**: Optionally hold a message that arrives while that topic's run is in progress until the run finishes, so a second person cannot steer the first person's work (opt-in, Zulip-only)
 - **Persistent Event Polling**: Automatically resumes from where it left off using locally-persisted queue metadata
 - **Durable Deduplication**: Persistent deduplication store prevents duplicate message processing
-- **Bot Workspace**: Sandboxed file storage under `data/zulip-workspace/`
-- **SSRF Protection**: Rejects internal IPs, localhost, and AWS metadata endpoints
+- **Bot Workspace**: Sandboxed file storage under `{dataDir}/workspace/`
+- **SSRF Protection**: Rejects internal IPs, localhost, and AWS metadata endpoints unless `allowInsecureHttp` is opted in
 - **Security Hardening**: URL encoding, path traversal sanitization, symlink rejection
 - **Multiple Accounts**: Support for multiple Zulip accounts and realms in a single instance
 
@@ -93,12 +94,7 @@ See [AGENTS.md](AGENTS.md) for Node 24 / CJS Gateway host compatibility notes an
 openclaw plugins install clawhub:@niyazmft/openclaw-zulip
 ```
 
-Then restart the gateway and run the interactive setup wizard:
-
-```bash
-openclaw gateway restart
-openclaw channels add
-```
+Then restart the gateway and run `openclaw channels add` — see [Quick Start](#quick-start) for the full sequence.
 
 ### From Source
 
@@ -113,7 +109,7 @@ Run `openclaw channels add` and select "Zulip (plugin)". The wizard will guide y
 - **Site URL**: Your Zulip realm URL (e.g., `https://your-org.zulipchat.com`)
 - **Bot email**: The email address of your Zulip bot
 - **API key**: The API key from your Zulip bot settings
-- **Allow list**: Who can DM the bot (pairing required by default)
+- **DM policy**: who can DM the bot — `pairing` (default), `open`, `allowlist` or `disabled`
 
 ### Manual Configuration
 
@@ -133,11 +129,14 @@ Edit `~/.openclaw/openclaw.json`:
       ],
       "streams": ["general", "dev"],
       "chatmode": "onmessage",
-      "dmPolicy": "pairing"
+      "dmPolicy": "pairing",
+      "groupAllowFrom": ["you@your-org.zulipchat.com"]
     }
   }
 }
 ```
+
+`streams` and `chatmode` only decide *when* the bot answers: `groupPolicy` defaults to `"allowlist"`, so stream senders must also be named in `groupAllowFrom` (or `allowFrom`) or stream messages are dropped.
 
 #### Configuration Options
 
@@ -146,34 +145,39 @@ Edit `~/.openclaw/openclaw.json`:
 | `siteUrl` | string | required | Zulip realm URL |
 | `apiKey` | string | required | Bot API key |
 | `email` | string | required | Bot email address |
-| `streams` | string[] | `["general"]` | Streams to monitor |
-| `chatmode` | `"oncall"` \| `"onmessage"` \| `"onchar"` | `"onmessage"` | When the bot responds in streams |
-| `dmPolicy` | `"open"` \| `"pairing"` \| `"closed"` | `"pairing"` | Who can DM the bot |
-| `allowFrom` | string[] | `[]` | Allowed sender emails (for pairing) |
-| `groupAllowFrom` | string[] | `[]` | Allowed group IDs |
+| `streams` | string[] | `["*"]` | Streams to monitor (`"*"` = all public streams) |
+| `chatmode` | `"oncall"` \| `"onmessage"` \| `"onchar"` | — | When the bot responds in streams: `oncall` needs a mention, `onmessage` replies to every message, `onchar` needs a prefix (`oncharPrefixes`, default `[">", "!"]`). Unset leaves it to `requireMention` |
+| `requireMention` | boolean | `true` | Require an @mention in streams; `chatmode` overrides it |
+| `dmPolicy` | `"open"` \| `"pairing"` \| `"allowlist"` \| `"disabled"` | `"pairing"` | Who can DM the bot (`"open"` requires `allowFrom` to include `"*"`) |
+| `allowFrom` | string[] | `[]` | Allowed DM senders (bot email or numeric user id; only static config may contain `"*"`) |
+| `groupPolicy` | `"allowlist"` \| `"open"` \| `"disabled"` | `"allowlist"` | Who can trigger the bot in streams |
+| `groupAllowFrom` | string[] | `[]` | Allowed stream senders (falls back to `allowFrom` when empty) |
+| `allowInsecureHttp` | boolean | `false` | Allow a plain `http://` site URL and private/internal addresses |
 | `enableAdminActions` | boolean | `false` | Enable destructive admin actions |
-| `maxMessagesPerMinute` | number | `60` | Rate limit per sender |
+| `maxMessagesPerMinute` | number | `60` | Rate limit per sender (`0` disables) |
 | `showThinkingPlaceholder` | boolean | `false` | Show "Thinking..." placeholder |
-| `maxMessageLength` | number | `20000` | Max outbound message length |
+| `maxMessageLength` | number | `20000` | Max outbound message length (`0` disables) |
+| `dmSessionTurnLimit` | number | `20` | Inbound turns in one DM session before a fresh session starts (`0` disables) |
 | `enableSessionRecovery` | boolean | `false` | Recover interrupted messages |
-| `sessionArchiveRepair` | boolean | `auto` | Repair stuck session archives |
+| `sessionArchiveRepair` | boolean | unset (automatic) | Publish stuck session transcript archives; `true` always, `false` never |
 | `blockSecretLeaks` | boolean | `true` | Block messages containing credentials |
 | `activityTrace` | boolean | `false` | Post one live, in-place-edited status message per work item |
-| `traceCoalesceMs` | number | `400` | Coalescing window for trace edits (ms) |
-| `traceMaxRate` | number | `2` | Hard ceiling on trace edits per second |
+| `traceCoalesceMs` | number | `400` | Coalescing window for trace edits (ms), clamped 0–60000 |
+| `traceMaxRate` | number | `2` | Hard ceiling on trace edits per second, clamped 0.1–50 |
 | `historyContext` | `"off"` \| `"on-demand"` \| `"always"` | `"off"` | Harvest bounded past stream/topic history into context |
-| `historyMaxMessages` | number | `8` | Max earlier messages injected as history |
-| `historyWindowHours` | number | `72` | How far back history is considered |
-| `historyMaxChars` | number | `4000` | Hard cap on the rendered history block |
+| `historyMaxMessages` | number | `8` | Max earlier messages injected as history (clamped 1–50) |
+| `historyWindowHours` | number | `72` | How far back history is considered (clamped 1–8760) |
+| `historyMaxChars` | number | `4000` | Hard cap on the rendered history block (clamped 200–20000) |
 | `renderRefs` | boolean | `false` | Validate `[[zulip_ref: …]]` markers and render them as links |
 | `reactionTriggers` | object | — | Emoji → instruction map; a reaction then dispatches that instruction in-thread |
 | `reactionTriggerAnyMessage` | boolean | `false` | Allow triggers on messages the bot did not author |
 | `queueMode` | `"off"` \| `"followup"` | `"off"` | Hold a message arriving mid-run until that session's active run finishes |
-| `queueCap` | number | `20` | Max messages waiting behind a run (past it, dispatch immediately) |
+| `queueCap` | number | `20` | Max messages waiting behind a run, clamped 1–500 (past it, dispatch immediately) |
+| `reactions.onQueued` | string | `"hourglass"` | Emoji added to a message waiting in the queue |
 
 #### Environment Variables
 
-All config options can be overridden via environment variables:
+Credentials and the site URL can be set through environment variables instead of config. They take precedence over config for the default account only — non-default accounts are config-only.
 
 | Variable | Purpose |
 |----------|---------|
@@ -182,7 +186,7 @@ All config options can be overridden via environment variables:
 | `ZULIP_URL` | Zulip realm URL |
 | `ZULIP_SITE` | Alternative URL variable |
 | `ZULIP_REALM` | Realm name |
-| `ZULIP_ALLOW_INSECURE_HTTP` | Allow plain HTTP (LAN only) |
+| `ZULIP_ALLOW_INSECURE_HTTP` | Allow plain HTTP and private/internal addresses (default account only) |
 
 ## Verification
 
@@ -200,30 +204,35 @@ The bot should respond with a helpful message. Check `openclaw logs` if it doesn
 
 ## Attaching Local Files
 
-The agent can attach files to replies in one step using the core `message` tool's **`upload-file`** action:
+The agent can attach files to replies in one step using the core `message` tool's **`upload-file`** action. The host resolves `media` (a local path or an http(s) URL) into the file bytes:
 
 ```json
 {
   "type": "action",
   "name": "upload-file",
   "params": {
-    "source": "/path/to/file.pdf",
+    "to": "stream:general:deploys",
+    "media": "/path/to/report.pdf",
     "caption": "Here is the report"
   }
 }
 ```
 
-Or reference sandboxed local paths in the `media` field:
+Or reference sandboxed local paths from a `send` action's `media` field:
 
 ```json
 {
-  "type": "message",
-  "content": "Here is the image",
-  "media": ["data/zulip-workspace/default/image.png"]
+  "type": "action",
+  "name": "send",
+  "params": {
+    "to": "stream:general:deploys",
+    "message": "Here is the image",
+    "media": ["workspace/image.png"]
+  }
 }
 ```
 
-Files are staged in the bot workspace (`data/zulip-workspace/{accountId}/`) with path-traversal rejection.
+`upload-file` stages the bytes in the bot workspace (`{dataDir}/workspace/`, path-traversal rejected, pruned after an hour) before uploading. Attachments are read only from the system temp directory, the data dir or the bot workspace, symlinks are refused, and config, credential and session files are refused explicitly even though they sit under the data dir. A relative path (e.g. `workspace/image.png`) is tried against the agent workspace, then the data dir, then the process working directory.
 
 ## Progressive Activity Trace
 
@@ -407,7 +416,8 @@ What this deliberately is **not**: it does not launch arbitrary named workflows 
 trigger is an instruction to the agent that is already in this conversation, so its blast radius is
 the same as someone typing that sentence.
 
-**Emoji names** are the Zulip API names, not glyphs: 👍 is `+1`, ✅ is `check`, 👀 is `eyes`.
+**Emoji names** are the Zulip API names, not glyphs: 👍 is `+1`, 👀 is `eyes`. A name that does not
+match a Zulip emoji name never fires.
 
 ### Reaction trigger does nothing
 
@@ -446,23 +456,23 @@ The host can be configured to wait instead (`messages.queue.mode: "followup"`), 
 - there is no global mode that affects only Zulip, and changing `messages.queue.mode` would also
   change your other channels (e.g. Telegram).
 
-So the plugin queues for itself, Zulip-only:
+So the plugin queues for itself, Zulip-only (`queueMode: "followup"`):
 
 ```json
-{ "channels": { "zulip": { "queueMode": "followup", "queueCap": 20 } } }
+{ "channels": { "zulip": { "queueMode": "followup" } } }
 ```
 
 - A message arriving while a run is active for that topic (or DM) **waits its turn** instead of
   being steered into it. Separate topics are unaffected — they are separate sessions, so they still
   run in parallel.
-- The waiting message is marked with a **⏳ reaction** (`reactions.onQueued`, default `hourglass`),
-  because Zulip has no "queued input" surface. 👀 still means received and ✅ still means finished.
-- `queueCap` bounds the wait; past it a message is dispatched **immediately rather than dropped**.
+- The waiting message gets a reaction — **⏳**, because `reactions.onQueued` defaults to the
+  Zulip emoji name `hourglass` — since Zulip has no "queued input" surface. 👀 still means received
+  and ✅ still means finished.
+- Past `queueCap` a message is dispatched **immediately rather than dropped**.
 - Each transition is **audit-logged** as `message_queued` / `message_dequeued` (with the message id and
-  how many were waiting). The ⏳ is transient — it disappears the moment the turn starts — and plugin
-  logs do not surface on every host, so the audit file is the durable proof that the queue engaged.
-- Default **`"off"`**, so nothing changes unless you ask for it — and other channels are never
-  affected.
+  how many were waiting): the reaction is transient — it disappears the moment the turn starts — and
+  plugin logs do not surface on every host, so the audit file is the durable proof that the queue
+  engaged.
 
 For genuinely parallel work use separate topics; for private work use DMs (per-user sessions).
 
@@ -485,7 +495,8 @@ Install from ClawHub:
 openclaw plugins install clawhub:@niyazmft/openclaw-zulip
 ```
 
-Or from source without `--link`:
+Or from source without `--link` (this deletes the repo's own build and check scripts, so work in a
+copy or restore them afterwards):
 ```bash
 rm -rf scripts/
 openclaw plugins install ./ --force
@@ -496,23 +507,20 @@ openclaw plugins install ./ --force
 1. Restart the gateway: `openclaw gateway restart`
 2. Check that the plugin is in the extensions dir: `ls ~/.openclaw/extensions/zulip/`
 
-### Health-monitor restarting every ~10 min with `reason: stopped`
-
-**Fixed in v2026.8.3+.** The monitor now starts via `gateway.startAccount` inside the plugin's `base` parameter. Upgrade to the latest release.
-
-### "registerFull already called, skipping duplicate monitor start"
-
-**Status:** Harmless in v2026.8.3+. The plugin has a module-level `registerFullCalled` guard.
-
 ### No Response in Streams
 
-Ensure the bot is a member of the stream and it's in your `streams` config.
+Check three things: the bot is subscribed to the stream and `streams` includes it (or is `["*"]`);
+the sender is named in `groupAllowFrom` (or `allowFrom`), because the default `groupPolicy` is
+`"allowlist"` and an empty allowlist drops every stream message; and the message satisfies the
+mention rule for your `chatmode`.
 
 ### Logs show "mention required"
 
-Default requires @mentions. Check your `chatmode` setting.
+Streams require an @mention unless `chatmode: "onmessage"` (or `requireMention: false`) is set.
 
-For all other runtime issues (typing indicators, fallback reader, humanDelay, status message leaks, session conflation, Node 24 / ESM race, etc.), see [AGENTS.md#troubleshooting](AGENTS.md#troubleshooting).
+For everything else — health-monitor restarts, duplicate `registerFull` calls, typing indicators,
+fallback reader, humanDelay, status message leaks, session conflation, the Node 24 / ESM race, and
+the rest — see [AGENTS.md#troubleshooting](AGENTS.md#troubleshooting).
 
 ## Documentation
 
