@@ -47,8 +47,9 @@ openclaw channels add
 # → Select "Zulip (plugin)" → enter API key, email, URL → route to agent
 
 # 4. Approve yourself for DMs (dmPolicy defaults to "pairing")
-#    DM the bot first; it replies with a pairing code and the exact approval
-#    command to run on your host
+#    DM the bot first; it replies with a pairing code, then approve it:
+openclaw pairing list zulip             # pending requests
+openclaw pairing approve zulip <code>   # <code> alone works if one pairing channel is configured
 
 # 5. Test
 #    Send a DM to your bot or mention it in a stream
@@ -142,21 +143,27 @@ Edit `~/.openclaw/openclaw.json`:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `siteUrl` | string | required | Zulip realm URL |
+| `url` | string | required | Zulip realm URL (`site` and `realm` are accepted aliases) |
 | `apiKey` | string | required | Bot API key |
 | `email` | string | required | Bot email address |
 | `streams` | string[] | `["*"]` | Streams to monitor (`"*"` = all public streams) |
-| `chatmode` | `"oncall"` \| `"onmessage"` \| `"onchar"` | — | When the bot responds in streams: `oncall` needs a mention, `onmessage` replies to every message, `onchar` needs a prefix (`oncharPrefixes`, default `[">", "!"]`). Unset leaves it to `requireMention` |
+| `chatmode` | `"oncall"` \| `"onmessage"` \| `"onchar"` | — | When the bot responds in streams: `oncall` needs a mention, `onmessage` replies to every message, `onchar` needs a prefix from `oncharPrefixes`. Unset leaves it to `requireMention` |
 | `requireMention` | boolean | `true` | Require an @mention in streams; `chatmode` overrides it |
+| `oncharPrefixes` | string[] | `[">", "!"]` | Prefixes that trigger `chatmode: "onchar"` |
 | `dmPolicy` | `"open"` \| `"pairing"` \| `"allowlist"` \| `"disabled"` | `"pairing"` | Who can DM the bot (`"open"` requires `allowFrom` to include `"*"`) |
 | `allowFrom` | string[] | `[]` | Allowed DM senders (bot email or numeric user id; only static config may contain `"*"`) |
 | `groupPolicy` | `"allowlist"` \| `"open"` \| `"disabled"` | `"allowlist"` | Who can trigger the bot in streams |
 | `groupAllowFrom` | string[] | `[]` | Allowed stream senders (falls back to `allowFrom` when empty) |
 | `allowInsecureHttp` | boolean | `false` | Allow a plain `http://` site URL and private/internal addresses |
+| `mediaMaxMb` | number | `5` | Max inbound attachment size in MB |
 | `enableAdminActions` | boolean | `false` | Enable destructive admin actions |
 | `maxMessagesPerMinute` | number | `60` | Rate limit per sender (`0` disables) |
 | `showThinkingPlaceholder` | boolean | `false` | Show "Thinking..." placeholder |
+| `autoSendOnMissingTool` | boolean | `true` | Send the run's answer even if the agent never called the messaging tool |
+| `responsePrefix` | string | — | Prefix prepended to every reply |
 | `maxMessageLength` | number | `20000` | Max outbound message length (`0` disables) |
+| `textChunkLimit` | number | `4000` | Outbound chunk size in characters |
+| `chunkMode` | `"length"` \| `"newline"` | `"length"` | Split long replies by size, or on every newline |
 | `dmSessionTurnLimit` | number | `20` | Inbound turns in one DM session before a fresh session starts (`0` disables) |
 | `enableSessionRecovery` | boolean | `false` | Recover interrupted messages |
 | `sessionArchiveRepair` | boolean | unset (automatic) | Publish stuck session transcript archives; `true` always, `false` never |
@@ -173,7 +180,27 @@ Edit `~/.openclaw/openclaw.json`:
 | `reactionTriggerAnyMessage` | boolean | `false` | Allow triggers on messages the bot did not author |
 | `queueMode` | `"off"` \| `"followup"` | `"off"` | Hold a message arriving mid-run until that session's active run finishes |
 | `queueCap` | number | `20` | Max messages waiting behind a run, clamped 1–500 (past it, dispatch immediately) |
+| `reactions.enabled` | boolean | `true` | Use status reactions at all |
+| `reactions.onStart` | string | `"eyes"` | Reaction while a run is in progress |
+| `reactions.onSuccess` | string | `"check_mark"` | Reaction when a run succeeds |
+| `reactions.onError` | string | `"warning"` | Reaction when a run fails |
 | `reactions.onQueued` | string | `"hourglass"` | Emoji added to a message waiting in the queue |
+| `reactions.clearOnFinish` | boolean | `true` | Remove the status reaction when the run ends |
+
+#### Account and Host Keys
+
+Accepted for account plumbing, or owned by the host. Valid in both `channels.zulip` and `channels.zulip.accounts.<id>`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `true` | Start this account (`false` skips it) |
+| `name` | string | — | Display name in CLI/UI account lists |
+| `capabilities` | string[] | — | Provider capability tags for agent/runtime guidance |
+| `configWrites` | boolean | `true` | Allow channel-initiated config writes |
+| `streaming` | boolean | host default | Host reply-streaming mode (written by `openclaw channels add`) |
+| `markdown` | object | host default | Host markdown formatting options |
+| `blockStreaming` | boolean | host default | `false` disables block streaming for this account |
+| `blockStreamingCoalesce` | object | host default | Merge streamed block replies before sending |
 
 #### Environment Variables
 
