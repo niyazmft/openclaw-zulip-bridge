@@ -219,22 +219,33 @@ The host provides the `openclaw/plugin-sdk/*` modules at runtime (they are **not
 Derive the source triple from git — every part of it is verified by the host at install time:
 
 ```bash
-SOURCE_REPO=niyazmft/openclaw-zulip-bridge
+REPO=niyazmft/openclaw-zulip-bridge
+VERSION=$(node -p "require('./package.json').version")
 SOURCE_COMMIT=$(git rev-parse HEAD)
-git merge-base --is-ancestor "$SOURCE_COMMIT" origin/main \
-  || { echo "REFUSING: $SOURCE_COMMIT is not on origin/main"; exit 1; }
+SOURCE_REF="v$VERSION"
+
+# 1. Tag the commit you are about to record AND push the tag. The host resolves
+#    the ref against GitHub, so a local-only tag is useless.
+git tag -a "$SOURCE_REF" -m "$SOURCE_REF — <one-line summary>" "$SOURCE_COMMIT"
+git push origin "$SOURCE_REF"
+
+# 2. The recorded commit must be contained in the recorded ref.
+git merge-base --is-ancestor "$SOURCE_COMMIT" "$SOURCE_REF" \
+  || { echo "REFUSING: $SOURCE_COMMIT is not contained in $SOURCE_REF"; exit 1; }
 
 clawhub package publish . --family code-plugin --owner niyazmft \
-  --version "$(node -p "require('./package.json').version")" \
-  --source-repo "$SOURCE_REPO" --source-commit "$SOURCE_COMMIT" --source-ref main \
-  --changelog "$(sed -n '/^## \[<version>\]/,/^## \[/p' CHANGELOG.md)"
+  --version "$VERSION" \
+  --source-repo "$REPO" --source-commit "$SOURCE_COMMIT" --source-ref "$SOURCE_REF" \
+  --changelog "$(sed -n "/^## \[$VERSION\]/,/^## \[/p" CHANGELOG.md)"
 ```
 
 Invariants:
 
-- **Publish from `main` after the merge, never from the PR branch.** A squash-merged PR commits a *new* SHA; the branch SHA you published from is then reachable from no ref, and `--source-ref main` names a ref that does not contain it. This is exactly how `2026.9.1` recorded an unverifiable triple — the hash was real and even fetchable from GitHub, but not on any branch.
-- **The recorded repo must be one you can `git ls-remote`.** `niyazmft/openclaw-zulip` 404s (API and git, no redirect); only `openclaw-zulip-bridge` exists. ClawHub does not check this itself — it only validates the shape of what you pass.
-- **The same version cannot be published twice**, so a provenance fix requires a version bump in `package.json`, `openclaw.plugin.json`, `SKILL.md` and the README badge, plus a new `CHANGELOG.md` section.
+- **Publish from the merge commit on `main`, but record the tag as `--source-ref`.** A squash-merged PR commits a *new* SHA, so the pre-merge branch SHA is reachable from no ref — that is exactly how `2026.9.1` recorded an unverifiable triple (the hash was real and even fetchable from GitHub, but on no branch, while the record claimed ref `main`). Recording the pushed tag instead of `main` also keeps ClawHub's `Source Ref` identical to the GitHub release tag. `main` verifies too, but the two then disagree permanently: provenance is recorded per version, so reconciling them costs a version bump. Decide the ref before the first publish of that version.
+- **Create the release for that tag, marked Latest** (`gh release create "$SOURCE_REF" --title "$SOURCE_REF" --notes-file <file>`; drop `--prerelease`). GitHub's `releases/latest` only ever resolves to a non-prerelease, so a pre-release leaves GitHub advertising an older version than ClawHub serves under `latest`.
+- **The recorded repo must be one you can `git ls-remote`.** `niyazmft/openclaw-zulip` 404s (API and git, no redirect); only `openclaw-zulip-bridge` exists. ClawHub does not check this itself — it only validates the shape of what you pass, and `clawhub package readiness` likewise reports `PASS source:` for a repo that does not exist.
+- **The same version cannot be published twice**, so a provenance fix requires a version bump in `package.json`, `openclaw.plugin.json`, `package-lock.json`, `SKILL.md` and the README badge, plus a new `CHANGELOG.md` section.
+- **A publish that returns OK may still not be live.** The recorded version stays invisible (reads say `Version not found`, `latest` unchanged) until moderation clears. That state is indistinguishable from "never landed" by reads alone, so probe with a second publish: `Version already exists` means it landed; a success means it had not. Do not bump the version to force it through.
 
 ## Security & Permissions
 
