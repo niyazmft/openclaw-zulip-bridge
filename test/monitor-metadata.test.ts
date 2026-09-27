@@ -292,18 +292,24 @@ test("reply-handler source: suppresses non-terminal tool error warnings (#273 #2
     "utf8",
   );
   assert.equal(source.includes("isReplyPayloadNonTerminalToolErrorWarning"), true);
-  assert.equal(source.includes("zulip deliver skipped: non-terminal tool error warning"), true);
+  // The drop decision lives in shouldSkipPayload so it is unit-testable;
+  // behavioural coverage is in test/command-reply-delivery.test.ts.
+  assert.equal(source.includes('return "non-terminal tool error warning"'), true);
 });
 
-test("reply-handler source: suppresses compaction/fallback/status notices (#247)", async () => {
+test("reply-handler source: suppresses compaction/fallback/status notices (#247), except on a command turn", async () => {
   const source = await fs.readFile(
     path.resolve(process.cwd(), "src/zulip/reply-handler.ts"),
     "utf8",
   );
-  assert.equal(source.includes("payload.isCompactionNotice === true"), true);
-  assert.equal(source.includes("payload.isFallbackNotice === true"), true);
-  assert.equal(source.includes("payload.isStatusNotice === true"), true);
-  assert.equal(source.includes("zulip deliver skipped: status notice"), true);
+  assert.equal(source.includes("isCompactionNotice === true"), true);
+  assert.equal(source.includes("isFallbackNotice === true"), true);
+  assert.equal(source.includes("isStatusNotice === true"), true);
+  // Command turns are the documented exception: the host answers a control
+  // command with a status notice, and for a command that notice IS the reply.
+  // Suppressing it made every slash command silently unanswered.
+  assert.equal(source.includes("opts.isCommandTurn !== true"), true);
+  assert.equal(source.includes("shouldSkipPayload(payload, { isCommandTurn })"), true);
 });
 
 test("send source: uses zulipLogger instead of core.log", async () => {

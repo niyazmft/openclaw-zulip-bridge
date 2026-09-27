@@ -31,6 +31,33 @@ function isAbortError(err: unknown): boolean {
 }
 
 /**
+ * Decides whether a reply payload must NOT be sent to Zulip.
+ *
+ * Zulip has no transient/status surface, so host-generated runtime notices
+ * (compaction, fallback, status) are suppressed during agent runs — on native
+ * channels they render as transient indicators, here they would only be noise
+ * (#273, #247).
+ *
+ * Command turns are the exception. The host answers a control command with a
+ * payload marked `isStatusNotice` (e.g. `/new` → "New session started."), and
+ * that notice *is* the reply. Suppressing it left every slash command with no
+ * response at all, while the plugin reported "no reply sent" — which was wrong:
+ * there was a reply, we discarded it.
+ */
+export function shouldSkipPayload(
+  payload: Partial<ReplyPayload> | undefined,
+  opts: { isCommandTurn?: boolean } = {},
+): string | null {
+  if (isReplyPayloadNonTerminalToolErrorWarning(payload)) {
+    return "non-terminal tool error warning";
+  }
+  if (payload?.isCompactionNotice === true) return "compaction notice";
+  if (payload?.isFallbackNotice === true) return "fallback notice";
+  if (payload?.isStatusNotice === true && opts.isCommandTurn !== true) return "status notice";
+  return null;
+}
+
+/**
  * Handles the reply dispatching logic for a Zulip message.
  */
 export async function dispatchZulipReply(params: {
@@ -65,6 +92,33 @@ export async function dispatchZulipReply(params: {
   traceTitle?: string;
   /** Monitor abort signal, so a cancelled run finalizes its trace. */
   abortSignal?: AbortSignal;
+  /**
+   * True when this dispatch is an authorised control command (`/new`, `/status`,
+   * `/help`, … — anything the host detects via `hasControlCommand`).
+   *
+   * Command replies arrive marked as status notices, which the deliver path
+   * suppresses for agent runs, so the deliver path has to know. Keying off the
+   * host's detection rather than a command list means every command is covered,
+   * including ones a future host version or another plugin adds.
+   */
+  isCommandTurn?: boolean;
+  /** Audit hook: the deliver callback dropped a payload (`shouldSkipPayload`). */
+  onDeliverSkipped?: (info: { reason: string; textLen: number; isCommandTurn: boolean }) => void;
+  /** Audit hook: the run finished having delivered nothing (the "no reply sent" case). */
+  onDeliverEmpty?: (info: { elapsedMs: number; isCommandTurn: boolean }) => void;
+  /**
+   * Audit hook: a payload actually arrived from the host on a command turn.
+   * This is what separates "the host never answered our channel" from "we
+   * discarded what it answered" — indistinguishable otherwise, since plugin
+   * logs do not surface on every host.
+   */
+  onDeliverPayload?: (info: {
+    isStatusNotice: boolean;
+    isCompactionNotice: boolean;
+    isFallbackNotice: boolean;
+    isError: boolean;
+    textLen: number;
+  }) => void;
 }): Promise<unknown> {
   const {
     core,
@@ -91,6 +145,10 @@ export async function dispatchZulipReply(params: {
     traceManager,
     traceTitle,
     abortSignal,
+    isCommandTurn,
+    onDeliverSkipped,
+    onDeliverEmpty,
+    onDeliverPayload,
   } = params;
 
   const typingParams = isDM
@@ -160,28 +218,32 @@ export async function dispatchZulipReply(params: {
         //   no transient surface, so they would only be noise.
         // Agent-run failure messages (payload.isError) are deliberately
         // user-facing and are still delivered.
-        if (isReplyPayloadNonTerminalToolErrorWarning(payload)) {
-          zLogger?.info?.("zulip deliver skipped: non-terminal tool error warning", {
-            accountId: account.accountId,
-            messageId,
+        // What actually arrived for a command turn: without this, "the host said
+        // nothing" and "we discarded what it said" look identical from outside.
+        if (isCommandTurn) {
+          onDeliverPayload?.({
+            isStatusNotice: payload.isStatusNotice === true,
+            isCompactionNotice: payload.isCompactionNotice === true,
+            isFallbackNotice: payload.isFallbackNotice === true,
+            isError: (payload as { isError?: boolean }).isError === true,
             textLen: (payload.text ?? "").length,
           });
-          return;
         }
-        if (
-          payload.isCompactionNotice === true ||
-          payload.isFallbackNotice === true ||
-          payload.isStatusNotice === true
-        ) {
-          zLogger?.info?.("zulip deliver skipped: status notice", {
+        const skipReason = shouldSkipPayload(payload, { isCommandTurn });
+        if (skipReason) {
+          zLogger?.info?.("zulip deliver skipped", {
             accountId: account.accountId,
             messageId,
-            kind: payload.isCompactionNotice
-              ? "compaction"
-              : payload.isFallbackNotice
-                ? "fallback"
-                : "status",
+            reason: skipReason,
+            isCommandTurn: isCommandTurn === true,
             textLen: (payload.text ?? "").length,
+          });
+          // Plugin logs do not surface on every host, so record the drop where it
+          // can actually be inspected (see AGENTS.md, "verify in the field").
+          onDeliverSkipped?.({
+            reason: skipReason,
+            textLen: (payload.text ?? "").length,
+            isCommandTurn: isCommandTurn === true,
           });
           return;
         }
@@ -501,6 +563,12 @@ export async function dispatchZulipReply(params: {
             : deliveredAny
               ? `run finished in ${elapsed}`
               : `run finished in ${elapsed} — no reply sent`;
+        if (!cancelled && !dispatchError && !deliveredAny) {
+          // A run that produced nothing is otherwise invisible: the trace edit is
+          // the only evidence, and it reads the same whether the host genuinely
+          // said nothing or we discarded what it said.
+          onDeliverEmpty?.({ elapsedMs, isCommandTurn: isCommandTurn === true });
+        }
         trace.finish({ status, summary });
         // Best-effort: the final edit lands in the background. Awaiting it would
         // add a Zulip round-trip to every dispatch.

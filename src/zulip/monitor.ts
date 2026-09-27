@@ -893,6 +893,22 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       // arriving mid-run waits its turn (and is marked ⏳ while it waits) rather
       // than being steered into the running turn. With the default `off` this is
       // a pass-through — `run` just calls the task.
+      // Suspected command inbound: record what the host's own detector made of it,
+      // so "the host never answered our channel" can be told apart from "we
+      // dropped the answer". Only for command-looking messages, to stay quiet.
+      if (hasControlCommand || isControlCommand) {
+        void auditLogger.log({
+          ts: new Date().toISOString(),
+          event: "dispatch_turn",
+          accountId: account.accountId,
+          direction: "inbound",
+          messageId,
+          hasControlCommand: String(hasControlCommand),
+          isControlCommand: String(isControlCommand),
+          allowTextCommands: String(allowTextCommands),
+          commandAuthorized: String(commandAuthorized),
+        });
+      }
       const dispatchError = await sessionDispatchQueue.run(
         sessionKey,
         () =>
@@ -922,6 +938,47 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             traceManager: activityTraceManager,
             traceTitle: preview,
             abortSignal: opts.abortSignal,
+            // A control command's reply arrives marked as a status notice, which
+            // the deliver path suppresses for agent runs. Keying off the host's
+            // own detection keeps this true for every command, not a list.
+            isCommandTurn: isControlCommand && commandAuthorized,
+            onDeliverSkipped: (info) => {
+              void auditLogger.log({
+                ts: new Date().toISOString(),
+                event: "deliver_skipped",
+                accountId: account.accountId,
+                direction: "outbound",
+                messageId,
+                reason: info.reason,
+                isCommandTurn: String(info.isCommandTurn),
+                textLen: String(info.textLen),
+              });
+            },
+            onDeliverEmpty: (info) => {
+              void auditLogger.log({
+                ts: new Date().toISOString(),
+                event: "deliver_empty",
+                accountId: account.accountId,
+                direction: "outbound",
+                messageId,
+                isCommandTurn: String(info.isCommandTurn),
+                elapsedMs: String(info.elapsedMs),
+              });
+            },
+            onDeliverPayload: (info) => {
+              void auditLogger.log({
+                ts: new Date().toISOString(),
+                event: "deliver_payload",
+                accountId: account.accountId,
+                direction: "outbound",
+                messageId,
+                isStatusNotice: String(info.isStatusNotice),
+                isCompactionNotice: String(info.isCompactionNotice),
+                isFallbackNotice: String(info.isFallbackNotice),
+                isError: String(info.isError),
+                textLen: String(info.textLen),
+              });
+            },
           }),
         {
           onQueued: () => {
