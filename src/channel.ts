@@ -240,7 +240,12 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
         ? `channels.zulip.accounts.${resolvedAccountId}.`
         : "channels.zulip.";
       return {
-        policy: account.config.dmPolicy ?? "open",
+        // Must stay equal to the default the monitor actually enforces
+        // (`monitor.ts`, `accountSection.dmPolicy ?? account.config.dmPolicy ??
+        // "pairing"`). The host reads this reported policy to decide whether DMs
+        // are gated, so reporting "open" while the monitor demanded pairing let
+        // the host believe anyone could DM while the plugin dropped them.
+        policy: account.config.dmPolicy ?? "pairing",
         allowFrom: account.config.allowFrom ?? [],
         policyPath: `${basePath}dmPolicy`,
         allowFromPath: basePath,
