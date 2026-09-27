@@ -12,6 +12,21 @@ and this project adheres to [Calendar Versioning](https://calver.org/) in the fo
 - Additional stream filtering options
 - Enhanced error recovery
 
+## [2026.9.2] - 2026-09-27
+
+### Added
+- **`repository`, `homepage` and `bugs` in `package.json`**: the package declared no source repository at all, so the only record of where a release came from was the `--source-repo` flag given at publish time — and for `2026.9.1` that flag named `niyazmft/openclaw-zulip`, a repository that does not exist. ClawHub recorded it verbatim, so an installed host cannot resolve the release back to a commit and reports `Trust: reason=provenance-invalid`.
+
+### Changed
+- **`check:package` now rejects provenance drift**: it asserts that `package.json` `repository.url` names the canonical source repo (`niyazmft/openclaw-zulip-bridge`). A missing or wrong source repo now fails `npm run check` instead of only surfacing as `provenance-invalid` on a user's host after a publish. Documented alongside the publish recipe in `AGENTS.md`.
+
+### Fixed
+- **`2026.9.1` provenance resolved to nothing** — republished as `2026.9.2` with a correct source triple. The published `2026.9.1` is recorded on ClawHub as `niyazmft/openclaw-zulip@237608b18615e6efadfe5171486f1b968666232a` on ref `main`, and no part of that can be verified against GitHub:
+  - the recorded repo `niyazmft/openclaw-zulip` returns `404` from the GitHub API and `Repository not found` from `git ls-remote`, with **no** rename redirect — it is not a former name of this repo, it simply is not a repository;
+  - the recorded commit `237608b` is real, but it is **not on `main`**: it was the `docs/changelog-2026.9.1` PR-branch commit, whose squash-merge on `main` is `922c9e5`. That branch has since been deleted, so the commit is reachable from no branch or tag at all, while the record claims ref `main`.
+
+  The artifact itself was never in question: the published tarball's `dist/` is byte-identical to a clean build of `237608b` (`dist-cjs/` differs only in esbuild's absolute-path comments), and the ClawHub scan is clean. Only the provenance metadata was wrong, and it is recorded per-version and immutable — hence the version bump rather than a metadata edit.
+
 ## [2026.9.1] - 2026-09-20
 
 ### Added
