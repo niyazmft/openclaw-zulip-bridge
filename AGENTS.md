@@ -167,7 +167,9 @@ Why a workspace? The test files import `../dist/src/zulip/client.js`, which in t
 
 ## Plugin Manifest
 
-`openclaw.plugin.json` version must stay in sync with `package.json` version. `npm run check:package` validates this.
+`openclaw.plugin.json` version must stay in sync with `package.json` version, and so must the README version badge and the `SKILL.md` front matter — `npm run check:package` validates all of them, plus `package-lock.json`. It also asserts that `package.json` `repository.url` names the canonical repo (`niyazmft/openclaw-zulip-bridge`).
+
+**Provenance is part of the manifest contract.** ClawHub source-links each published version to a `source-repo` + `source-commit` + `source-ref` triple, and the host verifies that against GitHub at install time; anything it cannot resolve is reported as `Trust: reason=provenance-invalid`. The `2026.9.1` release shipped a dead `source-repo` (`niyazmft/openclaw-zulip` — a repo that does not exist, with no rename redirect) *and* a commit that was not on the recorded ref (`237608b` was a deleted PR-branch commit recorded as ref `main`). The `repository` field now anchors the repo, `check:package` rejects drift, and the publish recipe below derives the triple from git. See [Publishing to ClawHub](#publishing-to-clawhub).
 
 ## Environment
 
@@ -211,6 +213,28 @@ rsync -avh openclaw.plugin.json remote:.openclaw/extensions/zulip/
 The host provides the `openclaw/plugin-sdk/*` modules at runtime (they are **not** npm packages). The plugin's npm runtime dependencies are `zod` (config-schema validation) and `typebox` (the `zulip_progress` tool schema, pinned to the host's own version so the schema objects are identical), staged during install by `openclaw.build.stageRuntimeDependencies`.
 
 **Deploy the manifest before the config that uses it.** A channel config section is validated against the *installed* manifest, so a new key written to `openclaw.json` before the updated `openclaw.plugin.json` reaches the host fails validation: the host logs a failed channel restart and restarts the gateway to recover (hit in the field while deploying the #297 queue keys). Ship the manifest first, or both together.
+
+### Publishing to ClawHub
+
+Derive the source triple from git — every part of it is verified by the host at install time:
+
+```bash
+SOURCE_REPO=niyazmft/openclaw-zulip-bridge
+SOURCE_COMMIT=$(git rev-parse HEAD)
+git merge-base --is-ancestor "$SOURCE_COMMIT" origin/main \
+  || { echo "REFUSING: $SOURCE_COMMIT is not on origin/main"; exit 1; }
+
+clawhub package publish . --family code-plugin --owner niyazmft \
+  --version "$(node -p "require('./package.json').version")" \
+  --source-repo "$SOURCE_REPO" --source-commit "$SOURCE_COMMIT" --source-ref main \
+  --changelog "$(sed -n '/^## \[<version>\]/,/^## \[/p' CHANGELOG.md)"
+```
+
+Invariants:
+
+- **Publish from `main` after the merge, never from the PR branch.** A squash-merged PR commits a *new* SHA; the branch SHA you published from is then reachable from no ref, and `--source-ref main` names a ref that does not contain it. This is exactly how `2026.9.1` recorded an unverifiable triple — the hash was real and even fetchable from GitHub, but not on any branch.
+- **The recorded repo must be one you can `git ls-remote`.** `niyazmft/openclaw-zulip` 404s (API and git, no redirect); only `openclaw-zulip-bridge` exists. ClawHub does not check this itself — it only validates the shape of what you pass.
+- **The same version cannot be published twice**, so a provenance fix requires a version bump in `package.json`, `openclaw.plugin.json`, `SKILL.md` and the README badge, plus a new `CHANGELOG.md` section.
 
 ## Security & Permissions
 
@@ -287,6 +311,8 @@ Migration complete as of v2026.7.0:
 - **#268 safety**: the local-file attach fix must keep file reads in `readSafeLocalFile` and network sends in `uploadZulipFile` — a new `readFile`+`fetch` pair in an action handler would trip `potential_exfiltration`.
 
 ## Troubleshooting
+
+- **`Trust: reason=provenance-invalid` on an installed plugin**: two distinct causes, and the fix differs. (1) **ClawHub metadata** — the published version records a `source-repo`/`source-commit`/`source-ref` the host cannot resolve against GitHub (the `2026.9.1` case: dead repo name, and a commit that was not on the recorded ref). Check with `clawhub package inspect @niyazmft/openclaw-zulip`; it prints `Source Repo`, `Source Commit`, `Source Ref`. Only a republish clears it, and since a version cannot be published twice that means a version bump. (2) **Local out-of-band file replacement** — rsyncing `dist/` over a ClawHub-installed plugin (the [Manual deployment](#manual-deployment) flow) invalidates the recorded provenance on that host even when the ClawHub record is correct; reinstall with `openclaw plugins update` to clear it. Note `clawhub package readiness` reports `source: PASS` for a repo that does not exist — it validates the string, not GitHub.
 
 - **Health-monitor restarts every ~5 min** with `reason: stopped`: Fixed in v2026.8.4+. `gateway.startAccount` must be placed inside the `base` parameter of `createChatChannelPlugin`, not at the top level. The host checks `snapshot.running` to decide if channel is alive.
 - **Monitor never starts after hot reload / wizard config**: If `startZulipMonitor` creates an `AbortController` before validating credentials, and credentials are missing at startup, the controller blocks all future starts. Only create the controller **after** credential validation, right before launching the actual monitor loop.

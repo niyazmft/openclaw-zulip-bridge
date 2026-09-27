@@ -32,6 +32,37 @@ if (existsSync('package-lock.json')) {
   if (lock.version !== pkg.version) {
     errors.push(`Version mismatch: package-lock.json has ${lock.version}, package.json has ${pkg.version}`);
   }
+  const lockRoot = lock.packages && lock.packages[''];
+  if (lockRoot && lockRoot.version !== pkg.version) {
+    errors.push(`Version mismatch: package-lock.json packages[""].version has ${lockRoot.version}, package.json has ${pkg.version}`);
+  }
+}
+
+// 1c. Published provenance. ClawHub source-links every published version to a
+// `source-repo` + `source-commit` + `source-ref` triple, and the host verifies
+// that against GitHub at install time; anything it cannot resolve is reported
+// as `Trust: reason=provenance-invalid`. The 2026.9.1 release was published with
+// `--source-repo niyazmft/openclaw-zulip`, which is not a repository at all, so
+// keep the canonical repo declared in the artifact and checked here — a bad
+// publish flag is then the only remaining way to record an unreachable source.
+const CANONICAL_SOURCE_REPO = 'niyazmft/openclaw-zulip-bridge';
+const repoField = pkg.repository;
+const repoUrl = typeof repoField === 'string' ? repoField : repoField && repoField.url;
+if (!repoUrl) {
+  errors.push('Missing package.json "repository" field: ClawHub provenance cannot be traced from the artifact');
+} else {
+  const slug = String(repoUrl)
+    .replace(/^git\+/, '')
+    .replace(/^git@github\.com:/, '')
+    .replace(/^ssh:\/\/git@github\.com\//, '')
+    .replace(/^https:\/\/github\.com\//, '')
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '');
+  if (!/^[^/]+\/[^/]+$/.test(slug)) {
+    errors.push(`package.json "repository" is not a GitHub owner/repo URL: ${repoUrl}`);
+  } else if (slug !== CANONICAL_SOURCE_REPO) {
+    errors.push(`package.json "repository" is "${slug}", expected "${CANONICAL_SOURCE_REPO}": ClawHub records this as the source repo and the host verifies it at install time`);
+  }
 }
 
 // 2. Presence of required OpenClaw fields in package.json
