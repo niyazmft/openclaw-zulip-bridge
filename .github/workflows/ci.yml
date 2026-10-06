@@ -161,6 +161,10 @@ jobs:
           path: ~/.cache/plugin-inspector
           key: plugin-inspector-v1
       - run: pnpm install --frozen-lockfile
+      # The inspector validates the package's declared OpenClaw entrypoints
+      # (runtimeExtensions/runtimeSetupEntry -> dist-cjs/*), so the built output
+      # must exist first or a fresh checkout reports package-entrypoint-missing.
+      - run: pnpm run build
       # Blocking: the host versions this package declares (floor + build target),
       # derived from package.json#openclaw so a release bump keeps this in sync.
       - name: Plugin Inspector — declared host versions

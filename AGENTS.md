@@ -155,6 +155,8 @@ Four jobs, Node 22 + pnpm 10.32.1:
 
 Core-owned findings (`issues[].owner === "core"`, e.g. the `sdk-export-missing` host alias gap) are printed but do not fail the gate, matching ClawHub's PASS verdict — the plugin cannot fix them. Set `INSPECTOR_STRICT=1` to fail on them too.
 
+The gate validates the package's declared OpenClaw entrypoints, including the built `runtimeExtensions`/`runtimeSetupEntry`, so run `pnpm run build` first — the script fails fast with that instruction when the artifacts are absent (the CI job builds before running it).
+
 ## Build Artifacts
 
 `dist/` is gitignored and must be built locally. The smoke test imports from `dist/`, so `npm run build` must succeed before `check:smoke` or `check:package` can pass.

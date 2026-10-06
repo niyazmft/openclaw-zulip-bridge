@@ -40,6 +40,23 @@ import { fileURLToPath } from "node:url";
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
 
+// The inspector validates the package's declared OpenClaw entrypoints
+// (runtimeExtensions/runtimeSetupEntry are built artifacts). Fail fast with a
+// clear message instead of a confusing `package-entrypoint-missing` finding.
+const declaredEntrypoints = [
+  ...(pkg.openclaw?.extensions ?? []),
+  ...(pkg.openclaw?.runtimeExtensions ?? []),
+  ...(pkg.openclaw?.setupEntry ? [pkg.openclaw.setupEntry] : []),
+  ...(pkg.openclaw?.runtimeSetupEntry ? [pkg.openclaw.runtimeSetupEntry] : []),
+].filter((entry) => typeof entry === "string");
+const missingEntrypoints = declaredEntrypoints.filter((entry) => !existsSync(resolve(rootDir, entry)));
+if (missingEntrypoints.length > 0) {
+  console.error("check-inspector: declared package entrypoints are missing:");
+  for (const entry of missingEntrypoints) console.error(`    ${entry}`);
+  console.error("Build the package first: `pnpm run build` (built runtime entrypoints are validated too).");
+  process.exit(1);
+}
+
 /** ">=2026.7.1" -> "2026.7.1" (mirrors scripts/check-compat.js). */
 function versionFromRange(range) {
   if (!range || typeof range !== "string") return undefined;
