@@ -136,3 +136,38 @@ jobs:
       - run: pnpm run build
       - name: Outbound behaviour (tier 2) — local fake Zulip server
         run: pnpm run check:tier2
+
+  inspector:
+    # ClawHub's Plugin Inspector (the engine behind `clawhub package validate`),
+    # which check:clawscan cannot see. Same network/host-download rationale as
+    # compat/tier2, so it is its own job and not part of `pnpm run check`.
+    needs: zulip-bridge
+    if: needs.zulip-bridge.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # check:inspector stages the OpenClaw target under this cache; keying it
+      # avoids re-downloading the ~100 MB package on every run.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/plugin-inspector
+          key: plugin-inspector-v1
+      - run: pnpm install --frozen-lockfile
+      # Blocking: the host versions this package declares (floor + build target),
+      # derived from package.json#openclaw so a release bump keeps this in sync.
+      - name: Plugin Inspector — declared host versions
+        run: pnpm run check:inspector
+      # Early warning: the plugin declares an open-ended host range, so a newer
+      # host (or a newer inspector rule) can regress us before a release. Never
+      # blocking on a PR — beta/latest findings are signal, not a gate.
+      - name: Plugin Inspector — leading edge (beta/latest, non-blocking)
+        continue-on-error: true
+        run: INSPECTOR_VERSIONS=beta,latest pnpm run check:inspector

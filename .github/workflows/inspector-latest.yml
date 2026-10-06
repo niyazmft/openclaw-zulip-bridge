@@ -1,0 +1,44 @@
+name: inspector-latest
+
+# Weekly drift detector for the Plugin Inspector.
+#
+# Two things this repo pins can fall out of step with ClawHub's server-side
+# validation: the inspector engine itself (`@openclaw/plugin-inspector`, a
+# devDependency) and the OpenClaw host tags. Neither changes when this repo does,
+# so a new inspector rule or a host regression would otherwise only surface at
+# publish time. This workflow runs the *latest* inspector against the
+# leading-edge host tags on a schedule (and on demand), independent of PR CI.
+#
+# A failure here is an early warning, not a release gate: bump the pinned
+# devDependency (and fix the plugin) when it turns red.
+on:
+  schedule:
+    # Mondays 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  inspector-latest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/plugin-inspector
+          key: plugin-inspector-latest-v1
+      - run: pnpm install --frozen-lockfile
+      # Track ClawHub's engine rather than the pinned devDependency. `check:inspector`
+      # resolves the inspector from node_modules, so installing @latest is enough —
+      # and it keeps the core-owned/non-blocking filtering in one place.
+      - name: Install latest Plugin Inspector
+        run: pnpm add -D @openclaw/plugin-inspector@latest --ignore-scripts
+      - name: Latest Plugin Inspector — leading edge (beta/latest)
+        run: INSPECTOR_VERSIONS=beta,latest pnpm run check:inspector

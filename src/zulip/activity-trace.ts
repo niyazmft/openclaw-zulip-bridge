@@ -828,7 +828,7 @@ export function createZulipTraceIo(
 
 // ── Per-account registry ────────────────────────────────────────────────────
 // The monitor owns one manager per account (it has the account's Zulip client);
-// other call sites (mode A hooks in #302, `zulip_progress` in #303) reach it
+// other call sites (the mode A `after_tool_call` hooks in #302) reach it
 // through this registry rather than re-creating one per message.
 
 const managers = new Map<string, ActivityTraceManager>();

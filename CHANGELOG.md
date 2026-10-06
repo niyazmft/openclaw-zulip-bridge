@@ -7,6 +7,20 @@ and this project adheres to [Calendar Versioning](https://calver.org/) in the fo
 
 ## [Unreleased]
 
+### Added
+- **Local Plugin Inspector gate (`npm run check:inspector`)** — runs ClawHub's Plugin Inspector (the engine behind `clawhub package validate`) against the host versions `package.json#openclaw` declares (floor + build target, derived at run time, never hardcoded), so manifest-schema findings (`manifest-unknown-contracts`) and SDK-compat findings (`sdk-export-missing`) surface before a publish. `check:clawscan` is a different tool — the vendored moderation/security engine — and cannot see either. Wired as its own CI job (network + host download) with a non-blocking `beta`/`latest` leading-edge step, plus a weekly `.github/workflows/inspector-latest.yml` that runs the *latest* inspector so engine/host drift is caught between releases. Core-owned findings are reported but non-blocking, matching ClawHub's PASS verdict.
+
+### Removed
+- **Mode B agent-driven trace narration (`zulip_progress`)** (#303): the plugin-owned tool and its
+  `typebox` runtime dependency are gone. A native plugin tool must declare `contracts.tools` in
+  `openclaw.plugin.json` — the host's `registerTool` gate *and* tool discovery both read it — but
+  ClawHub's Plugin Inspector cannot resolve the target host's `PluginManifestContracts` type (a
+  `Partial<Record<(typeof PLUGIN_MANIFEST_CONTRACT_KEYS)[number], string[]>>` alias) and reports every
+  declared contract key as `manifest-unknown-contracts`. Keeping the contract fails `clawhub package
+  validate`; dropping it makes the host reject the tool. Rather than ship a tool that silently no-ops
+  on hosts that enforce the contract, the feature is removed. Mode A (`after_tool_call` checkpoints)
+  and the run-boundary trace are unaffected, and `openclaw.plugin.json` declares no `contracts`.
+
 ### Planned
 - Performance improvements for response dispatch times
 - Additional stream filtering options

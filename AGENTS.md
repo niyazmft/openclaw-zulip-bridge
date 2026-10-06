@@ -32,12 +32,13 @@ npm run check:clawscan     # ClawHub moderation-engine replica (vendored) — sc
 npm run check:gitleaks     # Secret detection (skips locally if gitleaks not installed; CI runs it)
 npm run check:audit        # npm audit --omit=dev (production dependency vulnerabilities)
 npm run check:compat       # Tier 1: loads the built plugin against real pinned OpenClaw hosts
+npm run check:inspector    # ClawHub Plugin Inspector (manifest schema + SDK compat) against declared hosts
 npm run check:tier2        # Tier 2: outbound behaviour tests against a local fake Zulip server
 ```
 
 **Command order matters**: `npm run check` runs steps sequentially. Building must precede smoke tests and package checks.
 
-**`check:compat` and `check:tier2` are deliberately NOT part of `npm run check`** — both download a real `openclaw` host (~390 MB) and need network access, so they run as separate CI jobs.
+**`check:compat`, `check:inspector` and `check:tier2` are deliberately NOT part of `npm run check`** — all three download an `openclaw` host package and need network access, so they run as separate CI jobs.
 
 ## Architecture
 
@@ -51,7 +52,7 @@ npm run check:tier2        # Tier 2: outbound behaviour tests against a local fa
 - **Session recovery**: `src/zulip/recovery.ts` recovers interrupted messages after gateway restart. Opt-in via `enableSessionRecovery: true` (default: `false`).
 - **Audit logging**: `src/zulip/audit-logger.ts` writes persistent JSON-line audit events to `{dataDir}/audit/{accountId}.audit.log` with 1MB rotation.
 - **Rate limiting**: Configurable per-sender rate limit via `maxMessagesPerMinute` (default: `60`, `0` disables). Sliding 60-second window.
-- **Activity trace**: `src/zulip/activity-trace.ts` (primitive), `src/zulip/tool-trace.ts` (mode A hooks), `src/zulip/progress-tool.ts` (mode B tool). Opt-in via `activityTrace`. See [Activity Trace](#activity-trace).
+- **Activity trace**: `src/zulip/activity-trace.ts` (primitive), `src/zulip/tool-trace.ts` (mode A hooks). Opt-in via `activityTrace`. See [Activity Trace](#activity-trace).
 - **History-aware context**: `src/zulip/history-context.ts` harvests a bounded slice of the current stream/topic into the agent's prompt. Opt-in via `historyContext` (`"off"` default, `"on-demand"`, `"always"`). Bounded by `historyMaxMessages` (8) / `historyWindowHours` (72) / `historyMaxChars` (4000), wrapped in a 2s timeout, and log-and-drop on failure so a harvest can never delay or fail a dispatch. It appends to the agent-facing `Body` only (commands keep `CommandBody`/`RawBody`), applies to streams/topics only (DMs keep per-user session continuity + isolation), and reuses `fetchZulipMessages` — no new network path.
 - **Actionable refs**: `src/zulip/refs.ts` renders `[[zulip_ref: <github url> | <label>]]` markers as links, but only after a **real** validation call. Opt-in via `renderRefs` (default `false`). Two invariants to preserve: (1) **nothing user-controlled is ever fetched** — only `https://github.com/<owner>/<repo>/{pull|issues|commit|actions/runs}/<id>` matches an anchored regex, the API origin is the hardcoded `GITHUB_API_ORIGIN`, and malformed refs are rejected *before* any fetch, so there is no allowlist knob that could become an SSRF primitive; (2) **validation failure degrades, never errors** — 404/rate-limit/timeout/network error render the ref as backticked plain text and the send proceeds. Validation is unauthenticated (public refs only; no credentials ever leave the process), cached 10 min, capped at 3 refs/message. Applied pre-chunk in `reply-handler.ts` (so a marker cannot split across messages) and in `sendMessageZulip` as the safety net for the CLI/fallback/trace paths.
 - **Schema/manifest parity**: the runtime schema (`src/config-schema.ts`, zod) and the two hand-written JSON schemas in `openclaw.plugin.json` (`configSchema` + `channelConfigs.zulip.schema`) must describe the **same** keys. `test/schema-manifest-parity.test.ts` enforces it, because both JSON schemas are `additionalProperties: false` and the host validates the root one at load time on older hosts — so a key that exists at runtime but is missing from the manifest is a real config-validation bug, not a cosmetic one. Add a key to the runtime schema **and both manifest schemas** (plus `config-ui-hints.ts`) in the same change.
@@ -68,8 +69,8 @@ final reply (or nothing at all when a run produces no reply).
 - **The rule**: *status detail edits the trace; actionable results are posted as new messages.* The
   trace layer only ever edits its own message; agent replies stay separate.
 - **Module split**: `activity-trace.ts` is the primitive (`TraceState`, stable step ids, coalescer,
-  renderer, registry). `tool-trace.ts` is mode A. `progress-tool.ts` is mode B. `reply-handler.ts`
-  owns the run boundary (start on dispatch, finish on success/error/abort).
+  renderer, registry). `tool-trace.ts` is mode A. `reply-handler.ts` owns the run boundary (start on
+  dispatch, finish on success/error/abort).
 - **Mode A — plugin-driven**: registers the host's `after_tool_call` hook with
   `{ matcher: ["exec"], timeoutMs: 2000, registrationId }`, falling back to simpler options and never
   registering without a matcher. **Never register `before_tool_call`** — it is a *fail-closed* gate, so
@@ -78,14 +79,15 @@ final reply (or nothing at all when a run produces no reply).
   so attribution is done through `findActivityTrace()`; unattributable hooks are **dropped**, never
   guessed. Registration is idempotent with its own guard plus a stable `registrationId` (openclaw#86241
   documents N-fold delivery from handler stacking across hot reloads).
-- **Mode B — agent-driven**: the `zulip_progress` tool lets the agent narrate intent mode A cannot
-  infer. **Surface decision**: the `message` tool's action vocabulary is a deliberately *closed,
-  core-owned* list (`src/channels/plugins/message-action-names.ts`: "Plugins add names through a core
-  PR; runtime registration is intentionally unsupported") and the message-tool schema is built from
-  that list, so the channel action adapter **cannot** carry a new verb. `api.registerTool` is the
-  supported plugin surface for a plugin-owned tool and requires `contracts.tools: ["zulip_progress"]`
-  in `openclaw.plugin.json`. Correlation comes from the per-run `OpenClawPluginToolContext.sessionKey`.
-  No active trace is a no-op, never an error.
+- **Mode B (removed) — agent-driven narration**: the `zulip_progress` tool was **removed** in
+  [#303](https://github.com/niyazmft/openclaw-zulip-bridge/issues/303). A plugin-owned agent tool must
+  declare `contracts.tools` in `openclaw.plugin.json` (the host's `registerTool` gate *and* tool
+  discovery read it), but ClawHub's Plugin Inspector cannot resolve the target host's
+  `PluginManifestContracts` type (a `Partial<Record<(typeof PLUGIN_MANIFEST_CONTRACT_KEYS)[number],
+  string[]>>` alias) and reports every declared contract key as `manifest-unknown-contracts`. Keeping
+  the contract fails `clawhub package validate`; dropping it makes the host reject the tool. Rather
+  than ship a tool that silently no-ops on hosts that enforce the contract, the feature is gone. Do
+  not re-add `contracts.tools`/`api.registerTool` without also fixing that inspector gap upstream.
 - **Write path**: posts go through `sendMessageZulip` (secret guard + media/SSRF hardening inherited);
   edits go through `editZulipMessage`. **Trace edits bypass `sendMessageZulip`'s secret guard**, so
   `createZulipTraceIo` redacts known host credentials (`redactSecrets` in `secret-guard.ts`) for both.
@@ -129,19 +131,29 @@ final reply (or nothing at all when a run produces no reply).
 
 Triggers: pushes to `main`, and all pull requests. `push` is deliberately scoped to `main` — an unscoped `push` together with `pull_request` fires both events for a PR branch and runs every job twice (this was live: 8 checks for 4 jobs). A `concurrency` group with `cancel-in-progress` cancels superseded runs when a PR is pushed repeatedly.
 
-Three jobs, Node 22 + pnpm 10.32.1:
+Four jobs, Node 22 + pnpm 10.32.1:
 
 | Job | Purpose | Runs |
 |-----|---------|------|
 | `zulip-bridge` | The gate: `pnpm install`, then `pnpm run check` (bootstrap → typecheck → build → smoke → test → package → clawscan → audit), gitleaks, and a pristine-working-directory check (`git diff --exit-code`) | Always |
 | `compat` | Tier 1 host compatibility — the only check that catches `openclaw/plugin-sdk/*` subpath/named-export drift and registration/manifest shape bugs. Matrix `2026.7.1`, `2026.9.1` with `fail-fast: false` so both versions report | Code changes only |
+| `inspector` | ClawHub's Plugin Inspector (the engine behind `clawhub package validate`) against the host versions `package.json` declares — catches `manifest-*` and `sdk-export-missing` findings that `check:clawscan` cannot see. Runs `check:inspector` (blocking) plus a non-blocking `beta`/`latest` leading-edge step | Code changes only |
 | `tier2` | Outbound behaviour against the local fake Zulip server | Code changes only |
 
-`compat` and `tier2` both `needs: zulip-bridge`, so a typecheck or unit-test failure does not first spend ~780 MB downloading hosts. They are also skipped when a change touches only documentation (`*.md`, `docs/`, `LICENSE`) — `zulip-bridge` publishes a `code` output computed with a plain `git diff` (no third-party path-filter action) and the heavy jobs gate on it. Both cache `~/.npm`, which is where the throwaway-workspace `npm install openclaw@<version>` lands.
+`compat`, `inspector` and `tier2` all `needs: zulip-bridge`, so a typecheck or unit-test failure does not first spend a host download. They are also skipped when a change touches only documentation (`*.md`, `docs/`, `LICENSE`) — `zulip-bridge` publishes a `code` output computed with a plain `git diff` (no third-party path-filter action) and the heavy jobs gate on it. `compat` and `tier2` cache `~/.npm` (where the throwaway-workspace `npm install openclaw@<version>` lands); `inspector` caches `~/.cache/plugin-inspector` (where the inspector stages the target package).
 
 **Never skip `zulip-bridge` for docs-only changes**: ClawScan scans `docs/` and `check:package` asserts that files referenced by `package.json` exist, so a README edit can legitimately fail CI.
 
-**Branch-protection caveat**: a skipped job reports as *skipped*, not *successful*. If `compat`/`tier2` are made required checks, a docs-only PR can be left blocked — mark only `zulip-bridge` as required, or drop the docs-only gating.
+**Branch-protection caveat**: a skipped job reports as *skipped*, not *successful*. If `compat`/`inspector`/`tier2` are made required checks, a docs-only PR can be left blocked — mark only `zulip-bridge` as required, or drop the docs-only gating.
+
+### Keeping the Plugin Inspector gate in sync
+
+`check:inspector` runs ClawHub's Plugin Inspector — the engine behind `clawhub package validate` — which is a **different tool** from `check:clawscan`: ClawScan is the vendored *moderation* (security) engine and cannot see `manifest-unknown-contracts`/`manifest-unknown-fields` or `sdk-export-missing`. Because the inspector and the target host both move independently of this repo, two versions have to be kept in step with ClawHub's server-side validation:
+
+1. **Target host version** — derived at run time from `package.json#openclaw`, the same source `check:compat` uses: the floor is `install.minHostVersion`, the primary is `build.openclawVersion`. A host-upgrade release bumps those fields, so this gate (and its CI job) follows automatically — **never hardcode the versions in the workflow**. Override per-run with positional args or `INSPECTOR_VERSIONS=beta,latest`.
+2. **Inspector engine version** — pinned exactly in `devDependencies` for reproducible local/CI runs, and bumped deliberately when ClawHub upgrades its server-side engine. To catch that drift without waiting for a release, `.github/workflows/inspector-latest.yml` runs weekly (and on `workflow_dispatch`) with `@openclaw/plugin-inspector@latest` against `beta`/`latest`; a red run there is the signal to bump the pin. The PR job also runs a non-blocking `beta`/`latest` step so leading-edge regressions are visible without blocking a merge.
+
+Core-owned findings (`issues[].owner === "core"`, e.g. the `sdk-export-missing` host alias gap) are printed but do not fail the gate, matching ClawHub's PASS verdict — the plugin cannot fix them. Set `INSPECTOR_STRICT=1` to fail on them too.
 
 ## Build Artifacts
 
@@ -210,7 +222,7 @@ rsync -avh openclaw.plugin.json remote:.openclaw/extensions/zulip/
 # Restart the gateway on the remote host
 ```
 
-The host provides the `openclaw/plugin-sdk/*` modules at runtime (they are **not** npm packages). The plugin's npm runtime dependencies are `zod` (config-schema validation) and `typebox` (the `zulip_progress` tool schema, pinned to the host's own version so the schema objects are identical), staged during install by `openclaw.build.stageRuntimeDependencies`.
+The host provides the `openclaw/plugin-sdk/*` modules at runtime (they are **not** npm packages). The plugin's only npm runtime dependency is `zod` (config-schema validation), staged during install by `openclaw.build.stageRuntimeDependencies`.
 
 **Deploy the manifest before the config that uses it.** A channel config section is validated against the *installed* manifest, so a new key written to `openclaw.json` before the updated `openclaw.plugin.json` reaches the host fails validation: the host logs a failed channel restart and restarts the gateway to recover (hit in the field while deploying the #297 queue keys). Ship the manifest first, or both together.
 
