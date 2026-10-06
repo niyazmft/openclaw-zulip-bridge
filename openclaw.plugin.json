@@ -9,11 +9,6 @@
   "channels": [
     "zulip"
   ],
-  "contracts": {
-    "tools": [
-      "zulip_progress"
-    ]
-  },
   "setup": {
     "providers": [
       {

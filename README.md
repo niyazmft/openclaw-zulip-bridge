@@ -286,16 +286,12 @@ as `⚪ **Cancelled** — run interrupted by a gateway restart`, so a topic neve
 **Status detail edits the trace. Actionable results are posted as new messages.** That keeps the
 topic readable while still producing a durable record, instead of one message per tool call.
 
-### Two trigger modes
+### Trigger mode
 
-| Mode | Source | Notes |
-|------|--------|-------|
-| **A — plugin-driven** | The host's `after_tool_call` hook, filtered to `exec` | Automatic; no agent cooperation needed. Best-effort per runtime/harness. |
-| **B — agent-driven** | The `zulip_progress` tool | Lets the agent narrate intent the plugin cannot infer ("about to ask a clarifying question", "switching approach"). No-op when no trace is active. |
-
-Mode A never registers `before_tool_call` (it is a fail-closed gate that could block the agent's own
-tool call). Mode B is unaffected when the host's tool profile strips plugin tools — the run-boundary
-trace still appears.
+The trace is plugin-driven: the host's `after_tool_call` hook, filtered to `exec`. It is automatic —
+no agent cooperation is needed — and best-effort per runtime/harness. The plugin never registers
+`before_tool_call`, a fail-closed gate that could block the agent's own tool call; when the host's
+tool profile strips plugin tools, the run-boundary trace still appears.
 
 ### Coalescing and rate limits
 
