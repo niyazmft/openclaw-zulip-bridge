@@ -137,14 +137,14 @@ Four jobs, Node 22 + pnpm 10.32.1:
 |-----|---------|------|
 | `zulip-bridge` | The gate: `pnpm install`, then `pnpm run check` (bootstrap → typecheck → build → smoke → test → package → clawscan → audit), gitleaks, and a pristine-working-directory check (`git diff --exit-code`) | Always |
 | `compat` | Tier 1 host compatibility — the only check that catches `openclaw/plugin-sdk/*` subpath/named-export drift and registration/manifest shape bugs. Matrix `2026.7.1`, `2026.9.1` with `fail-fast: false` so both versions report | Code changes only |
-| `inspector` | ClawHub's Plugin Inspector (the engine behind `clawhub package validate`) against the host versions `package.json` declares — catches `manifest-*` and `sdk-export-missing` findings that `check:clawscan` cannot see. Runs `check:inspector` (blocking) plus a non-blocking `beta`/`latest` leading-edge step | Code changes only |
+| `inspector` | ClawHub's Plugin Inspector (the engine behind `clawhub package validate`) against the host versions `package.json` declares — catches `manifest-*` and `sdk-export-missing` findings that `check:clawscan` cannot see. Runs `check:inspector` (blocking) plus a non-blocking `beta`/`latest` leading-edge step. **Required check**; has no job-level `if:` so it concludes success (not *skipped*) for docs-only PRs | Always (heavy steps code-changes-only) |
 | `tier2` | Outbound behaviour against the local fake Zulip server | Code changes only |
 
 `compat`, `inspector` and `tier2` all `needs: zulip-bridge`, so a typecheck or unit-test failure does not first spend a host download. They are also skipped when a change touches only documentation (`*.md`, `docs/`, `LICENSE`) — `zulip-bridge` publishes a `code` output computed with a plain `git diff` (no third-party path-filter action) and the heavy jobs gate on it. `compat` and `tier2` cache `~/.npm` (where the throwaway-workspace `npm install openclaw@<version>` lands); `inspector` caches `~/.cache/plugin-inspector` (where the inspector stages the target package).
 
 **Never skip `zulip-bridge` for docs-only changes**: ClawScan scans `docs/` and `check:package` asserts that files referenced by `package.json` exist, so a README edit can legitimately fail CI.
 
-**Branch-protection caveat**: a skipped job reports as *skipped*, not *successful*. If `compat`/`inspector`/`tier2` are made required checks, a docs-only PR can be left blocked — mark only `zulip-bridge` as required, or drop the docs-only gating.
+**Required checks / branch rule**: the `Production Safeguard` ruleset requires `zulip-bridge` **and `inspector`**. A *skipped* job does not satisfy a required check, and GitHub reports a docs-only skip as *skipped* — which is why `inspector` deliberately has **no job-level `if:`**: it always runs and concludes success (a no-op step for docs-only changes) while only its heavy steps are gated on the `code` output. `compat` and `tier2` are still job-level-skipped for docs-only changes and are therefore **not** required — promoting either means converting it to the same always-success shape first. `inspector-latest` is schedule/dispatch-only and must never be required (it never runs on a PR).
 
 ### Keeping the Plugin Inspector gate in sync
 

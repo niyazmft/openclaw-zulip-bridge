@@ -141,8 +141,12 @@ jobs:
     # ClawHub's Plugin Inspector (the engine behind `clawhub package validate`),
     # which check:clawscan cannot see. Same network/host-download rationale as
     # compat/tier2, so it is its own job and not part of `pnpm run check`.
+    #
+    # Unlike compat/tier2 this job has NO job-level `if:`: it must conclude
+    # success (not *skipped*) for docs-only PRs so it can be a REQUIRED status
+    # check — a skipped job does not satisfy a required check, which would block
+    # docs-only merges. Only the heavy steps are gated on the `code` output.
     needs: zulip-bridge
-    if: needs.zulip-bridge.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -154,24 +158,32 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Docs-only change — Plugin Inspector skipped
+        if: needs.zulip-bridge.outputs.code != 'true'
+        run: echo "documentation-only change; nothing for the Plugin Inspector to validate"
       # check:inspector stages the OpenClaw target under this cache; keying it
       # avoids re-downloading the ~100 MB package on every run.
       - uses: actions/cache@v4
+        if: needs.zulip-bridge.outputs.code == 'true'
         with:
           path: ~/.cache/plugin-inspector
           key: plugin-inspector-v1
-      - run: pnpm install --frozen-lockfile
+      - if: needs.zulip-bridge.outputs.code == 'true'
+        run: pnpm install --frozen-lockfile
       # The inspector validates the package's declared OpenClaw entrypoints
       # (runtimeExtensions/runtimeSetupEntry -> dist-cjs/*), so the built output
       # must exist first or a fresh checkout reports package-entrypoint-missing.
-      - run: pnpm run build
+      - if: needs.zulip-bridge.outputs.code == 'true'
+        run: pnpm run build
       # Blocking: the host versions this package declares (floor + build target),
       # derived from package.json#openclaw so a release bump keeps this in sync.
       - name: Plugin Inspector — declared host versions
+        if: needs.zulip-bridge.outputs.code == 'true'
         run: pnpm run check:inspector
       # Early warning: the plugin declares an open-ended host range, so a newer
       # host (or a newer inspector rule) can regress us before a release. Never
       # blocking on a PR — beta/latest findings are signal, not a gate.
       - name: Plugin Inspector — leading edge (beta/latest, non-blocking)
+        if: needs.zulip-bridge.outputs.code == 'true'
         continue-on-error: true
         run: INSPECTOR_VERSIONS=beta,latest pnpm run check:inspector
