@@ -7,6 +7,9 @@ and this project adheres to [Calendar Versioning](https://calver.org/) in the fo
 
 ## [Unreleased]
 
+### Fixed
+- **Multiple named streams no longer create an impossible Zulip event narrow** — Zulip combines narrow terms with AND, so registering `["stream", ...]` once per configured stream prevented every stream message from matching. The queue now receives public-stream events with `all_public_streams` and applies the configured stream list as an explicit post-receipt allowlist; DMs remain unaffected and unconfigured streams are dropped before policy or dispatch.
+
 ### Added
 - **Local Plugin Inspector gate (`npm run check:inspector`)** — runs ClawHub's Plugin Inspector (the engine behind `clawhub package validate`) against the host versions `package.json#openclaw` declares (floor + build target, derived at run time, never hardcoded), so manifest-schema findings (`manifest-unknown-contracts`) and SDK-compat findings (`sdk-export-missing`) surface before a publish. `check:clawscan` is a different tool — the vendored moderation/security engine — and cannot see either. Wired as its own CI job (network + host download) with a non-blocking `beta`/`latest` leading-edge step, plus a weekly `.github/workflows/inspector-latest.yml` that runs the *latest* inspector so engine/host drift is caught between releases. Core-owned findings are reported but non-blocking, matching ClawHub's PASS verdict.
 

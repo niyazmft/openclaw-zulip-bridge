@@ -1,6 +1,24 @@
 import assert from "node:assert";
 import { test, describe } from "node:test";
-import { formatInboundFromLabel, maskPII } from "../src/zulip/monitor-helpers.ts";
+import {
+  formatInboundFromLabel,
+  isMonitoredStream,
+  maskPII,
+} from "../src/zulip/monitor-helpers.ts";
+
+describe("isMonitoredStream", () => {
+  test("accepts each configured stream and rejects streams outside the allowlist", () => {
+    const streams = ["engineering", "operations"];
+    assert.equal(isMonitoredStream("engineering", streams), true);
+    assert.equal(isMonitoredStream("operations", streams), true);
+    assert.equal(isMonitoredStream("general", streams), false);
+  });
+
+  test("accepts every stream only for the explicit wildcard", () => {
+    assert.equal(isMonitoredStream("general", ["*"]), true);
+    assert.equal(isMonitoredStream("general", []), false);
+  });
+});
 
 describe("maskPII", () => {
   test("returns empty string for null, undefined, or empty", () => {
