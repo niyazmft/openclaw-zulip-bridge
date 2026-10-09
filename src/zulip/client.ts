@@ -429,6 +429,17 @@ export const MAX_LONGPOLL_TIMEOUT_SECS = 90;
 const MIN_LONGPOLL_TIMEOUT_SECS = 1;
 
 /**
+ * Versioned description of the stream-delivery shape fixed at registration.
+ * Persisting this beside the queue prevents an upgrade from reusing a queue
+ * created with the old multi-stream AND narrow.
+ */
+export function resolveZulipQueueRegistrationKey(streams?: string[]): string {
+  return streams && streams.length > 0
+    ? "all-public-post-filter-v1"
+    : "subscribed-post-filter-v1";
+}
+
+/**
  * Clamps a server-provided long-poll timeout into the range Zulip accepts.
  * Falls back to the default when the value is missing or unusable.
  */
@@ -459,12 +470,13 @@ export async function registerZulipQueue(
   // (see /api/register-queue); clients must never assume the default.
   body.set("fetch_event_types", JSON.stringify(["realm"]));
   body.set("event_queue_longpoll_timeout_seconds", String(DEFAULT_LONGPOLL_TIMEOUT_SECS));
-  if (params.streams && params.streams.length > 0 && !params.streams.includes("*")) {
-    // Zulip expects legacy array format for narrow filters.
-    const narrow = params.streams.map((stream) => ["stream", stream]);
-    body.set("narrow", JSON.stringify(narrow));
-  }
-  if (params.streams?.includes("*")) {
+  if (params.streams && params.streams.length > 0) {
+    // Zulip ANDs every term in a narrow. Registering one ["stream", name]
+    // term per configured stream therefore creates an impossible filter as
+    // soon as more than one stream is configured. Receive public-stream
+    // events through one queue and enforce the configured stream allowlist in
+    // the monitor after receipt; subscribed private-stream events continue to
+    // arrive through the user's normal event feed and are filtered there too.
     body.set("all_public_streams", "true");
   }
 

@@ -17,6 +17,7 @@ import {
   fetchZulipSubscriptions,
   fetchZulipUser,
   registerZulipQueue,
+  resolveZulipQueueRegistrationKey,
   updateZulipMessageFlag,
   type ZulipMessage,
 } from "./client.js";
@@ -26,6 +27,7 @@ import {
   formatZulipLog,
   maskPII,
   delay,
+  isMonitoredStream,
   trackConversationMetadata,
 } from "./monitor-helpers.js";
 import { ZulipDedupeStore } from "./dedupe-store.js";
@@ -409,6 +411,13 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         streamId = String(message.stream_id ?? "");
         if (typeof message.display_recipient === "string") {
           streamName = message.display_recipient;
+        }
+        // Named stream lists are registered with all_public_streams because
+        // Zulip combines multiple stream narrow terms as AND, not OR. Keep the
+        // configured list as an allowlist by dropping other stream messages
+        // immediately after receipt, before dedupe, policy, or dispatch.
+        if (!isMonitoredStream(streamName, streams)) {
+          return;
         }
       }
 
@@ -1119,6 +1128,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       accountId: account.accountId,
       runtime: core,
       desiredEventTypes: eventTypes,
+      desiredRegistrationKey: resolveZulipQueueRegistrationKey(streams),
       registerFn: async () => {
         return await registerZulipQueue(client, { eventTypes, streams });
       },
@@ -1293,7 +1303,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           return;
         }
         // Only streams this account is configured to watch.
-        if (!streams.includes("*") && !streams.includes(streamName)) {
+        if (!isMonitoredStream(streamName, streams)) {
           logger?.info?.("zulip reaction trigger ignored: stream not monitored", {
             accountId: account.accountId,
             streamName,

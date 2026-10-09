@@ -5,6 +5,7 @@ import {
   createZulipClient,
   getZulipEventsWithRetry,
   registerZulipQueue,
+  resolveZulipQueueRegistrationKey,
   resolveEventsTimeoutMs,
 } from "../src/zulip/client.ts";
 
@@ -155,6 +156,31 @@ test("registerZulipQueue falls back to 90s when the server omits the timeout", a
 
   const queue = await registerZulipQueue(client, {});
   assert.equal(queue.longpollTimeoutSecs, 90);
+});
+
+test("registerZulipQueue does not AND multiple configured streams into an impossible narrow", async () => {
+  let seenBody = "";
+  const client = createZulipClient({
+    baseUrl: "https://zulip.example.com",
+    email: "bot@example.com",
+    apiKey: "***",
+    fetchImpl: async (_url, init) => {
+      seenBody = String(init?.body ?? "");
+      return jsonResponse({ result: "success", queue_id: "q", last_event_id: 1 });
+    },
+  });
+
+  await registerZulipQueue(client, { streams: ["engineering", "operations"] });
+
+  const body = new URLSearchParams(seenBody);
+  assert.equal(body.get("all_public_streams"), "true");
+  assert.equal(body.get("narrow"), null);
+});
+
+test("resolveZulipQueueRegistrationKey invalidates queues from the old narrow strategy", () => {
+  assert.equal(resolveZulipQueueRegistrationKey(["engineering"]), "all-public-post-filter-v1");
+  assert.equal(resolveZulipQueueRegistrationKey(["*"]), "all-public-post-filter-v1");
+  assert.equal(resolveZulipQueueRegistrationKey([]), "subscribed-post-filter-v1");
 });
 
 test("createZulipClient gates plain HTTP behind allowInsecureHttp", () => {

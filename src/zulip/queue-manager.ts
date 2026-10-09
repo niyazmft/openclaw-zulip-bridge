@@ -29,6 +29,8 @@ export type QueueMetadata = {
    * restarts, so reactions were never delivered and the feature looked broken.
    */
   eventTypes?: string[];
+  /** Versioned registration shape; mismatches require a fresh queue. */
+  registrationKey?: string;
 };
 
 export type QueueRegisterCallback = () => Promise<{
@@ -47,6 +49,11 @@ export type QueueManagerOpts = {
    * Defaults to `["message"]` (the historical behaviour).
    */
   desiredEventTypes?: string[];
+  /**
+   * Versioned registration shape requested by the caller. When provided, a
+   * persisted queue is reused only when it was registered with the same key.
+   */
+  desiredRegistrationKey?: string;
 };
 
 export class ZulipQueueManager {
@@ -54,6 +61,7 @@ export class ZulipQueueManager {
   private runtime: PluginRuntime;
   private registerFn: QueueRegisterCallback;
   private desiredEventTypes: string[];
+  private desiredRegistrationKey?: string;
   private currentQueue: QueueMetadata | null = null;
   private registrationPromise: Promise<QueueMetadata> | null = null;
   private persistenceDirChecked = false;
@@ -63,6 +71,7 @@ export class ZulipQueueManager {
     this.runtime = opts.runtime;
     this.registerFn = opts.registerFn;
     this.desiredEventTypes = [...(opts.desiredEventTypes ?? ["message"])];
+    this.desiredRegistrationKey = opts.desiredRegistrationKey;
   }
 
   getQueue(): QueueMetadata | null {
@@ -106,12 +115,14 @@ export class ZulipQueueManager {
         return persisted;
       }
       if (persisted) {
-        // A reused queue would receive none of the newly needed events.
+        // A reused queue would have stale event types or registration filters.
         this.runtime.log?.(
-          formatZulipLog("zulip queue event types changed; registering a fresh queue", {
+          formatZulipLog("zulip queue registration requirements changed; registering a fresh queue", {
             accountId: this.accountId,
             persisted: (persisted.eventTypes ?? ["message"]).join(","),
             desired: this.desiredEventTypes.join(","),
+            persistedRegistrationKey: persisted.registrationKey,
+            desiredRegistrationKey: this.desiredRegistrationKey,
           }),
         );
       }
@@ -143,6 +154,7 @@ export class ZulipQueueManager {
           registeredAt: Date.now(),
           longpollTimeoutSecs: queue.longpollTimeoutSecs,
           eventTypes: [...this.desiredEventTypes],
+          registrationKey: this.desiredRegistrationKey,
         };
         await this.saveMetadata(metadata);
         this.runtime.log?.(
@@ -187,10 +199,13 @@ export class ZulipQueueManager {
   private canReuseQueue(persisted: QueueMetadata): boolean {
     const persistedTypes = [...(persisted.eventTypes ?? ["message"])].sort();
     const desiredTypes = [...this.desiredEventTypes].sort();
-    return (
+    const eventTypesMatch =
       persistedTypes.length === desiredTypes.length &&
-      persistedTypes.every((type, index) => type === desiredTypes[index])
-    );
+      persistedTypes.every((type, index) => type === desiredTypes[index]);
+    const registrationMatches =
+      this.desiredRegistrationKey === undefined ||
+      persisted.registrationKey === this.desiredRegistrationKey;
+    return eventTypesMatch && registrationMatches;
   }
 
   async markQueueExpired(): Promise<void> {

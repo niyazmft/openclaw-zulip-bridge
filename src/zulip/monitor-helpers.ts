@@ -122,6 +122,11 @@ export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Return whether a stream event is inside the account's configured allowlist. */
+export function isMonitoredStream(streamName: string, streams: string[]): boolean {
+  return streams.includes("*") || streams.includes(streamName);
+}
+
 /**
  * Compute and track conversation metadata for inbound messages.
  */

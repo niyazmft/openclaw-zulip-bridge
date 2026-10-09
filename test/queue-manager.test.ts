@@ -223,6 +223,40 @@ test("ZulipQueueManager: records the event types it registered with", async () =
   await manager.markQueueExpired();
 });
 
+test("ZulipQueueManager: re-registers a persisted queue with an old registration shape", async () => {
+  const accountId = "test-account-registration-upgrade-" + Date.now();
+  writeFileSync(
+    queuePath(accountId),
+    JSON.stringify({
+      queueId: "q_old_narrow",
+      lastEventId: 5,
+      registeredAt: Date.now(),
+      eventTypes: ["message"],
+    }),
+  );
+
+  let registered = 0;
+  const manager = new ZulipQueueManager({
+    accountId,
+    runtime: mockRuntime,
+    desiredRegistrationKey: "all-public-post-filter-v1",
+    registerFn: async () => {
+      registered++;
+      return { queueId: "q_all_public", lastEventId: 0 };
+    },
+  });
+
+  const queue = await manager.ensureQueue();
+  assert.equal(queue.queueId, "q_all_public");
+  assert.equal(registered, 1);
+  assert.equal(
+    JSON.parse(readFileSync(queuePath(accountId), "utf8")).registrationKey,
+    "all-public-post-filter-v1",
+  );
+
+  await manager.markQueueExpired();
+});
+
 test("ZulipQueueManager: reuses a persisted queue when the event types match", async () => {
   const accountId = "test-account-reuse-ets-" + Date.now();
   let registered = 0;
