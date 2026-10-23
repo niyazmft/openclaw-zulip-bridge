@@ -7,6 +7,9 @@ and this project adheres to [Calendar Versioning](https://calver.org/) in the fo
 
 ## [Unreleased]
 
+### Fixed
+- **A run that delivers nothing is now audited even with `activityTrace` off** (#326, cause 3): `onDeliverEmpty` was called inside the `if (trace) { … }` block in `reply-handler.ts`, and `activityTrace` defaults to `false`, so on a default config a silent run left **no** record — no `deliver_payload` (nothing was delivered) and no `deliver_empty` (unreachable). Combined with `dispatch_turn` being limited to command-looking messages and `message`-tool sends bypassing the deliver callback, that meant `{dataDir}/audit/*.audit.log` could not distinguish a working channel from a silently broken one for ordinary traffic. The hook now fires outside the trace guard; the trace finalisation stays inside it. `test/reply-handler-audit-hooks.test.ts` pins the behaviour (fires with tracing off; does not fire when a payload was delivered, when the dispatch threw, or when the run was aborted; no double reporting with tracing on). Causes 1, 2 and 4 of #326 are untouched.
+
 ### Planned
 - Performance improvements for response dispatch times
 - Additional stream filtering options
