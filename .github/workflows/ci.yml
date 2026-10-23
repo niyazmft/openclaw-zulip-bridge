@@ -22,6 +22,10 @@ jobs:
       # "true" when anything other than documentation changed. Consumed by the
       # compat/tier2 jobs to skip ~390 MB host downloads for docs-only PRs.
       code: ${{ steps.filter.outputs.code }}
+      # JSON array of the host versions the compat matrix must cover, derived from
+      # package.json (floor + build target) rather than hardcoded here — see the
+      # `hosts` step below.
+      hosts: ${{ steps.hosts.outputs.versions }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,6 +68,14 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The compat matrix used to be hardcoded here as ["2026.7.1", "2026.9.1"].
+      # That silently defeated the host bump: raising `build.openclawVersion` in
+      # package.json changed nothing in CI, so the gate kept testing the old host
+      # while host 2026.10.6 broke the plugin outright (#324). The versions now
+      # come from the same place `check:compat` reads them.
+      - id: hosts
+        name: Host versions under test (floor + build target, from package.json)
+        run: echo "versions=$(node scripts/check-compat.js --list-hosts)" >> "$GITHUB_OUTPUT"
       # `check` already runs check:bootstrap, check:clawscan and check:audit.
       # Running them again as separate steps re-executed three of them twice for
       # no additional signal.
@@ -88,7 +100,11 @@ jobs:
       # whether the other version regressed.
       fail-fast: false
       matrix:
-        openclaw: ["2026.7.1", "2026.9.1"]
+        # Derived from package.json#openclaw (floor + build target) by the
+        # `hosts` step in zulip-bridge. Never hardcode versions here: a hardcoded
+        # matrix does not follow a host bump, which is how 2026.10.6 shipped
+        # unverified (#324).
+        openclaw: ${{ fromJson(needs.zulip-bridge.outputs.hosts) }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

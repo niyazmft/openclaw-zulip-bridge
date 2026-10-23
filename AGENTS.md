@@ -138,7 +138,7 @@ Four jobs, Node 22 + pnpm 10.32.1:
 | Job | Purpose | Runs |
 |-----|---------|------|
 | `zulip-bridge` | The gate: `pnpm install`, then `pnpm run check` (bootstrap → typecheck → build → smoke → test → package → clawscan → audit), gitleaks, and a pristine-working-directory check (`git diff --exit-code`) | Always |
-| `compat` | Tier 1 host compatibility — the only check that catches `openclaw/plugin-sdk/*` subpath/named-export drift and registration/manifest shape bugs. Matrix `2026.7.1`, `2026.9.1` with `fail-fast: false` so both versions report | Code changes only |
+| `compat` | Tier 1 host compatibility — the only check that catches `openclaw/plugin-sdk/*` subpath/named-export drift and registration/manifest shape bugs. Matrix is **derived from `package.json#openclaw`** (floor + build target) via `node scripts/check-compat.js --list-hosts`, never hardcoded, with `fail-fast: false` so every version reports | Code changes only |
 | `inspector` | ClawHub's Plugin Inspector (the engine behind `clawhub package validate`) against the host versions `package.json` declares — catches `manifest-*` and `sdk-export-missing` findings that `check:clawscan` cannot see. Runs `check:inspector` (blocking) plus a non-blocking `beta`/`latest` leading-edge step. **Required check**; has no job-level `if:` so it concludes success (not *skipped*) for docs-only PRs | Always (heavy steps code-changes-only) |
 | `tier2` | Outbound behaviour against the local fake Zulip server | Code changes only |
 
@@ -352,6 +352,7 @@ The host resolves a plugin's `openclaw/plugin-sdk/*` imports at **link time** an
 Two consequences for this repo:
 
 - **`openclaw.build.openclawVersion` / `pluginSdkVersion` are part of the gate, not just metadata** — `check:compat` and `check:inspector` derive their matrix from them. They sat at `2026.9.1` while the plugin was dead on `2026.10.6`, so both gates were green. Bump them in the same change as any host-version support claim.
+- **The CI compat matrix must stay derived** (`node scripts/check-compat.js --list-hosts` → `fromJson`). It was hardcoded as `["2026.7.1", "2026.9.1"]`, so the bump above would have changed only the local run and left CI testing the old host — a hardcoded matrix silently defeats the floor/build-target convention it appears to follow.
 - **`test/sdk-subpath-compat.test.ts` is the local guard** (see [Testing](#testing)); it compares the plugin's import surface against recorded host snapshots, so this drift shows up locally instead of as a silent outage in the field.
 
 ## ClawScan Replica (pre-publish security gate)

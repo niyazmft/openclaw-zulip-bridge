@@ -32,6 +32,7 @@
  *   node scripts/check-compat.js 2026.7.1 2026.9.4  # explicit versions
  *   COMPAT_VERSIONS=2026.7.1,latest node scripts/check-compat.js
  *   node scripts/check-compat.js --keep             # keep temp workspaces
+ *   node scripts/check-compat.js --list-hosts       # JSON array, for the CI matrix
  */
 
 import { execFileSync } from "node:child_process";
@@ -65,6 +66,20 @@ function versionFromRange(range) {
 
 const floorVersion = versionFromRange(pkg.openclaw?.install?.minHostVersion);
 const buildVersion = versionFromRange(pkg.openclaw?.build?.openclawVersion);
+
+// `--list-hosts` is the single source of truth for the CI compat matrix. It exists
+// because the matrix used to be hardcoded in ci.yml: bumping `build.openclawVersion`
+// to a newer host then changed nothing in CI, so the gate kept testing the old host
+// and host 2026.10.6 broke the plugin while every job stayed green (#324).
+if (argv.includes("--list-hosts")) {
+  const hosts = [...new Set([floorVersion, buildVersion].filter(Boolean))];
+  if (hosts.length === 0) {
+    console.error("check-compat: package.json declares no host floor or build target.");
+    process.exit(1);
+  }
+  process.stdout.write(`${JSON.stringify(hosts)}\n`);
+  process.exit(0);
+}
 
 const versions = explicit.length
   ? explicit
