@@ -549,14 +549,23 @@ export async function dispatchZulipReply(params: {
         }
       }
     }
+    // A run that produced nothing is otherwise invisible: no deliver callback fired,
+    // so there is no `deliver_payload`, and the trace edit is the only evidence — which
+    // reads the same whether the host genuinely said nothing or we discarded what it
+    // said. Emit it *outside* the trace guard: the audit log is the durable surface on
+    // hosts where plugin logs are swallowed, and it must not depend on `activityTrace`
+    // being enabled (default off), or the two states stay indistinguishable (#326).
+    const cancelled = abortSignal?.aborted === true || isAbortError(dispatchError);
+    const elapsedMs = Date.now() - dispatchStartMs;
+    if (!cancelled && !dispatchError && !deliveredAny) {
+      onDeliverEmpty?.({ elapsedMs, isCommandTurn: isCommandTurn === true });
+    }
     if (trace) {
       // Finalize on success, error *and* abort — a trace must never be left
       // permanently "in progress", and a run that produced no reply still shows
       // in the room that it happened.
       try {
-        const cancelled = abortSignal?.aborted === true || isAbortError(dispatchError);
         const status = cancelled ? "cancelled" : dispatchError ? "failed" : "done";
-        const elapsedMs = Date.now() - dispatchStartMs;
         const elapsed = formatTraceDuration(elapsedMs) ?? `${elapsedMs}ms`;
         const summary = cancelled
           ? "run cancelled"
@@ -565,12 +574,6 @@ export async function dispatchZulipReply(params: {
             : deliveredAny
               ? `run finished in ${elapsed}`
               : `run finished in ${elapsed} — no reply sent`;
-        if (!cancelled && !dispatchError && !deliveredAny) {
-          // A run that produced nothing is otherwise invisible: the trace edit is
-          // the only evidence, and it reads the same whether the host genuinely
-          // said nothing or we discarded what it said.
-          onDeliverEmpty?.({ elapsedMs, isCommandTurn: isCommandTurn === true });
-        }
         trace.finish({ status, summary });
         // Best-effort: the final edit lands in the background. Awaiting it would
         // add a Zulip round-trip to every dispatch.
