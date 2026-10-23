@@ -40,5 +40,13 @@ jobs:
       # and it keeps the core-owned/non-blocking filtering in one place.
       - name: Install latest Plugin Inspector
         run: pnpm add -D @openclaw/plugin-inspector@latest --ignore-scripts
+      # `check:inspector` validates the package's *declared* entrypoints, including
+      # the built `runtimeExtensions`/`runtimeSetupEntry` (./dist-cjs/*.cjs), and
+      # fails fast when they are absent. Without this step the job died in ~2s on
+      # "declared package entrypoints are missing" on every scheduled run, so the
+      # drift alarm it exists to be was never actually evaluated. The PR-time
+      # inspector job in ci.yml builds for the same reason.
+      - name: Build
+        run: pnpm run build
       - name: Latest Plugin Inspector — leading edge (beta/latest)
         run: INSPECTOR_VERSIONS=beta,latest pnpm run check:inspector
