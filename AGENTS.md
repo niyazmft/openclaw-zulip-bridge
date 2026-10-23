@@ -125,6 +125,7 @@ final reply (or nothing at all when a run produces no reply).
 - Custom loader (`test-loader.js`) remaps `openclaw/plugin-sdk` imports to the shim and resolves `.ts` from `.js` imports.
 - Run a single test: `node --test --experimental-strip-types --loader ./test-loader.js test/policy.test.ts`
 - The `npm run test` glob is `test/*.test.ts`, so **`test/tier2/` is excluded by construction** — those tests import built `dist/` artifacts and need a real host in `node_modules` (supplied by `npm run check:tier2`).
+- **SDK import surface is guarded by a recorded fixture** (`test/sdk-subpath-compat.test.ts` + `test/fixtures/plugin-sdk-exports.json`): it asserts every `openclaw/plugin-sdk/*` specifier the plugin imports is exported by **every** recorded host version, and fails if `package.json#openclaw` declares a floor/build-target version with no snapshot. Nothing else in `npm run check` can see a missing SDK subpath, because `test-loader.js` maps *every* `openclaw/plugin-sdk/*` specifier onto the catch-all shim (`test/openclaw-plugin-sdk-shim.js`), so a subpath that exists on no real host still resolves in tests. Refresh after a host bump with `node scripts/refresh-sdk-exports.mjs <version>` (downloads the npm tarball and records its `exports` map) or `node scripts/refresh-sdk-exports.mjs --from-host <container>` for an already-installed host.
 - No external services required: unit tests use in-process SDK shims, and the Tier 2 fake Zulip server is a local HTTP server created per test.
 - **Verify in the field through the audit log, not the gateway log**: plugin child-logger output does not reach the host log on every host (verified on Termux: zero plugin lines in the gateway log), so behaviour is confirmed through `{dataDir}/audit/{accountId}.audit.log` or the Zulip API. Field notes elsewhere in this file assume that.
 
@@ -326,6 +327,21 @@ Migration complete as of v2026.7.0:
 - Manifest `uiHints` synced with runtime schema for full cold-path label coverage
 - `minGatewayVersion` and `minHostVersion` are both `>=2026.7.1` — the lowest OpenClaw version actually published on npm (both `2026.6.0` and `2026.7.0` are phantom versions; `npm view openclaw@2026.7.0` is a 404)
 
+### 2026.9.x → 2026.10.x
+Fixed in v2026.9.3 (#324). Host `2026.10.6` **deleted** two subpaths from its `exports` map with no deprecation window:
+
+| Symbol | Removed subpath | Durable subpath (present on 2026.7.1, 2026.9.1 **and** 2026.10.6) |
+|---|---|---|
+| `resolveControlCommandGate` | `plugin-sdk/command-auth` | `plugin-sdk/command-auth-native` |
+| `createTypingCallbacks`, `createReplyPrefixOptions` | `plugin-sdk/channel-reply-pipeline` | `plugin-sdk/channel-outbound` |
+
+The host resolves a plugin's `openclaw/plugin-sdk/*` imports at **link time** and validates each against its own `exports` map, so a removed subpath does not degrade a helper — the **whole plugin is rejected**. See the [Troubleshooting](#troubleshooting) entry for how silently that presents. `channel-*` subpaths for reply/typing plumbing have now been renamed three times (`channel-runtime` → `channel-reply-options-runtime` → `channel-reply-pipeline` → `channel-outbound`); `channel-outbound` and `command-auth-native` are the ones present across every host version this plugin supports, so prefer them.
+
+Two consequences for this repo:
+
+- **`openclaw.build.openclawVersion` / `pluginSdkVersion` are part of the gate, not just metadata** — `check:compat` and `check:inspector` derive their matrix from them. They sat at `2026.9.1` while the plugin was dead on `2026.10.6`, so both gates were green. Bump them in the same change as any host-version support claim.
+- **`test/sdk-subpath-compat.test.ts` is the local guard** (see [Testing](#testing)); it compares the plugin's import surface against recorded host snapshots, so this drift shows up locally instead of as a silent outage in the field.
+
 ## ClawScan Replica (pre-publish security gate)
 
 `scripts/clawscan/` vendors the **exact ClawHub moderation engine** (`convex/lib/moderationEngine.ts` + `moderationReasonCodes.ts`, engine v2.4.26, commit `60b02c09`) and runs it against source + built output + docs. This is the same scanner ClawHub runs on publish, so a clean local run means a clean ClawHub scan (for the static rules).
@@ -338,6 +354,7 @@ Migration complete as of v2026.7.0:
 
 ## Troubleshooting
 
+- **The channel is dead but `openclaw status` says `Zulip | ON | OK | configured`** (host `2026.10.6` and later; fixed in v2026.9.3, #324): the plugin was **rejected at load time** because it imports an `openclaw/plugin-sdk/*` subpath the host no longer exports — `plugin-sdk/command-auth` and `plugin-sdk/channel-reply-pipeline` were both deleted in `2026.10.6`. Do not trust the channel table: it only validates *config*. Three checks give the real answer, in increasing order of directness: **(1)** the gateway startup line must list the plugin — `http server listening (8 plugins: browser, device-pair, exa, ollama, openclaw-honcho, talk-voice, telegram, zulip; …)`; a `7 plugins: … telegram` line with no `zulip` is the signature. **(2)** `docker logs <host> | grep -i 'failed during load'` shows `Plugin zulip cannot import openclaw/plugin-sdk/<subpath> (built with OpenClaw <x>; running core <y>)` plus `ERR_PACKAGE_PATH_NOT_EXPORTED`. **(3)** the audit log goes silent — no `message_*` events at all. **The host's own remedy is wrong here**: it suggests `openclaw plugins update zulip`, but `2026.9.1` and `2026.9.2` both carry the old imports, so the update is a no-op. `openclaw status --deep` may also abort entirely (`Plugin CLI resource disposal failed: AggregateError … [openclaw] The command failed.`) because the same unresolvable import breaks plugin CLI disposal. Verify a fix by a real message round-trip, not by the absence of errors. Root cause and the durable subpaths are in [SDK Migration Notes](#20269x--202610x).
 - **`Trust: reason=provenance-invalid` on an installed plugin**: two distinct causes, and the fix differs. (1) **ClawHub metadata** — the published version records a `source-repo`/`source-commit`/`source-ref` the host cannot resolve against GitHub (the `2026.9.1` case: dead repo name, and a commit that was not on the recorded ref). Check with `clawhub package inspect @niyazmft/openclaw-zulip`; it prints `Source Repo`, `Source Commit`, `Source Ref`. Only a republish clears it, and since a version cannot be published twice that means a version bump. (2) **Local out-of-band file replacement** — rsyncing `dist/` over a ClawHub-installed plugin (the [Manual deployment](#manual-deployment) flow) invalidates the recorded provenance on that host even when the ClawHub record is correct; reinstall with `openclaw plugins update` to clear it. Note `clawhub package readiness` reports `source: PASS` for a repo that does not exist — it validates the string, not GitHub.
 
 - **Health-monitor restarts every ~5 min** with `reason: stopped`: Fixed in v2026.8.4+. `gateway.startAccount` must be placed inside the `base` parameter of `createChatChannelPlugin`, not at the top level. The host checks `snapshot.running` to decide if channel is alive.
