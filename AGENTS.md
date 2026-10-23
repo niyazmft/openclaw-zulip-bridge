@@ -206,14 +206,23 @@ Then restart the gateway and run `openclaw channels add` to configure.
 ### Manual deployment
 
 1. Build: `npm run build`
-2. Copy `dist/` and `openclaw.plugin.json` into the host's extensions directory (default: `~/.openclaw/extensions/zulip/`).
+2. Copy `dist/` **and** `dist-cjs/` (the host loads `runtimeExtensions` → `dist-cjs/index.cjs`; copying only `dist/` leaves the old code running) plus `openclaw.plugin.json` and `package.json` into the host's extensions directory (default: `~/.openclaw/extensions/zulip/`). Replacing `dist/`/`dist-cjs/` wholesale is safest — a stale file from the previous version otherwise survives.
 3. Restart the OpenClaw gateway.
+
+Two things that bite on this path:
+
+- **Never park the backup inside `extensions/`.** The host scans every child of `extensions/` for plugins, so `extensions/zulip.bak-<version>/` registers as a **second** zulip plugin: `duplicate plugin id detected; global plugin will be overridden by global plugin (…/zulip.bak-…/dist-cjs/index.cjs)`, and which one actually wins is not obvious from the log. Keep backups under `~/.openclaw/backups/`. The whole plugin dir is only ~15MB:
+  ```bash
+  docker exec -u root <host> sh -c 'mkdir -p /home/node/.openclaw/backups && cp -a /home/node/.openclaw/extensions/zulip /home/node/.openclaw/backups/zulip.bak-<version>'
+  ```
+- **Expect `provenance-invalid` after the next start** (see [Troubleshooting](#troubleshooting)): out-of-band replacement invalidates the recorded ClawHub provenance on that host. It does not block loading as long as the plugin is in `plugins.allow`, but the trust badge stays off until it is reinstalled from ClawHub.
 
 Example — local host:
 ```bash
 npm run build
-rsync -avh --delete dist/ ~/.openclaw/extensions/zulip/
-rsync -avh openclaw.plugin.json ~/.openclaw/extensions/zulip/
+rsync -avh --delete dist/ ~/.openclaw/extensions/zulip/dist/
+rsync -avh --delete dist-cjs/ ~/.openclaw/extensions/zulip/dist-cjs/
+rsync -avh openclaw.plugin.json package.json ~/.openclaw/extensions/zulip/
 # Restart the gateway
 ```
 
@@ -221,10 +230,13 @@ Example — remote host:
 ```bash
 npm run build
 ssh remote "mkdir -p ~/.openclaw/extensions/zulip/"
-rsync -avh --delete dist/ remote:.openclaw/extensions/zulip/
-rsync -avh openclaw.plugin.json remote:.openclaw/extensions/zulip/
+rsync -avh --delete dist/ remote:.openclaw/extensions/zulip/dist/
+rsync -avh --delete dist-cjs/ remote:.openclaw/extensions/zulip/dist-cjs/
+rsync -avh openclaw.plugin.json package.json remote:.openclaw/extensions/zulip/
 # Restart the gateway on the remote host
 ```
+
+Verify the deploy by the **startup plugin count**, not the channel table: `http server listening (8 plugins: … zulip; …s)`. `openclaw status` reports `Zulip | ON | OK | configured` whether or not the plugin loaded, so it proves nothing on its own.
 
 The host provides the `openclaw/plugin-sdk/*` modules at runtime (they are **not** npm packages). The plugin's only npm runtime dependency is `zod` (config-schema validation), staged during install by `openclaw.build.stageRuntimeDependencies`.
 
