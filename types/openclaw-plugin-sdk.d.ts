@@ -84,7 +84,10 @@ declare module "openclaw/plugin-sdk/account-core" {
   export const setAccountEnabledInConfigSection: any;
 }
 
-declare module "openclaw/plugin-sdk/command-auth" {
+// `command-auth` was removed from the host's exports map in 2026.10.6 (it still
+// exists on 2026.7.1-2026.9.x, so importing it only failed on newer hosts).
+// `command-auth-native` is present across the whole supported range. See #324.
+declare module "openclaw/plugin-sdk/command-auth-native" {
   export const resolveControlCommandGate: any;
 }
 
@@ -93,12 +96,12 @@ declare module "openclaw/plugin-sdk/channel-inbound" {
   export const formatInboundEnvelope: any;
 }
 
-declare module "openclaw/plugin-sdk/channel-reply-options-runtime" {
-  export const createReplyPrefixOptions: any;
-  export const createTypingCallbacks: any;
-}
-
-declare module "openclaw/plugin-sdk/channel-reply-pipeline" {
+// `channel-reply-options-runtime` (2026.7.x) and `channel-reply-pipeline`
+// (2026.8.x-2026.9.x) were both retired; `channel-reply-pipeline` is absent from
+// the host's exports map in 2026.10.6, which made the plugin fail to load
+// entirely. `channel-outbound` is present across 2026.7.1, 2026.9.1 and
+// 2026.10.6, so it is the durable subpath for these two helpers. See #324.
+declare module "openclaw/plugin-sdk/channel-outbound" {
   export const createReplyPrefixOptions: any;
   export const createTypingCallbacks: any;
 }

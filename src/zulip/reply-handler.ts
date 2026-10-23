@@ -1,4 +1,6 @@
-import { createTypingCallbacks } from "openclaw/plugin-sdk/channel-reply-pipeline";
+// `channel-reply-pipeline` is gone from the host's exports map in 2026.10.6; the helper
+// now lives on `channel-outbound` (present on 2026.7.1 .. 2026.10.6). See #324.
+import { createTypingCallbacks } from "openclaw/plugin-sdk/channel-outbound";
 import { logTypingFailure } from "openclaw/plugin-sdk/channel-feedback";
 import { sendZulipTyping, editZulipMessage } from "./client.js";
 import { sendMessageZulip } from "./send.js";

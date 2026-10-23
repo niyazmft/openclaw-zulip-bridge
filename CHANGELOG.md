@@ -7,11 +7,23 @@ and this project adheres to [Calendar Versioning](https://calver.org/) in the fo
 
 ## [Unreleased]
 
+### Planned
+- Performance improvements for response dispatch times
+- Additional stream filtering options
+- Enhanced error recovery
+
+## [2026.9.3] - 2026-10-23
+
 ### Fixed
-- **Multiple named streams no longer create an impossible Zulip event narrow** — Zulip combines narrow terms with AND, so registering `["stream", ...]` once per configured stream prevented every stream message from matching. The queue now receives public-stream events with `all_public_streams` and applies the configured stream list as an explicit post-receipt allowlist; DMs remain unaffected and unconfigured streams are dropped before policy or dispatch.
+- **The plugin no longer fails to load on OpenClaw 2026.10.6** (#324): host 2026.10.6 removed `openclaw/plugin-sdk/command-auth` and `openclaw/plugin-sdk/channel-reply-pipeline` from its `exports` map. Because the host resolves a plugin's SDK imports at link time, a missing subpath does not degrade a helper — the **entire plugin is rejected**, so the Zulip channel goes dead. It did so silently: `openclaw status` reported `Zulip | ON | OK | configured` (that check only validates config), and the only honest signal was the gateway's startup line listing `7 plugins: … telegram` with no `zulip`. Three imports are repointed at subpaths that exist across the whole supported range (verified present in the published `exports` map of 2026.7.1, 2026.9.1 **and** 2026.10.6): `resolveControlCommandGate` → `plugin-sdk/command-auth-native`, and `createTypingCallbacks` / `createReplyPrefixOptions` → `plugin-sdk/channel-outbound`. `openclaw plugins update zulip` could not fix this: the published `2026.9.1` and `2026.9.2` both carry the old imports, so the host's own suggested remedy was a no-op.
+- **Multiple named streams no longer create an impossible Zulip event narrow** (#322) — Zulip combines narrow terms with AND, so registering `["stream", ...]` once per configured stream prevented every stream message from matching. The queue now receives public-stream events with `all_public_streams` and applies the configured stream list as an explicit post-receipt allowlist; DMs remain unaffected and unconfigured streams are dropped before policy or dispatch.
 
 ### Added
+- **`test/sdk-subpath-compat.test.ts` — an import-surface guard** (#324): scans every `openclaw/plugin-sdk/*` specifier the plugin imports and asserts it is exported by **every** recorded host version, using snapshots in `test/fixtures/plugin-sdk-exports.json` (regenerate with `node scripts/refresh-sdk-exports.mjs <version>`, or `--from-host <container>` for an installed host). A second assertion fails when `package.json#openclaw` declares a floor or build-target host that has no snapshot, so a host bump cannot skip the import audit. This exists because nothing else in `npm run check` can see the failure: `test-loader.js` maps every `openclaw/plugin-sdk/*` specifier onto a catch-all shim, so a subpath that exists on no real host still resolves in tests.
 - **Local Plugin Inspector gate (`npm run check:inspector`)** — runs ClawHub's Plugin Inspector (the engine behind `clawhub package validate`) against the host versions `package.json#openclaw` declares (floor + build target, derived at run time, never hardcoded), so manifest-schema findings (`manifest-unknown-contracts`) and SDK-compat findings (`sdk-export-missing`) surface before a publish. `check:clawscan` is a different tool — the vendored moderation/security engine — and cannot see either. Wired as its own CI job (network + host download) with a non-blocking `beta`/`latest` leading-edge step, plus a weekly `.github/workflows/inspector-latest.yml` that runs the *latest* inspector so engine/host drift is caught between releases. Core-owned findings are reported but non-blocking, matching ClawHub's PASS verdict.
+
+### Changed
+- **Declared build target raised to OpenClaw `2026.10.6`** (`openclaw.build.openclawVersion` and `pluginSdkVersion`), so `check:compat` and `check:inspector` actually test against the host release that broke the plugin. They derive their matrix from these fields, so leaving them at `2026.9.1` meant both gates were green while the plugin was dead on 2026.10.6.
 
 ### Removed
 - **Mode B agent-driven trace narration (`zulip_progress`)** (#303): the plugin-owned tool and its
@@ -23,11 +35,6 @@ and this project adheres to [Calendar Versioning](https://calver.org/) in the fo
   validate`; dropping it makes the host reject the tool. Rather than ship a tool that silently no-ops
   on hosts that enforce the contract, the feature is removed. Mode A (`after_tool_call` checkpoints)
   and the run-boundary trace are unaffected, and `openclaw.plugin.json` declares no `contracts`.
-
-### Planned
-- Performance improvements for response dispatch times
-- Additional stream filtering options
-- Enhanced error recovery
 
 ## [2026.9.2] - 2026-09-27
 

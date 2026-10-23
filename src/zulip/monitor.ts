@@ -1,7 +1,11 @@
 import type { OpenClawConfig, ChannelAccountSnapshot } from "openclaw/plugin-sdk/channel-core";
 import { logInboundDrop, formatInboundEnvelope } from "openclaw/plugin-sdk/channel-inbound";
-import { resolveControlCommandGate } from "openclaw/plugin-sdk/command-auth";
-import { createReplyPrefixOptions } from "openclaw/plugin-sdk/channel-reply-pipeline";
+// Host 2026.10.6 dropped `plugin-sdk/command-auth` and `plugin-sdk/channel-reply-pipeline`
+// from its exports map, which made the whole plugin fail to load (the host rejects an
+// unresolvable subpath at link time). `command-auth-native` and `channel-outbound` are the
+// current homes for these helpers and exist across 2026.7.1 .. 2026.10.6. See #324.
+import { resolveControlCommandGate } from "openclaw/plugin-sdk/command-auth-native";
+import { createReplyPrefixOptions } from "openclaw/plugin-sdk/channel-outbound";
 import { resolveChannelMediaMaxBytes } from "openclaw/plugin-sdk/media-runtime";
 import {
   deriveInboundMessageHookContext,
