@@ -127,6 +127,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
   });
   void auditLogger.logMonitorStart(accountIdForAudit);
 
+
   // Platform workaround (see ./session-archive-repair.ts). Stopped in `finally`.
   let stopSessionArchiveRepair: (() => void) | undefined;
 
@@ -396,6 +397,25 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       : /@\b/gi; // Fallback regex that won't match anything
 
     const handleMessage = async (message: ZulipMessage) => {
+      /**
+       * Record an inbound message that was deliberately not dispatched (#326 follow-up).
+       *
+       * Every early return between receipt and dispatch used to be silent: policy drops
+       * went to the host logger (which does not reach the host log file on every host),
+       * and the onchar/empty-body gates wrote nothing at all — so "the channel is
+       * authorised and working" and "the channel is receiving and discarding everything"
+       * produced identical audit files. `deliver_skipped` is the outbound equivalent.
+       */
+      const auditInboundDrop = (reason: string, extra: Record<string, unknown> = {}) => {
+        void auditLogger.log({
+          ts: new Date().toISOString(),
+          event: "inbound_dropped",
+          accountId: account.accountId,
+          direction: "inbound",
+          reason,
+          ...extra,
+        });
+      };
       const messageId = String(message.id ?? "");
       if (!messageId) {
         return;
@@ -426,6 +446,10 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
         // configured list as an allowlist by dropping other stream messages
         // immediately after receipt, before dedupe, policy, or dispatch.
         if (!isMonitoredStream(streamName, streams)) {
+          auditInboundDrop("stream-not-monitored", {
+            messageId,
+            stream: maskPII(streamName || streamId),
+          });
           return;
         }
       }
@@ -456,6 +480,7 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
           accountId: account.accountId,
           messageId,
         });
+        auditInboundDrop("duplicate", { messageId });
         return;
       }
 
@@ -614,10 +639,17 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
             target: senderId,
           });
         }
+        auditInboundDrop(policyResult.shouldPair ? "policy-drop-pairing" : "policy-drop", {
+          reason: policyResult.reason ?? "policy drop",
+          messageId,
+          senderId: maskPII(senderId),
+          isDM: String(isDM),
+        });
         return;
       }
 
       if (!isReactionTrigger && oncharEnabled && !oncharTriggered && !wasMentioned && !isControlCommand) {
+        auditInboundDrop("onchar-gate", { messageId, isDM: String(isDM) });
         return;
       }
 
@@ -638,6 +670,13 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       const bodySource = oncharTriggered ? oncharResult.stripped : rawText;
       const bodyText = normalizeMention(bodySource, botUsernameMentionRegex);
       if (!bodyText) {
+        // An empty body after HTML/mention stripping: a mention-only message, an
+        // attachment-only message, or a message the bot cannot see the text of.
+        auditInboundDrop("empty-body", {
+          messageId,
+          isDM: String(isDM),
+          hasUploads: String(uploadUrls.length > 0),
+        });
         return;
       }
 
@@ -997,6 +1036,21 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
                 isFallbackNotice: String(info.isFallbackNotice),
                 isError: String(info.isError),
                 textLen: String(info.textLen),
+              });
+            },
+            onDispatchError: (info) => {
+              void auditLogger.log({
+                ts: new Date().toISOString(),
+                event: "dispatch_failed",
+                accountId: account.accountId,
+                direction: "inbound",
+                messageId,
+                cancelled: String(info.cancelled),
+                isCommandTurn: String(info.isCommandTurn),
+                elapsedMs: String(info.elapsedMs),
+                // Masked: host errors routinely embed the session key, which contains
+                // the sender's email.
+                error: maskPII(info.error.slice(0, 200)),
               });
             },
             onDeliverFallback: (info) => {

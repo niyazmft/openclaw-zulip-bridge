@@ -57,6 +57,27 @@ test("#326 cause 1: dispatch_turn is recorded for every dispatched message", asy
   assert.match(source, /event: "dispatch_turn"[\s\S]{0,400}?isDM: String\(isDM\)/);
 });
 
+test("#326: deliver_payload is not gated on command turns", async () => {
+  // The dispatcher delivery is the most common outcome, so it must always be audited.
+  // It used to sit inside `if (isCommandTurn) { … }`.
+  const source = await read("src/zulip/reply-handler.ts");
+  const lines = source.split("\n");
+  const eventLine = lines.findIndex((l) => l.includes("onDeliverPayload?.({"));
+  assert.ok(eventLine > 0, "expected an onDeliverPayload call");
+  let previousLine = "";
+  for (let i = eventLine - 1; i >= 0; i -= 1) {
+    if (lines[i].trim() && !lines[i].trim().startsWith("//")) {
+      previousLine = lines[i];
+      break;
+    }
+  }
+  assert.equal(
+    /^\s*if \(/.test(previousLine),
+    false,
+    "onDeliverPayload must not be wrapped in an if() — every delivered payload is audited",
+  );
+});
+
 test("#326 cause 4: the auto-send rescue is audited as deliver_fallback", async () => {
   const source = await read("src/zulip/monitor.ts");
   assert.match(source, /onDeliverFallback:/, "monitor must pass an onDeliverFallback hook");
@@ -95,4 +116,33 @@ test("#326: the monitor reuses the shared audit logger instead of making its own
   // rotation; the outbound adapter needs the same instance the monitor uses.
   assert.equal(source.includes("new AuditLogger("), false);
   assert.match(source, /getAuditLogger\(/);
+});
+
+test("pre-dispatch drops are audited, so a silently discarding channel is visible", async () => {
+  // The counterpart to cause 1: every early return between receipt and dispatch used
+  // to be silent, so a channel that receives everything and drops it as unauthorised
+  // looked exactly like an idle one. Each exit must now record `inbound_dropped` with
+  // a reason, mirroring `deliver_skipped` on the outbound side.
+  const source = await read("src/zulip/monitor.ts");
+
+  assert.match(source, /event: "inbound_dropped"/, "expected an inbound_dropped audit event");
+
+  for (const reason of [
+    "stream-not-monitored",
+    "duplicate",
+    "policy-drop",
+    "policy-drop-pairing",
+    "onchar-gate",
+    "empty-body",
+  ]) {
+    assert.ok(
+      source.includes(`"${reason}"`),
+      `expected an inbound_dropped reason of ${reason} (an early return is still silent)`,
+    );
+  }
+
+  // Five call sites: the two policy-drop reasons come from one ternary, so the six
+  // reasons above map to five calls. Anything less means an exit went silent again.
+  const dropCalls = source.match(/auditInboundDrop\(/g) ?? [];
+  assert.ok(dropCalls.length >= 5, `expected >=5 auditInboundDrop call sites, got ${dropCalls.length}`);
 });

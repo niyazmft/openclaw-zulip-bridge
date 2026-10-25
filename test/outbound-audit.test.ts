@@ -149,3 +149,44 @@ test("auditOutboundSend never throws, even when the log cannot be written", asyn
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+// ── The action path (what the `message` tool and the CLI actually use) ──────
+
+test("handleSendAction audits stream and DM sends", async () => {
+  resetAuditLoggers();
+  const dir = tmpDir();
+  useRuntimeDataDir(dir);
+  const { handleSendAction } = await import("../src/actions-send.ts");
+  const client = {} as any; // replaced per-call below
+  try {
+    // Stream send
+    const streamClient: any = {
+      authHeader: "Basic x",
+      baseUrl: "https://example.com",
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ result: "success", msg: "", id: 111 }),
+        headers: { get: () => null },
+      }),
+    };
+    await handleSendAction(streamClient, { to: "stream:main:general", message: "hello stream" }, "default");
+    // DM send
+    await handleSendAction(streamClient, { to: "user:a@example.com", message: "hello dm" }, "default");
+    await new Promise((r) => setTimeout(r, 80));
+
+    const events = (await readAuditEvents(dir)).filter((e) => e.event === "outbound_send");
+    assert.equal(events.length, 2, "one outbound_send per action send");
+    assert.equal(events[0].source, "channel-action");
+    assert.equal(events[0].targetKind, "stream");
+    assert.equal(events[0].textLen, "hello stream".length);
+    assert.equal(events[0].messageId, "111");
+    assert.equal(events[1].targetKind, "dm");
+    assert.ok(!JSON.stringify(events).includes("a@example.com"), "target must be masked");
+  } finally {
+    void client;
+    clearZulipRuntime();
+    resetAuditLoggers();
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

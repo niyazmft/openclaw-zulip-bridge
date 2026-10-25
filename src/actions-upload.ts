@@ -5,6 +5,7 @@ import { uploadZulipFile, type ZulipClient } from "./zulip/client.js";
 import { createBotWorkspace } from "./zulip/workspace.js";
 import { resolveZulipDataDir } from "./zulip/data-dir.js";
 import { sendMessageZulip } from "./zulip/send.js";
+import { auditOutboundSend } from "./zulip/outbound-audit.js";
 import { getZulipRuntime } from "./runtime.js";
 
 /**
@@ -23,6 +24,7 @@ import { getZulipRuntime } from "./runtime.js";
 export async function handleUploadFileAction(
   client: ZulipClient,
   params: Record<string, unknown>,
+  accountId?: string,
 ): Promise<unknown> {
   const to = readStringParam(params, "to", { required: true });
   const bufferB64 = readStringParam(params, "buffer");
@@ -59,6 +61,17 @@ export async function handleUploadFileAction(
   }
 
   const sendResult = await sendMessageZulip(to, caption, { mediaUrl: url });
+  // The upload action posts a message too, so it belongs in the same outbound trail
+  // as the other send paths (#326, cause 2).
+  auditOutboundSend({
+    accountId,
+    to,
+    kind: "media",
+    text: caption,
+    hasMedia: true,
+    messageId: sendResult.messageId,
+    source: "channel-action",
+  });
   return jsonResult({
     success: true,
     messageId: sendResult.messageId,
