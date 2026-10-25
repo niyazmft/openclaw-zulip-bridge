@@ -7,6 +7,7 @@ import { sendZulipStreamMessage, sendZulipPrivateMessage, uploadZulipFile } from
 import type { ZulipClient } from "./zulip/client.js";
 import { maskPII } from "./zulip/monitor-helpers.js";
 import { getZulipRuntime } from "./runtime.js";
+import { auditOutboundSend } from "./zulip/outbound-audit.js";
 
 function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
@@ -81,6 +82,7 @@ export async function resolveAttachmentUrls(
 export async function handleSendAction(
   client: ZulipClient,
   params: Record<string, unknown>,
+  accountId?: string,
 ) {
   const to = readStringParam(params, "to", { required: true });
   const content = readSendMessageContent(params);
@@ -95,11 +97,25 @@ export async function handleSendAction(
       ? [content, ...attachmentUrls].filter(Boolean).join("\n\n")
       : content;
 
+  // The agent's `message` tool and the CLI reach Zulip through this action, not
+  // through `outbound.sendText`, so this is where their sends have to be audited
+  // (#326, cause 2). Auditing happens after the send, and cannot throw.
+  const kind = attachmentUrls.length > 0 ? "media" : "text";
+
   if (target.kind === "stream") {
     const result = await sendZulipStreamMessage(client, {
       stream: target.stream,
       topic: target.topic,
       content: fullContent,
+    });
+    auditOutboundSend({
+      accountId,
+      to,
+      kind,
+      text: fullContent,
+      hasMedia: attachmentUrls.length > 0,
+      messageId: result.id,
+      source: "channel-action",
     });
     return jsonResult({ success: true, messageId: result.id });
   }
@@ -107,6 +123,15 @@ export async function handleSendAction(
   const result = await sendZulipPrivateMessage(client, {
     to: [target.email],
     content: fullContent,
+  });
+  auditOutboundSend({
+    accountId,
+    to,
+    kind,
+    text: fullContent,
+    hasMedia: attachmentUrls.length > 0,
+    messageId: result.id,
+    source: "channel-action",
   });
   return jsonResult({ success: true, messageId: result.id });
 }

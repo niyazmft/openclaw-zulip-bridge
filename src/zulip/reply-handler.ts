@@ -131,6 +131,22 @@ export async function dispatchZulipReply(params: {
    * was invisible (#326, cause 4).
    */
   onDeliverFallback?: (info: { textLen: number; chunks: number; isCommandTurn: boolean }) => void;
+  /**
+   * Audit hook: the run ended in an error (or was cancelled) instead of delivering.
+   *
+   * Without this, a failed run is the last way to get `dispatch_turn` and then
+   * silence: `deliver_payload`/`deliver_fallback` never fire (nothing was sent),
+   * `deliver_empty` deliberately skips errors, and the error itself goes to a host
+   * logger that does not reach the log file on every host. Observed on
+   * `lab-openclaw` as `SessionWorkStartInvalidatedError` — the audit file showed an
+   * inbound message and then nothing at all (#326).
+   */
+  onDispatchError?: (info: {
+    error: string;
+    elapsedMs: number;
+    cancelled: boolean;
+    isCommandTurn: boolean;
+  }) => void;
   /** Test seam: override the trajectory reader used by the auto-send fallback. */
   fallbackReader?: typeof readLatestAssistantTexts;
   /** Test seam: override the channel sender so tests never touch the network. */
@@ -166,6 +182,7 @@ export async function dispatchZulipReply(params: {
     onDeliverEmpty,
     onDeliverPayload,
     onDeliverFallback,
+    onDispatchError,
     fallbackReader,
     sendText: sendTextOverride,
   } = params;
@@ -239,17 +256,19 @@ export async function dispatchZulipReply(params: {
         //   no transient surface, so they would only be noise.
         // Agent-run failure messages (payload.isError) are deliberately
         // user-facing and are still delivered.
-        // What actually arrived for a command turn: without this, "the host said
-        // nothing" and "we discarded what it said" look identical from outside.
-        if (isCommandTurn) {
-          onDeliverPayload?.({
-            isStatusNotice: payload.isStatusNotice === true,
-            isCompactionNotice: payload.isCompactionNotice === true,
-            isFallbackNotice: payload.isFallbackNotice === true,
-            isError: (payload as { isError?: boolean }).isError === true,
-            textLen: (payload.text ?? "").length,
-          });
-        }
+        // What actually arrived, for **every** delivered payload — not just command
+        // turns. Gating this on `isCommandTurn` (a leftover from when the audit was
+        // command-scoped) left the ordinary dispatcher delivery unaudited, which is
+        // the single most common outcome in the channel: a normal reply then produced
+        // no outbound record at all, while a *dropped* one produced `deliver_skipped`.
+        // That asymmetry is what made a working reply look like silence (#326).
+        onDeliverPayload?.({
+          isStatusNotice: payload.isStatusNotice === true,
+          isCompactionNotice: payload.isCompactionNotice === true,
+          isFallbackNotice: payload.isFallbackNotice === true,
+          isError: (payload as { isError?: boolean }).isError === true,
+          textLen: (payload.text ?? "").length,
+        });
         const skipReason = shouldSkipPayload(payload, { isCommandTurn });
         if (skipReason) {
           zLogger?.info?.("zulip deliver skipped", {
@@ -590,6 +609,16 @@ export async function dispatchZulipReply(params: {
     const elapsedMs = Date.now() - dispatchStartMs;
     if (!cancelled && !dispatchError && !deliveredAny) {
       onDeliverEmpty?.({ elapsedMs, isCommandTurn: isCommandTurn === true });
+    }
+    if (dispatchError) {
+      // Recorded here rather than in the catch so the audit sees one terminal event
+      // per dispatch, and so the abort/error distinction is the same one the trace uses.
+      onDispatchError?.({
+        error: dispatchError instanceof Error ? dispatchError.message : String(dispatchError),
+        elapsedMs,
+        cancelled,
+        isCommandTurn: isCommandTurn === true,
+      });
     }
     if (trace) {
       // Finalize on success, error *and* abort — a trace must never be left

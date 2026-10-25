@@ -28,6 +28,8 @@ export type OutboundAuditInput = {
   hasMedia?: boolean;
   /** Message id returned by Zulip, when the send succeeded. */
   messageId?: string | number;
+  /** Which path sent it: the channel outbound adapter, or a message action. */
+  source?: "channel-outbound" | "channel-action";
   topic?: string;
 };
 
@@ -54,7 +56,10 @@ export function auditOutboundSend(input: OutboundAuditInput): void {
       accountId,
       direction: "outbound",
       // Distinguishes this from `deliver_payload`, which is the reply-dispatcher path.
-      source: "channel-outbound",
+      // Both send paths matter: the host may deliver through `outbound.sendText`, but
+      // the agent's `message` tool (and the CLI) go through the channel's `send`
+      // *action*, which is a different code path entirely.
+      source: input.source ?? "channel-outbound",
       kind: input.kind,
       targetKind: outboundTargetKind(input.to),
       target: maskPII(input.to),

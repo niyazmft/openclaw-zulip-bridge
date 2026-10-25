@@ -68,7 +68,7 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
     const { client, account } = resolveZulipClient(cfg, accountId ?? undefined);
 
     if (action === "send") {
-      return handleSendAction(client, params);
+      return handleSendAction(client, params, accountId ?? account.accountId);
     }
 
     if (action === "channel-list") {
@@ -92,7 +92,7 @@ export const zulipMessageActions: ChannelMessageActionAdapter = {
     }
 
     if (action === "upload-file") {
-      return handleUploadFileAction(client, params);
+      return handleUploadFileAction(client, params, accountId ?? account.accountId);
     }
 
     if (action === "read") {

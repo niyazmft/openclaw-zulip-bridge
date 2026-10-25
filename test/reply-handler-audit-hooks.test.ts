@@ -77,6 +77,39 @@ function makeParams(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
+test("deliver_payload fires for an ordinary (non-command) delivered reply", async () => {
+  // The dispatcher delivery is the most common outcome in the channel, so it has to
+  // be audited. It used to be gated on `isCommandTurn`, which meant a normal reply
+  // produced no outbound record while a *dropped* one produced `deliver_skipped` —
+  // exactly the asymmetry that made a working reply look like silence (#326).
+  const payloads: Array<{ textLen: number; isStatusNotice: boolean }> = [];
+  await dispatchZulipReply(
+    makeParams({
+      core: makeCore({ deliverText: "here is the answer" }),
+      isCommandTurn: false,
+      onDeliverPayload: (info: any) => payloads.push(info),
+    }),
+  );
+
+  assert.equal(payloads.length, 1, "an ordinary delivered reply must be audited");
+  assert.equal(payloads[0].textLen, "here is the answer".length);
+  assert.equal(payloads[0].isStatusNotice, false);
+});
+
+test("deliver_payload still reports command-turn status notices", async () => {
+  const payloads: Array<{ isStatusNotice: boolean }> = [];
+  await dispatchZulipReply(
+    makeParams({
+      core: makeCore({ deliverText: "New session started." }),
+      isCommandTurn: true,
+      onDeliverPayload: (info: any) => payloads.push(info),
+    }),
+  );
+
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].isStatusNotice, false); // the fake core does not mark it
+});
+
 test("deliver_empty fires with activity tracing OFF (no traceManager)", async () => {
   const calls: Array<{ elapsedMs: number; isCommandTurn: boolean }> = [];
   await dispatchZulipReply(
@@ -238,4 +271,54 @@ test("deliver_fallback does not fire when the host delivered normally", async ()
   await dispatchZulipReply(params);
 
   assert.deepEqual(fallbackCalls, [], "no rescue happened, so nothing to report");
+});
+
+// ── Failed runs ─────────────────────────────────────────────────────────────
+
+test("dispatch_failed fires when the run errors, so silence is attributable", async () => {
+  // Seen in the field as `SessionWorkStartInvalidatedError`: dispatch_turn, then
+  // nothing. A failed run must name itself rather than looking like no reply.
+  const failures: Array<{ error: string; cancelled: boolean; isCommandTurn: boolean }> = [];
+  const emptyCalls: unknown[] = [];
+  const result = await dispatchZulipReply(
+    makeParams({
+      core: makeCore({ dispatchError: new Error("SessionWorkStartInvalidatedError: retry") }),
+      onDispatchError: (info: any) => failures.push(info),
+      onDeliverEmpty: (info: any) => emptyCalls.push(info),
+    }),
+  );
+
+  assert.ok(result instanceof Error, "the error is still propagated to the caller");
+  assert.equal(failures.length, 1, "a failed run must be audited");
+  assert.match(failures[0].error, /SessionWorkStartInvalidatedError/);
+  assert.equal(failures[0].cancelled, false);
+  assert.equal(failures[0].isCommandTurn, false);
+  assert.deepEqual(emptyCalls, [], "an error is not an empty run");
+});
+
+test("dispatch_failed marks a cancelled run as cancelled", async () => {
+  const failures: Array<{ cancelled: boolean }> = [];
+  const controller = new AbortController();
+  controller.abort();
+  await dispatchZulipReply(
+    makeParams({
+      core: makeCore({ dispatchError: Object.assign(new Error("aborted"), { name: "AbortError" }) }),
+      abortSignal: controller.signal,
+      onDispatchError: (info: any) => failures.push(info),
+    }),
+  );
+
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].cancelled, true);
+});
+
+test("dispatch_failed does not fire on a successful run", async () => {
+  const failures: unknown[] = [];
+  await dispatchZulipReply(
+    makeParams({
+      core: makeCore({ deliverText: "fine" }),
+      onDispatchError: (info: any) => failures.push(info),
+    }),
+  );
+  assert.deepEqual(failures, []);
 });
