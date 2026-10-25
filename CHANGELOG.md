@@ -10,6 +10,9 @@ and this project adheres to [Calendar Versioning](https://calver.org/) in the fo
 ### Fixed
 - **A run that delivers nothing is now audited even with `activityTrace` off** (#326, cause 3): `onDeliverEmpty` was called inside the `if (trace) { … }` block in `reply-handler.ts`, and `activityTrace` defaults to `false`, so on a default config a silent run left **no** record — no `deliver_payload` (nothing was delivered) and no `deliver_empty` (unreachable). Combined with `dispatch_turn` being limited to command-looking messages and `message`-tool sends bypassing the deliver callback, that meant `{dataDir}/audit/*.audit.log` could not distinguish a working channel from a silently broken one for ordinary traffic. The hook now fires outside the trace guard; the trace finalisation stays inside it. `test/reply-handler-audit-hooks.test.ts` pins the behaviour (fires with tracing off; does not fire when a payload was delivered, when the dispatch threw, or when the run was aborted; no double reporting with tracing on). Causes 1, 2 and 4 of #326 are untouched.
 
+### Security
+- **`zod` bumped 3.25.76 → 4.6.7** for GHSA-mrhx-c7xc-m3w5 ("Zod can exhaust memory while validating oversized constrained collections", high severity, affects `zod < 4.6.6`). `npm audit --omit=dev` — part of `npm run check` and therefore the push hook and CI — started failing on this advisory mid-work, with no patched 3.x available (`3.25.76` is the last of that line). Verified as a real bump rather than a lockfile edit: typecheck, all 449 unit tests (including the schema/manifest parity and setup-wizard validation suites, which are the only real consumers of zod), `check:package`, ClawScan, and `check:compat` against OpenClaw `2026.7.1` and `2026.10.6` — the latter now stages `zod@4.6.7` and still loads and registers the plugin. Still the plugin's only npm runtime dependency.
+
 ### Planned
 - Performance improvements for response dispatch times
 - Additional stream filtering options

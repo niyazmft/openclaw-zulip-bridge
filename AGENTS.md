@@ -334,7 +334,7 @@ Migration complete as of v2026.7.0:
   - `deleteAccountFromConfigSection`, `setAccountEnabledInConfigSection`, `formatPairingApproveHint` (`src/channel.ts`)
   - `applyAccountNameToChannelSection` (`src/setup-core.ts`) — not exported from `account-core` either
   - Getting these wrong is invisible to `npm run check` (the smoke loader stubs every SDK specifier with `noOp`, so a missing export cannot surface); `npm run check:compat` is what catches it.
-- `openclaw/plugin-sdk/zod` → the subpath existed on hosts `2026.6.x`–`2026.7.x` but was **removed by 2026.9.x**. The plugin uses bare `zod` (declared as a runtime dependency) which is the correct current approach.
+- `openclaw/plugin-sdk/zod` → the subpath existed on hosts `2026.6.x`–`2026.7.x` but was **removed by 2026.9.x**. The plugin uses bare `zod` (declared as a runtime dependency) which is the correct current approach. That dependency is on **zod 4** (`^4.6.7`): `zod 3.25.76` is the last of its line and is flagged by GHSA-mrhx-c7xc-m3w5 (high, memory exhaustion via oversized constrained collections), which `npm audit --omit=dev` treats as a hard failure. Do not "fix" a future audit advisory on zod by downgrading — there is no patched 3.x.
 - Keep both root `configSchema` and `channelConfigs` in the manifest. OpenClaw 2026.6.x still validates the root schema at load time
 - Manifest `uiHints` synced with runtime schema for full cold-path label coverage
 - `minGatewayVersion` and `minHostVersion` are both `>=2026.7.1` — the lowest OpenClaw version actually published on npm (both `2026.6.0` and `2026.7.0` are phantom versions; `npm view openclaw@2026.7.0` is a 404)
