@@ -173,3 +173,69 @@ test("deliver_empty still fires when a trace is active (no double reporting)", a
 
   assert.equal(calls.length, 1, "exactly one deliver_empty, trace on or off");
 });
+
+// ── Cause 4: the auto-send fallback rescue ──────────────────────────────────
+
+function makeFallbackParams(overrides: Record<string, unknown> = {}) {
+  const sent: Array<{ to: string; text: string }> = [];
+  const fallbackCalls: Array<{ textLen: number; chunks: number; isCommandTurn: boolean }> = [];
+  const emptyCalls: unknown[] = [];
+  return {
+    sent,
+    fallbackCalls,
+    emptyCalls,
+    params: makeParams({
+      account: { accountId: "default", config: {}, autoSendOnMissingTool: true },
+      route: {
+        sessionKey: "zulip:default:stream:1:general",
+        agentId: "enkidu",
+        mainSessionKey: "zulip:default:stream:1:general",
+      },
+      sendText: async (to: string, text: string) => {
+        sent.push({ to, text });
+        return { messageId: `m-${sent.length}`, channelId: "1" };
+      },
+      fallbackReader: async () => ["rescued answer"],
+      onDeliverFallback: (info: any) => fallbackCalls.push(info),
+      onDeliverEmpty: (info: any) => emptyCalls.push(info),
+      ...overrides,
+    }),
+  };
+}
+
+test("deliver_fallback fires when the auto-send rescue sends a reply", async () => {
+  const { params, sent, fallbackCalls, emptyCalls } = makeFallbackParams();
+
+  await dispatchZulipReply(params);
+
+  assert.equal(sent.length, 1, "the rescue actually sent the text");
+  assert.equal(sent[0].text, "rescued answer");
+  assert.equal(fallbackCalls.length, 1, "the rescue must be audited");
+  assert.equal(fallbackCalls[0].textLen, "rescued answer".length);
+  assert.equal(fallbackCalls[0].chunks, 1);
+  assert.equal(fallbackCalls[0].isCommandTurn, false);
+  assert.deepEqual(
+    emptyCalls,
+    [],
+    "a rescued run delivered something, so it must not also report empty",
+  );
+});
+
+test("deliver_fallback carries the command-turn flag", async () => {
+  const { params, fallbackCalls } = makeFallbackParams({ isCommandTurn: true });
+
+  await dispatchZulipReply(params);
+
+  assert.equal(fallbackCalls.length, 1);
+  assert.equal(fallbackCalls[0].isCommandTurn, true);
+});
+
+test("deliver_fallback does not fire when the host delivered normally", async () => {
+  const { params, fallbackCalls } = makeFallbackParams({
+    core: makeCore({ deliverText: "delivered by the host" }),
+  });
+
+  await dispatchZulipReply(params);
+
+  assert.deepEqual(fallbackCalls, [], "no rescue happened, so nothing to report");
+});

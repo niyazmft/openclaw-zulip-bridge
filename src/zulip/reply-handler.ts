@@ -121,6 +121,20 @@ export async function dispatchZulipReply(params: {
     isError: boolean;
     textLen: number;
   }) => void;
+  /**
+   * Audit hook: the runner had to rescue the turn through the auto-send fallback
+   * (the agent finished with assistant text but never called the messaging tool).
+   *
+   * Without this the rescue is recorded as "delivered" but leaves no evidence it was
+   * the fallback rather than a normal host delivery — and it suppresses
+   * `onDeliverEmpty` (correctly, something was sent), so previously the whole event
+   * was invisible (#326, cause 4).
+   */
+  onDeliverFallback?: (info: { textLen: number; chunks: number; isCommandTurn: boolean }) => void;
+  /** Test seam: override the trajectory reader used by the auto-send fallback. */
+  fallbackReader?: typeof readLatestAssistantTexts;
+  /** Test seam: override the channel sender so tests never touch the network. */
+  sendText?: typeof sendMessageZulip;
 }): Promise<unknown> {
   const {
     core,
@@ -151,7 +165,12 @@ export async function dispatchZulipReply(params: {
     onDeliverSkipped,
     onDeliverEmpty,
     onDeliverPayload,
+    onDeliverFallback,
+    fallbackReader,
+    sendText: sendTextOverride,
   } = params;
+
+  const sendText = sendTextOverride ?? sendMessageZulip;
 
   const typingParams = isDM
     ? { op: "start" as const, type: "direct" as const, to: [senderNumericId] }
@@ -336,7 +355,7 @@ export async function dispatchZulipReply(params: {
                   logVerboseMessage(
                     `zulip placeholder edit failed: ${String(err)}; falling back to new message`,
                   );
-                  await sendMessageZulip(to, chunk, {
+                  await sendText(to, chunk, {
                     accountId: account.accountId,
                     topic: resolvedTopic,
                   });
@@ -347,7 +366,7 @@ export async function dispatchZulipReply(params: {
                   });
                 }
               } else {
-                await sendMessageZulip(to, chunk, {
+                await sendText(to, chunk, {
                   accountId: account.accountId,
                   topic: resolvedTopic,
                 });
@@ -373,14 +392,14 @@ export async function dispatchZulipReply(params: {
                 logVerboseMessage(
                   `zulip placeholder edit failed: ${String(err)}; falling back to new message`,
                 );
-                await sendMessageZulip(to, caption, {
+                await sendText(to, caption, {
                   accountId: account.accountId,
                   mediaUrl,
                   topic: resolvedTopic,
                 });
               }
             } else {
-              await sendMessageZulip(to, caption, {
+              await sendText(to, caption, {
                 accountId: account.accountId,
                 mediaUrl,
                 topic: resolvedTopic,
@@ -482,7 +501,8 @@ export async function dispatchZulipReply(params: {
             logVerboseMessage(
               `[zulip-fallback] triggering fallback reader startTime=${dispatchStartTime} sessionKey=${sessionKey}`,
             );
-            const texts = await readLatestAssistantTexts({
+            const readFallbackTexts = fallbackReader ?? readLatestAssistantTexts;
+            const texts = await readFallbackTexts({
               dataDir,
               agentId: route.agentId,
               sessionKey,
@@ -520,14 +540,25 @@ export async function dispatchZulipReply(params: {
                 textLimit,
                 chunkMode,
               );
-              for (const chunk of chunks.length > 0 ? chunks : [truncatedText]) {
+              const sentChunks = chunks.length > 0 ? chunks : [truncatedText];
+              let sent = 0;
+              for (const chunk of sentChunks) {
                 if (!chunk) continue;
-                await sendMessageZulip(to, chunk, {
+                await sendText(to, chunk, {
                   accountId: account.accountId,
                   topic: resolvedTopic,
                 });
+                sent += 1;
               }
               deliveredAny = true;
+              // Record the rescue itself: it sets `deliveredAny`, which suppresses
+              // `deliver_empty`, so without this event the fallback path is
+              // completely silent in the audit log (#326, cause 4).
+              onDeliverFallback?.({
+                textLen: truncatedText.length,
+                chunks: sent,
+                isCommandTurn: isCommandTurn === true,
+              });
               statusSink?.({ lastOutboundAt: Date.now() });
               // UX: Signal that the reply was auto-sent via fallback
               await addReactionSafe({

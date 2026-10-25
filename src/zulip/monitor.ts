@@ -79,7 +79,7 @@ import {
   resolveActivityTraceConfig,
   unregisterActivityTraceManager,
 } from "./activity-trace.js";
-import { AuditLogger } from "./audit-logger.js";
+import { getAuditLogger } from "./audit-log.js";
 import { resolveZulipDataDir, resolveZulipStatePath } from "./data-dir.js";
 
 export type MonitorZulipOpts = {
@@ -111,16 +111,21 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
   // ~/.openclaw, which exists on Termux/Android where a hard-coded /tmp does not.
   const dataDir = resolveZulipDataDir(core);
 
-  // Initialize audit logger for persistent security event logging
-  const auditLogger = new AuditLogger(dataDir, opts.accountId ?? "default", {
+  // Initialize audit logger for persistent security event logging. Shared per
+  // account (see ./zulip/audit-log.ts): the channel's outbound adapter audits
+  // `message`-tool sends through the same instance so two loggers never interleave
+  // writes or race on rotation.
+  const accountIdForAudit = opts.accountId ?? "default";
+  const auditLogger = getAuditLogger(accountIdForAudit, {
+    dataDir,
     onError: (err) => {
       logger?.warn?.("zulip audit log write failed", {
-        accountId: opts.accountId ?? "default",
+        accountId: accountIdForAudit,
         error: String(err),
       });
     },
   });
-  void auditLogger.logMonitorStart(opts.accountId ?? "default");
+  void auditLogger.logMonitorStart(accountIdForAudit);
 
   // Platform workaround (see ./session-archive-repair.ts). Stopped in `finally`.
   let stopSessionArchiveRepair: (() => void) | undefined;
@@ -906,22 +911,24 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
       // arriving mid-run waits its turn (and is marked ⏳ while it waits) rather
       // than being steered into the running turn. With the default `off` this is
       // a pass-through — `run` just calls the task.
-      // Suspected command inbound: record what the host's own detector made of it,
-      // so "the host never answered our channel" can be told apart from "we
-      // dropped the answer". Only for command-looking messages, to stay quiet.
-      if (hasControlCommand || isControlCommand) {
-        void auditLogger.log({
-          ts: new Date().toISOString(),
-          event: "dispatch_turn",
-          accountId: account.accountId,
-          direction: "inbound",
-          messageId,
-          hasControlCommand: String(hasControlCommand),
-          isControlCommand: String(isControlCommand),
-          allowTextCommands: String(allowTextCommands),
-          commandAuthorized: String(commandAuthorized),
-        });
-      }
+      // Every dispatched message is recorded, not just command-looking ones.
+      // Gating this on `hasControlCommand` (#326, cause 1) meant ordinary traffic —
+      // i.e. almost all of it — left no inbound record at all, so "the channel is
+      // quietly not delivering" and "the channel is fine" read identically in the
+      // file that is supposed to be the durable evidence. The host's own detector's
+      // verdict is kept as a field rather than used as a filter.
+      void auditLogger.log({
+        ts: new Date().toISOString(),
+        event: "dispatch_turn",
+        accountId: account.accountId,
+        direction: "inbound",
+        messageId,
+        isDM: String(isDM),
+        hasControlCommand: String(hasControlCommand),
+        isControlCommand: String(isControlCommand),
+        allowTextCommands: String(allowTextCommands),
+        commandAuthorized: String(commandAuthorized),
+      });
       const dispatchError = await sessionDispatchQueue.run(
         sessionKey,
         () =>
@@ -990,6 +997,18 @@ export async function monitorZulipProvider(opts: MonitorZulipOpts = {}): Promise
                 isFallbackNotice: String(info.isFallbackNotice),
                 isError: String(info.isError),
                 textLen: String(info.textLen),
+              });
+            },
+            onDeliverFallback: (info) => {
+              void auditLogger.log({
+                ts: new Date().toISOString(),
+                event: "deliver_fallback",
+                accountId: account.accountId,
+                direction: "outbound",
+                messageId,
+                textLen: String(info.textLen),
+                chunks: String(info.chunks),
+                isCommandTurn: String(info.isCommandTurn),
               });
             },
           }),

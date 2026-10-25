@@ -41,6 +41,17 @@ export class AuditLogger {
   }
 
   /**
+   * Replace the error handler.
+   *
+   * Loggers are shared per account (see ./audit-log.ts), and the owner that
+   * creates one is not always the owner that can report failures (the monitor
+   * has a child logger; the CLI fallback does not).
+   */
+  setErrorHandler(handler?: (error: unknown) => void): void {
+    this.onError = handler;
+  }
+
+  /**
    * Ensure the log directory exists.
    */
   private async ensureDir(): Promise<void> {

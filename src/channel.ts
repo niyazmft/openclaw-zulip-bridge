@@ -33,6 +33,7 @@ import {
 import { normalizeZulipBaseUrl } from "./zulip/client.js";
 import { monitorZulipProvider } from "./zulip/monitor.js";
 import { maskPII, formatZulipLog } from "./zulip/monitor-helpers.js";
+import { auditOutboundSend } from "./zulip/outbound-audit.js";
 import { probeZulip } from "./zulip/probe.js";
 import { sendMessageZulip } from "./zulip/send.js";
 
@@ -292,12 +293,29 @@ export const zulipPlugin = createChatChannelPlugin<ResolvedZulipAccount>({
       const result = await sendMessageZulip(to, text, {
         accountId: accountId ?? undefined,
       });
+      // The agent's `message` tool lands here, not on the reply dispatcher, so this
+      // is the only place its sends can be audited (#326, cause 2).
+      auditOutboundSend({
+        accountId: accountId ?? undefined,
+        to,
+        kind: "text",
+        text,
+        messageId: result.messageId,
+      });
       return { channel: "zulip", ...result };
     },
     sendMedia: async ({ to, text, mediaUrl, accountId }) => {
       const result = await sendMessageZulip(to, text, {
         accountId: accountId ?? undefined,
         mediaUrl,
+      });
+      auditOutboundSend({
+        accountId: accountId ?? undefined,
+        to,
+        kind: "media",
+        text,
+        hasMedia: true,
+        messageId: result.messageId,
       });
       return { channel: "zulip", ...result };
     },
